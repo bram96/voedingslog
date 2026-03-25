@@ -1,0 +1,12 @@
+{
+  "domain": "voedingslog",
+  "name": "Voedingslog",
+  "version": "1.0.0",
+  "documentation": "https://github.com/bram96/voedingslog",
+  "issue_tracker": "https://github.com/bram96/voedingslog/issues",
+  "dependencies": [],
+  "codeowners": ["@bram96"],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "config_flow": true
+}

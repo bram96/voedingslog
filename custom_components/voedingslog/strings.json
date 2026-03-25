@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Voedingslog instellen",
+        "data": {
+          "personen": "Personen (komma-gescheiden, bijv. Jan,Lisa)",
+          "doel_calorieen": "Dagelijks caloriëndoel (kcal)",
+          "doel_natrium_mg": "Dagelijks natriumdoel (mg)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met Open Food Facts",
+      "unknown": "Onbekende fout"
+    },
+    "abort": {
+      "already_configured": "Voedingslog is al geconfigureerd"
+    }
+  }
+}
