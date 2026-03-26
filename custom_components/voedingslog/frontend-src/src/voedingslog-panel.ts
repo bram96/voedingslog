@@ -61,7 +61,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _mealIngredientSearch = "";
   @state() private _mealIngredientResults: Product[] = [];
   @state() private _favorites: Product[] = [];
-  @state() private _exporting = false;
+  @state() private _exportImageUrl: string | null = null;
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
@@ -479,17 +479,25 @@ export class VoedingslogPanel extends LitElement {
           )}
         </div>
 
-        <button class="btn-secondary btn-confirm" @click=${() => this._exportDayImage(slices)} ?disabled=${this._exporting}>
-          <ha-icon icon="mdi:download"></ha-icon>
-          ${this._exporting ? "Bezig..." : "Exporteer als afbeelding"}
-        </button>
+        ${this._exportImageUrl
+          ? html`
+            <div class="export-preview">
+              <img src=${this._exportImageUrl} alt="Voedingslog export"
+                style="width:100%;border-radius:8px;border:1px solid var(--divider-color);margin-top:8px;" />
+              <span class="export-hint">Houd ingedrukt om op te slaan of te delen</span>
+            </div>
+          `
+          : html`
+            <button class="btn-secondary btn-confirm" @click=${() => this._exportDayImage(slices)}>
+              <ha-icon icon="mdi:download"></ha-icon>
+              Exporteer als afbeelding
+            </button>
+          `}
       </div>
     `;
   }
 
   private _exportDayImage(slices: { pct: number; color: string; label: string; grams: number; goal: number }[]): void {
-    if (this._exporting) return;
-    this._exporting = true;
     const totals = sumNutrients(this._items);
     const goal = this._config?.calories_goal || 2000;
     const kcal = totals["energy-kcal_100g"] || 0;
@@ -630,18 +638,12 @@ export class VoedingslogPanel extends LitElement {
       ctx.stroke();
     }
 
-    // Download
+    // Show inline for long-press save / share
     canvas.toBlob(async (blob) => {
-      if (!blob) { this._exporting = false; return; }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `voedingslog-${person}-${this._selectedDate}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      this._exporting = false;
+      if (!blob) return;
+      const dataUrl = canvas.toDataURL("image/png");
+      this._exportImageUrl = dataUrl;
+      this.requestUpdate();
     }, "image/png");
   }
 
@@ -1524,7 +1526,7 @@ export class VoedingslogPanel extends LitElement {
     this._mealIngredientSearch = "";
     this._mealIngredientResults = [];
     this._prefillProduct = null;
-    this._exporting = false;
+    this._exportImageUrl = null;
   }
 
   private _openFileInput(id: string): void {

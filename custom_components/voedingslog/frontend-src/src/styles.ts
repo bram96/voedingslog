@@ -139,6 +139,8 @@ export const panelStyles = css`
   }
   .btn-secondary:hover { background: var(--divider-color); }
   .btn-confirm { width: 100%; padding: 14px; font-size: 16px; margin-top: 8px; }
+  .export-preview { margin-top: 12px; text-align: center; }
+  .export-hint { display: block; margin-top: 8px; font-size: 13px; color: var(--secondary-text-color); }
 
   /* Search */
   .search-results { margin-top: 12px; max-height: 300px; overflow-y: auto; }
