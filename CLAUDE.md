@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Voedingslog is a Home Assistant custom component for tracking daily nutrition per person. It provides a sidebar panel (LitElement), HA sensors, and services. Data comes from Open Food Facts and can be supplemented with manual entry and AI photo analysis.
+Voedingslog is a Home Assistant custom component for tracking daily nutrition per person. It provides a sidebar panel (LitElement), HA sensors, and services. Data comes from Open Food Facts and can be supplemented with manual entry, AI photo analysis, and AI text/handwriting parsing.
 
 ## Architecture
 
@@ -12,7 +12,8 @@ Voedingslog is a Home Assistant custom component for tracking daily nutrition pe
 |------|---------|
 | `__init__.py` | Panel registration (`async_setup`), config entry setup, HA service registration |
 | `coordinator.py` | `DataUpdateCoordinator` — manages logs, meals, product cache. Persists to `.storage/` |
-| `websocket.py` | All WebSocket command handlers (panel ↔ backend communication) |
+| `websocket.py` | Core WebSocket command handlers (panel ↔ backend communication) |
+| `ai_handlers.py` | AI-related WS handlers — photo analysis, text parsing, handwriting OCR |
 | `sensor.py` | HA sensor entities — one nutrient sensor + log overview per person |
 | `config_flow.py` | Setup wizard + options flow (persons, goals, AI entity) |
 | `open_food_facts.py` | OFF API wrapper — barcode lookup and product search |
@@ -23,12 +24,32 @@ Voedingslog is a Home Assistant custom component for tracking daily nutrition pe
 
 Source in `frontend-src/src/`, built output in `frontend/voedingslog-panel.js`.
 
+**Main component:**
+
 | File | Purpose |
 |------|---------|
-| `voedingslog-panel.ts` | Main panel component — all rendering and action handlers (~1400 lines) |
+| `voedingslog-panel.ts` | Main panel — layout, routing, lifecycle, barcode scanner (~520 lines) |
 | `types.ts` | TypeScript interfaces for all data structures |
 | `helpers.ts` | Pure functions — nutrient calculation, grouping, constants |
 | `styles.ts` | All CSS as a `css` tagged template export |
+
+**Controllers (composition pattern — each owns its dialogs + logic):**
+
+| File | Purpose |
+|------|---------|
+| `controllers/ai-controller.ts` | Batch add — AI text parsing, handwriting OCR, product validation flow |
+| `controllers/search-controller.ts` | Product search, barcode lookup, photo label analysis, manual entry |
+| `controllers/entry-controller.ts` | Weight/portion selection, edit existing item with nutrients |
+| `controllers/export-controller.ts` | Day detail dialog, pie chart, PNG export, download/share |
+| `controllers/meals-controller.ts` | Meal list, meal editor, ingredient management |
+
+**Shared utilities:**
+
+| File | Purpose |
+|------|---------|
+| `barcode-capture.ts` | `Html5Camera` class — reusable html5-qrcode wrapper for scanning and photo capture |
+| `photo-capture.ts` | `renderPhotoPicker()` — shared camera/file picker UI, `readFileAsBase64()` |
+| `product-search.ts` | `ProductSearch` class — shared search bar UI with local + online OFF search |
 
 ### Build
 
@@ -43,12 +64,16 @@ The built JS file is committed to the repo (HACS requirement — users don't run
 
 ## Key Design Decisions
 
+- **One config entry per person**: Each person is a separate HA integration instance. `ws_get_config` gathers persons from all entries. WS commands route to the correct coordinator by person name.
+- **Controller composition pattern**: Each dialog group lives in its own controller class with a typed host interface. Controllers render templates and handle actions via the host's state and methods. No mixins, no type casts.
 - **`async_setup()` + `async_setup_entry()`**: Panel/WS/static files registered globally in `async_setup`. Coordinator/sensors/services registered per config entry in `async_setup_entry`.
 - **WebSocket API over services**: Services are fire-and-forget. WS commands return data to the frontend (search results, config, etc).
-- **html5-qrcode for barcode scanning**: Works in browser with HTTPS. Falls back to photo decode if camera fails. Light DOM container with `requestAnimationFrame` position tracking for the bottom-sheet dialog.
+- **Html5Camera for barcode/photo**: Reusable `Html5Camera` class wraps html5-qrcode for both barcode scanning and photo viewfinder. Light DOM container with `requestAnimationFrame` position tracking.
 - **Content hash cache busting**: JS URL uses MD5 hash of file content (`?v=a3f1b2c4`) instead of version number.
-- **Local-first search**: Products are cached on first use. Search checks cache first, "Zoek online" button for API.
-- **AI photo → manual verify**: AI analysis opens the manual entry dialog pre-filled with recognized values for user verification.
+- **Local-first search**: Products are cached on first use. `ProductSearch` class checks cache first, "Zoek online" button for OFF API.
+- **Shared search dialog**: The search dialog supports callbacks — meals ingredient search opens the same dialog and returns the selected product to the caller.
+- **AI structured output**: AI uses `ai_task.generate_data` with the `structure` parameter for typed responses. Photo attachments use `media-source://` URIs via temp files in `/media`.
+- **AI text/handwriting → product lookup**: AI only identifies product names + estimated grams. Real nutrients come from local cache / OFF search, not AI guessing.
 
 ## Data Model
 
@@ -70,24 +95,36 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 
 ## WebSocket Commands
 
+### Core (websocket.py)
+
 | Command | Purpose |
 |---------|---------|
-| `voedingslog/get_config` | Panel initialization data |
+| `voedingslog/get_config` | Panel initialization data (persons from all entries, per-person goals) |
 | `voedingslog/get_log` | Day's log for a person |
 | `voedingslog/lookup_barcode` | Barcode lookup (no logging) |
 | `voedingslog/search_products` | Search local cache or online (OFF) |
 | `voedingslog/log_product` | Log a product with full nutrient data |
-| `voedingslog/edit_item` | Edit weight/category of existing item |
+| `voedingslog/edit_item` | Edit name, weight, category, nutrients of existing item |
 | `voedingslog/delete_item` | Delete item by index |
 | `voedingslog/reset_day` | Clear day's log |
-| `voedingslog/analyze_photo` | AI analysis of nutrition label photo |
 | `voedingslog/get_meals` | List custom meals |
 | `voedingslog/save_meal` | Create/update custom meal |
 | `voedingslog/delete_meal` | Delete custom meal |
+| `voedingslog/get_favorites` | List favorite products |
+| `voedingslog/toggle_favorite` | Toggle favorite status |
+
+### AI (ai_handlers.py)
+
+| Command | Purpose |
+|---------|---------|
+| `voedingslog/analyze_photo` | AI analysis of nutrition label photo (structured output) |
+| `voedingslog/parse_text` | AI text parsing → product lookup from cache/OFF |
+| `voedingslog/parse_handwriting` | AI handwriting OCR → product lookup from cache/OFF |
 
 ## Code Conventions
 
 - **All code in English** — variable names, functions, comments
 - **UI strings in Dutch** — button labels, hints, messages (prepared for future i18n)
+- **Controller composition** — each controller has a typed `Host` interface, no casts
 - Use arrow functions for all Lit event handlers (`@click=${() => this._method()}`)
 - TypeScript strict mode with `experimentalDecorators`

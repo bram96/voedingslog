@@ -1,21 +1,27 @@
 # Voedingslog — Home Assistant Custom Component
 
-Houd calorieën, macronutriënten, zout en vitamines bij per persoon.
+Houd calorieën, macronutriënten, vezels, zout en vitamines bij per persoon.
 Data komt van **Open Food Facts** — gratis, open database met miljoenen producten inclusief Nederlandse supermarktproducten.
 
 ### Features
 
 - **Sidebar panel** — eigen pagina met dagoverzicht per maaltijd (ontbijt, lunch, avondeten, tussendoor)
-- **Barcode scanner** — scan producten met je camera via html5-qrcode (HTTPS vereist)
+- **Product zoeken** — zoek lokaal in je cache of online in Open Food Facts, met favorieten
+- **Barcode scanner** — scan producten met je camera of voer de barcode handmatig in
 - **Foto-analyse** — maak een foto van het voedingsetiket, AI leest de waarden uit en je kunt ze controleren
-- **Product zoeken** — zoek lokaal in je cache of online in Open Food Facts
+- **Batch toevoegen** — beschrijf wat je gegeten hebt in tekst, of maak een foto van een handgeschreven lijst. AI herkent de producten, zoekt voedingswaarden op in Open Food Facts, en je valideert ze één voor één
 - **Handmatig invoeren** — voer zelf een product in met alle voedingswaarden
-- **Custom maaltijden** — sla recepten op (bijv. macaroni) met ingrediënten en portiegrootte
-- **Meerdere personen** — schakel tussen personen via tabs
+- **Custom maaltijden** — sla recepten op met ingrediënten, portiegrootte, en AI-ondersteunde ingrediëntinvoer
+- **Ingrediënten bewerken** — pas naam, gewicht en alle voedingswaarden per ingrediënt aan
+- **Meerdere personen** — elke persoon is een aparte integratie-instantie met eigen doelen en data
+- **Persoon wisselen** — schakel tussen personen via tabs, standaard geselecteerd op basis van je HA-account
 - **Datum navigatie** — blader door dagen met pijltjes of kies een datum
-- **Bewerken** — tik op een item om gewicht, maaltijd of datum aan te passen
+- **Bewerken** — tik op een item om naam, gewicht, maaltijd, datum en alle voedingswaarden aan te passen
+- **Dagdetails** — taartdiagram met macro-verdeling, voortgangsbalken per doel, alle voedingswaarden
+- **Exporteren** — exporteer je dag als PNG afbeelding, download of deel via je telefoon
 - **Lokale cache** — eerder gebruikte producten worden lokaal opgeslagen voor sneller zoeken
-- **Persistentie** — alle data blijft bewaard na herstart
+- **Favorieten** — markeer producten als favoriet voor snelle toegang
+- **Persistentie** — alle data wordt meegenomen in HA backups
 - **HA Sensoren** — alle voedingswaarden beschikbaar als sensoren voor automations en dashboards
 
 ---
@@ -31,6 +37,7 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 5. Herstart Home Assistant
 6. Ga naar **Instellingen → Apparaten & Diensten → Integratie toevoegen**
 7. Zoek op **Voedingslog** en volg de stappen
+8. Herhaal stap 6-7 voor elke persoon (elke persoon is een aparte integratie)
 
 ## Handmatige installatie
 
@@ -49,37 +56,40 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 Na installatie verschijnt **Voedingslog** automatisch in de sidebar. Het panel biedt:
 
 - **Dagoverzicht** gegroepeerd per maaltijd (ontbijt, lunch, avondeten, tussendoor)
-- **Dagtotalen** met voortgangsbalk voor calorieën en macro-overzicht
+- **Dagtotalen** met voortgangsbalk voor calorieën en macro-overzicht (eiwit, koolhydraten, vet, vezels)
 - **Datum navigatie** — pijltjes om door dagen te bladeren, tik op de datum om te kiezen
-- **6 acties** om voeding toe te voegen:
-  - **Scan barcode** — live camera scanner (html5-qrcode, HTTPS vereist)
-  - **Zoek product** — zoekt eerst lokaal, daarna online met "Zoek online" knop
-  - **Foto etiket** — maak een foto van het voedingsetiket, AI analyseert het, je controleert de waarden
-  - **Maaltijden** — kies een opgeslagen recept en log het met de ingestelde portie
-  - **Handmatig** — voer naam en alle macro's per 100g zelf in
-- **Bewerken** — tik op een item om gewicht, maaltijdcategorie of datum aan te passen
+- **2 acties** om voeding toe te voegen:
+  - **Zoek product** — zoek in cache/OFF, scan barcode, of voer handmatig in (inclusief foto etiket via AI)
+  - **Batch toevoegen** — typ wat je gegeten hebt of maak een foto van een handgeschreven lijst. AI herkent producten, zoekt echte voedingswaarden op, en je valideert ze één voor één
+- **Maaltijden** — beheer en log opgeslagen recepten vanuit het dagoverzicht
+- **Dagdetails** — tik op de dagtotalen voor een taartdiagram, alle voedingswaarden, en exporteer als afbeelding
+- **Bewerken** — tik op een item om naam, gewicht, maaltijdcategorie, datum en alle voedingswaarden aan te passen
 - **Verwijderen** — tik op het kruisje (met bevestiging)
 - **Portie presets** — kies uit portiegroottes van Open Food Facts of je eigen recepten
 
-### AI Foto-analyse instellen
+### AI instellen
 
 1. Zorg dat je een AI integratie hebt met AI Task support (bijv. OpenAI, Google AI, Claude)
 2. Ga naar **Instellingen → Apparaten & Diensten → Voedingslog → Opties**
 3. Kies je AI Task entity in de dropdown
-4. De "Foto etiket" knop wordt nu actief in het panel
-5. Na analyse opent het controlescherm waar je de herkende waarden kunt aanpassen
+4. De AI-functies worden nu actief:
+   - **Foto etiket** — AI leest voedingswaarden van een etiketfoto (gestructureerde output)
+   - **Batch toevoegen (tekst)** — typ "2 boterhammen met kaas, een appel" → AI herkent producten → voedingswaarden uit Open Food Facts
+   - **Batch toevoegen (foto)** — maak een foto van een handgeschreven lijst → OCR + productherkenning
+   - **AI ingrediënten** — in de maaltijdeditor, typ ingrediënten en AI zoekt ze op
 
 ### Custom Maaltijden
 
 Sla recepten op die je vaak eet:
 
-1. Tik op **Maaltijden** → **Nieuwe maaltijd**
+1. Tik op **Maaltijden** in het dagoverzicht → **Nieuwe maaltijd**
 2. Geef een naam (bijv. "Macaroni")
-3. Zoek en voeg ingrediënten toe met hun gewicht
-4. Stel een standaard portie in (bijv. 400g)
-5. Tik op **Opslaan**
+3. Voeg ingrediënten toe via **Ingrediënt zoeken** (opent het productzoekscherm) of **AI ingrediënten invoer**
+4. Pas per ingrediënt het gewicht en de voedingswaarden aan (tik op het potlood)
+5. Stel een standaard portie in (bijv. 400g)
+6. Tik op **Opslaan**
 
-Volgende keer: tik op **Maaltijden** → tik op het recept → gewicht is al ingevuld → **Toevoegen**
+Volgende keer: tik op het recept in de maaltijdenlijst → gewicht is al ingevuld → **Toevoegen**
 
 ---
 
@@ -183,6 +193,7 @@ entities:
   - entity: sensor.voedingslog_jan_vetten
   - entity: sensor.voedingslog_jan_koolhydraten
   - entity: sensor.voedingslog_jan_eiwitten
+  - entity: sensor.voedingslog_jan_vezels
   - entity: sensor.voedingslog_jan_natrium_zout
   - entity: sensor.voedingslog_jan_log_vandaag
     name: Gelogde items
@@ -192,7 +203,7 @@ entities:
 
 ## Data opslag
 
-Alle data wordt bewaard in de HA `.storage/` map:
+Alle data wordt bewaard in de HA `.storage/` map en is onderdeel van HA backups:
 
 | Bestand | Inhoud |
 |---------|--------|
@@ -206,4 +217,4 @@ Alle data wordt bewaard in de HA `.storage/` map:
 
 - Home Assistant 2024.5.0 of hoger
 - **HTTPS vereist** voor barcode scanner en camera (anders werkt getUserMedia niet)
-- Optioneel: AI Task integratie voor foto-analyse (OpenAI, Google AI, Claude)
+- Optioneel: AI Task integratie voor foto-analyse, batch toevoegen en AI ingrediënten (OpenAI, Google AI, Claude)
