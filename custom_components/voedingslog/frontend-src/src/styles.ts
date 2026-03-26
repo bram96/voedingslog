@@ -141,10 +141,14 @@ export const panelStyles = css`
 
   /* Search */
   .search-results { margin-top: 12px; max-height: 300px; overflow-y: auto; }
-  .search-result { display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; border-bottom: 1px solid var(--divider-color); cursor: pointer; border-radius: 8px; }
+  .search-result { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid var(--divider-color); border-radius: 8px; gap: 4px; }
   .search-result:hover { background: var(--secondary-background-color); }
+  .search-result-main { flex: 1; min-width: 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
   .result-name { font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px; }
   .result-meta { font-size: 12px; color: var(--secondary-text-color); white-space: nowrap; }
+  .fav-btn { background: none; border: none; cursor: pointer; padding: 4px; display: flex; color: #ff9800; flex-shrink: 0; }
+  .fav-btn ha-icon { --mdc-icon-size: 20px; }
+  .favorites-section { margin: 12px 0 4px; }
   .search-online-btn { width: 100%; margin-top: 8px; }
   .search-loading { display: flex; align-items: center; gap: 8px; padding: 12px 0; font-size: 13px; color: var(--secondary-text-color); }
 

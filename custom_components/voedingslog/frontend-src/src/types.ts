@@ -32,6 +32,11 @@ export interface Product {
   serving_grams: number;
   portions?: Portion[];
   nutrients: NutrientMap;
+  favorite?: boolean;
+}
+
+export interface GetFavoritesResponse {
+  products: Product[];
 }
 
 export interface VoedingslogConfig {

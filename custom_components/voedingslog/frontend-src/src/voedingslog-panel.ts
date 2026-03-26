@@ -13,6 +13,7 @@ import type {
   VoedingslogConfig,
   GetLogResponse,
   GetMealsResponse,
+  GetFavoritesResponse,
   LookupBarcodeResponse,
   SearchProductsResponse,
   SaveMealResponse,
@@ -59,6 +60,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _editingMeal: CustomMeal | null = null;
   @state() private _mealIngredientSearch = "";
   @state() private _mealIngredientResults: Product[] = [];
+  @state() private _favorites: Product[] = [];
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
@@ -512,7 +514,24 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  private _renderSearchResult(p: Product, showFavToggle = false): TemplateResult {
+    return html`
+      <div class="search-result">
+        <div class="search-result-main" @click=${() => this._selectProduct(p)}>
+          <span class="result-name">${p.name}</span>
+          <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
+        </div>
+        ${showFavToggle
+          ? html`<button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this._toggleFavorite(p); }}>
+              <ha-icon icon=${p.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
+            </button>`
+          : nothing}
+      </div>
+    `;
+  }
+
   private _renderSearchDialog(): TemplateResult {
+    const showFavorites = !this._searchQuery.trim() && this._favorites.length > 0;
     return html`
       <div class="dialog-header">
         <h2>Zoek product</h2>
@@ -539,17 +558,18 @@ export class VoedingslogPanel extends LitElement {
         ${this._searching
           ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
           : nothing}
+        ${showFavorites
+          ? html`
+            <div class="favorites-section">
+              <div class="section-label"><ha-icon icon="mdi:star" style="--mdc-icon-size:16px;vertical-align:middle;color:#ff9800"></ha-icon> Favorieten</div>
+              ${this._favorites.map((p) => this._renderSearchResult(p, true))}
+            </div>
+          `
+          : nothing}
         <div class="search-results">
-          ${this._searchResults.map(
-            (p) => html`
-              <div class="search-result" @click=${() => this._selectProduct(p)}>
-                <span class="result-name">${p.name}</span>
-                <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
-              </div>
-            `
-          )}
+          ${this._searchResults.map((p) => this._renderSearchResult(p, true))}
         </div>
-        ${this._searchSource === "local" && this._searchResults.length >= 0 && this._searchQuery.trim()
+        ${this._searchSource === "local" && this._searchQuery.trim()
           ? html`<button class="btn-secondary search-online-btn" @click=${() => this._doSearch(true)}>
               <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
             </button>`
@@ -1048,11 +1068,17 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private _openSearch(): void {
+  private async _openSearch(): Promise<void> {
     this._dialogMode = "search";
     this._searchResults = [];
     this._searchQuery = "";
     this._searchSource = "local";
+    try {
+      const res = await this.hass.callWS<GetFavoritesResponse>({ type: "voedingslog/get_favorites" });
+      this._favorites = res.products || [];
+    } catch {
+      this._favorites = [];
+    }
   }
 
   private _openEditDialog(item: IndexedLogItem): void {
@@ -1373,6 +1399,27 @@ export class VoedingslogPanel extends LitElement {
       alert("Fout bij zoeken. Controleer de verbinding.");
     }
     this._searching = false;
+  }
+
+  private async _toggleFavorite(product: Product): Promise<void> {
+    try {
+      const res = await this.hass.callWS<{ favorite: boolean }>({
+        type: "voedingslog/toggle_favorite",
+        product_name: product.name,
+      });
+      product.favorite = res.favorite;
+      // Update favorites list
+      if (res.favorite) {
+        if (!this._favorites.find((f) => f.name === product.name)) {
+          this._favorites = [...this._favorites, product];
+        }
+      } else {
+        this._favorites = this._favorites.filter((f) => f.name !== product.name);
+      }
+      this.requestUpdate();
+    } catch (e) {
+      console.error("Failed to toggle favorite:", e);
+    }
   }
 
   private _selectProduct(product: Product): void {

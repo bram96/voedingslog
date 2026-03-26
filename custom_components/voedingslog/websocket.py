@@ -25,6 +25,8 @@ from .const import (
     WS_GET_MEALS,
     WS_SAVE_MEAL,
     WS_DELETE_MEAL,
+    WS_GET_FAVORITES,
+    WS_TOGGLE_FAVORITE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +60,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_meals)
     websocket_api.async_register_command(hass, ws_save_meal)
     websocket_api.async_register_command(hass, ws_delete_meal)
+    websocket_api.async_register_command(hass, ws_get_favorites)
+    websocket_api.async_register_command(hass, ws_toggle_favorite)
 
 
 @websocket_api.websocket_command(
@@ -379,4 +383,36 @@ async def ws_delete_meal(hass, connection, msg):
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Meal not found")
+
+
+# ── Favorites ─────────────────────────────────────────────────────
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_GET_FAVORITES}
+)
+@websocket_api.async_response
+async def ws_get_favorites(hass, connection, msg):
+    """Return favorite products."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    connection.send_result(msg["id"], {"products": coordinator.get_favorites()})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TOGGLE_FAVORITE,
+        vol.Required("product_name"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_toggle_favorite(hass, connection, msg):
+    """Toggle favorite status for a product."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    is_fav = await coordinator.toggle_favorite(msg["product_name"])
+    connection.send_result(msg["id"], {"favorite": is_fav})
 

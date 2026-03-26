@@ -172,18 +172,30 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
     async def search_products_online(self, query: str) -> list[dict]:
         """Search products via Open Food Facts API."""
         session = await self._get_session()
-        results = await search_by_name(session, query)
-        # Cache any new results
-        for product in results:
-            self._cache_product(product)
-        return results
+        return await search_by_name(session, query)
+
+    def get_favorites(self) -> list[dict]:
+        """Return favorite products."""
+        return [p for p in self._product_cache if p.get("favorite")]
+
+    def get_cached_products(self) -> list[dict]:
+        """Return all cached (logged) products."""
+        return self._product_cache
+
+    async def toggle_favorite(self, product_name: str) -> bool:
+        """Toggle favorite status for a cached product. Returns new state."""
+        for p in self._product_cache:
+            if p.get("name") == product_name:
+                p["favorite"] = not p.get("favorite", False)
+                await self._async_save_products()
+                return p["favorite"]
+        return False
 
     def _cache_product(self, product: dict) -> None:
-        """Add a product to the local cache if not already present."""
+        """Add a product to the local cache when it's actually logged."""
         name = product.get("name", "")
         if not name:
             return
-        # Check for duplicate by name
         if any(p.get("name") == name for p in self._product_cache):
             return
         self._product_cache.append({
@@ -191,6 +203,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             "serving_grams": product.get("serving_grams", 100),
             "nutrients": product.get("nutrients", {}),
             "portions": product.get("portions", []),
+            "favorite": False,
         })
 
     async def _async_save_products(self) -> None:
