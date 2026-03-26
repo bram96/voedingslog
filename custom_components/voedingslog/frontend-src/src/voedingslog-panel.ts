@@ -330,8 +330,8 @@ export class VoedingslogPanel extends LitElement {
       <div class="dialog-overlay" @click=${() => this._closeDialog()}>
         <div class="dialog" @click=${(e: Event) => e.stopPropagation()}>
           ${this._dialogMode === "add-chooser" ? this._renderAddChooser() : nothing}
-          ${this._dialogMode === "barcode" ? this._renderBarcodeDialog() : nothing}
           ${this._dialogMode === "search" ? this._renderSearchDialog() : nothing}
+          ${this._dialogMode === "barcode" ? this._renderBarcodeDialog() : nothing}
           ${this._dialogMode === "photo" ? this._renderPhotoDialog() : nothing}
           ${this._dialogMode === "weight" ? this._renderWeightDialog() : nothing}
           ${this._dialogMode === "edit" ? this._renderEditDialog() : nothing}
@@ -339,10 +339,9 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "meal-edit" ? this._meals.renderEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._renderManualEntryDialog() : nothing}
           ${this._dialogMode === "day-detail" ? this._export.renderDayDetailDialog() : nothing}
-          ${this._dialogMode === "ai-text" ? this._ai.renderTextDialog() : nothing}
-          ${this._dialogMode === "ai-handwriting" ? this._ai.renderHandwritingDialog() : nothing}
+          ${this._dialogMode === "batch-add" ? this._ai.renderBatchAddDialog() : nothing}
           ${this._dialogMode === "ai-validate" ? this._ai.renderValidateDialog() : nothing}
-          ${this._dialogMode === "meal-ai-text" ? this._ai.renderMealTextDialog() : nothing}
+          ${this._dialogMode === "meal-ai-text" ? this._ai.renderBatchAddDialog("meal") : nothing}
         </div>
       </div>
     `;
@@ -361,29 +360,13 @@ export class VoedingslogPanel extends LitElement {
       </div>
       <div class="dialog-body">
         <div class="chooser-grid">
-          <button class="chooser-item" @click=${() => this._openBarcodeScanner()}>
-            <ha-icon icon="mdi:barcode-scan"></ha-icon>
-            <span>Scan barcode</span>
-          </button>
           <button class="chooser-item" @click=${() => this._openSearch()}>
             <ha-icon icon="mdi:magnify"></ha-icon>
             <span>Zoek product</span>
           </button>
-          <button class="chooser-item" @click=${() => this._openPhotoCapture()} ?disabled=${!hasAI}>
-            <ha-icon icon="mdi:camera"></ha-icon>
-            <span>Foto etiket</span>
-          </button>
-          <button class="chooser-item" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
-            <ha-icon icon="mdi:pencil-plus"></ha-icon>
-            <span>Handmatig</span>
-          </button>
-          <button class="chooser-item" @click=${() => { this._dialogMode = "ai-text"; }} ?disabled=${!hasAI}>
+          <button class="chooser-item" @click=${() => { this._ai.batchMode = "text"; this._dialogMode = "batch-add"; }} ?disabled=${!hasAI}>
             <ha-icon icon="mdi:text-box-outline"></ha-icon>
-            <span>AI tekst</span>
-          </button>
-          <button class="chooser-item" @click=${() => { this._dialogMode = "ai-handwriting"; }} ?disabled=${!hasAI}>
-            <ha-icon icon="mdi:note-text-outline"></ha-icon>
-            <span>Handgeschreven lijst</span>
+            <span>Batch toevoegen</span>
           </button>
         </div>
       </div>
@@ -483,6 +466,26 @@ export class VoedingslogPanel extends LitElement {
           (p) => this._selectProduct(p),
           { renderResult: (p) => this._renderSearchResultWithFav(p) },
         )}
+
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
+          <div class="section-label">Barcode</div>
+          <div class="input-row">
+            <input type="text" id="manual-barcode" placeholder="Barcode nummer"
+              inputmode="numeric"
+              @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this._lookupManualBarcode(); }} />
+            <button class="btn-primary" @click=${() => this._lookupManualBarcode()}>
+              <ha-icon icon="mdi:magnify"></ha-icon>
+            </button>
+            <button class="btn-secondary" @click=${() => this._openBarcodeScanner()}>
+              <ha-icon icon="mdi:barcode-scan"></ha-icon>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn-secondary btn-confirm" style="margin-top:16px" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
+          <ha-icon icon="mdi:pencil-plus"></ha-icon>
+          Handmatig invoeren
+        </button>
       </div>
     `;
   }
@@ -722,6 +725,12 @@ export class VoedingslogPanel extends LitElement {
             `
           )}
         </div>
+        ${!pre && !!this._config?.ai_task_entity ? html`
+          <button class="btn-secondary btn-confirm" @click=${() => this._openPhotoCapture()}>
+            <ha-icon icon="mdi:camera"></ha-icon>
+            Foto van etiket (AI)
+          </button>
+        ` : nothing}
         <button class="btn-primary btn-confirm" @click=${() => this._confirmManualEntry(fields)}>
           <ha-icon icon="mdi:arrow-right"></ha-icon>
           Verder

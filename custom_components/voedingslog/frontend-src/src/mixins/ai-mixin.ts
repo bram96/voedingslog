@@ -37,6 +37,7 @@ export class AiController {
   validateIndex = 0;
   validateSearch = "";
   validateSearchResults: Product[] = [];
+  batchMode: "text" | "photo" = "text";
   private _validateMode: ValidateMode = "log";
 
   constructor(host: AiControllerHost) {
@@ -48,86 +49,62 @@ export class AiController {
     this.validateIndex = 0;
     this.validateSearch = "";
     this.validateSearchResults = [];
+    this.batchMode = "text";
     this._validateMode = "log";
   }
 
-  renderMealTextDialog(): TemplateResult {
+  renderBatchAddDialog(mode: ValidateMode = "log"): TemplateResult {
     const h = this.host;
-    return html`
-      <div class="dialog-header">
-        <h2>AI ingrediënten invoer</h2>
-        <button class="close-btn" @click=${() => h._setDialogMode("meal-edit")}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
-          Beschrijf de ingrediënten. AI herkent de producten en zoekt voedingswaarden op.
-        </p>
-        <textarea
-          id="ai-text-input"
-          class="ai-textarea"
-          placeholder="Bijv. 200g kipfilet, 100g rijst, 150g broccoli, scheutje olijfolie"
-        ></textarea>
-        ${h._analyzing
-          ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
-          : html`
-            <button class="btn-primary btn-confirm" @click=${() => this.submitText("meal")}>
-              <ha-icon icon="mdi:auto-fix"></ha-icon>
-              Analyseren
-            </button>
-          `}
-      </div>
-    `;
-  }
+    const isMeal = mode === "meal";
+    const title = isMeal ? "AI ingrediënten invoer" : "Batch toevoegen";
+    const closeAction = isMeal ? () => h._setDialogMode("meal-edit") : () => h._closeDialog();
+    const placeholder = isMeal
+      ? "Bijv. 200g kipfilet, 100g rijst, 150g broccoli, scheutje olijfolie"
+      : "Bijv. 2 boterhammen met kaas, een appel, kop koffie met melk";
 
-  renderTextDialog(): TemplateResult {
-    const h = this.host;
     return html`
       <div class="dialog-header">
-        <h2>AI tekst invoer</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
+        <h2>${title}</h2>
+        <button class="close-btn" @click=${closeAction}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
       <div class="dialog-body">
-        <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
-          Beschrijf wat je gegeten hebt. AI herkent de producten en zoekt voedingswaarden op.
-        </p>
-        <textarea
-          id="ai-text-input"
-          class="ai-textarea"
-          placeholder="Bijv. 2 boterhammen met kaas, een appel, kop koffie met melk"
-        ></textarea>
-        ${h._analyzing
-          ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
+        ${this.batchMode === "text"
+          ? html`
+            <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
+              Beschrijf wat je gegeten hebt. AI herkent de producten en zoekt voedingswaarden op.
+            </p>
+            <textarea
+              id="ai-text-input"
+              class="ai-textarea"
+              placeholder=${placeholder}
+            ></textarea>
+            ${h._analyzing
+              ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
+              : html`
+                <button class="btn-primary btn-confirm" @click=${() => this.submitText(mode)}>
+                  <ha-icon icon="mdi:auto-fix"></ha-icon>
+                  Analyseren
+                </button>
+                <button class="btn-secondary btn-confirm" @click=${() => { this.batchMode = "photo"; h.requestUpdate(); }}>
+                  <ha-icon icon="mdi:camera"></ha-icon>
+                  Foto van handgeschreven lijst
+                </button>
+              `}
+          `
           : html`
-            <button class="btn-primary btn-confirm" @click=${() => this.submitText()}>
-              <ha-icon icon="mdi:auto-fix"></ha-icon>
-              Analyseren
+            <button class="btn-secondary" style="margin-bottom:12px;width:100%;padding:8px" @click=${() => { this.batchMode = "text"; h.requestUpdate(); }}>
+              <ha-icon icon="mdi:keyboard"></ha-icon> Terug naar tekst invoer
             </button>
+            ${renderPhotoPicker(
+              h,
+              "file-input-handwriting",
+              (e: Event) => this.handleHandwritingPhoto(e),
+              () => this._captureForHandwriting(),
+              "Maak een foto van je handgeschreven lijst.",
+            )}
           `}
-      </div>
-    `;
-  }
-
-  renderHandwritingDialog(): TemplateResult {
-    const h = this.host;
-    return html`
-      <div class="dialog-header">
-        <h2>Handgeschreven lijst</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${renderPhotoPicker(
-          h,
-          "file-input-handwriting",
-          (e: Event) => this.handleHandwritingPhoto(e),
-          () => this._captureForHandwriting(),
-          "Maak een foto of kies een afbeelding van je handgeschreven lijst.",
-        )}
       </div>
     `;
   }
