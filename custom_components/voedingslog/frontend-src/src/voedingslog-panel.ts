@@ -351,6 +351,7 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "ai-text" ? this._ai.renderTextDialog() : nothing}
           ${this._dialogMode === "ai-handwriting" ? this._ai.renderHandwritingDialog() : nothing}
           ${this._dialogMode === "ai-validate" ? this._ai.renderValidateDialog() : nothing}
+          ${this._dialogMode === "meal-ai-text" ? this._ai.renderMealTextDialog() : nothing}
         </div>
       </div>
     `;
@@ -1246,6 +1247,13 @@ export class VoedingslogPanel extends LitElement {
           </div>
         </div>
 
+        ${!!this._config?.ai_task_entity ? html`
+          <button class="btn-secondary btn-confirm" @click=${() => { this._dialogMode = "meal-ai-text" as DialogMode; }}>
+            <ha-icon icon="mdi:text-box-outline"></ha-icon>
+            AI ingrediënten invoer
+          </button>
+        ` : nothing}
+
         <button class="btn-primary btn-confirm" @click=${() => this._saveMeal()}>
           <ha-icon icon="mdi:check"></ha-icon>
           Opslaan
@@ -1529,6 +1537,14 @@ export class VoedingslogPanel extends LitElement {
     const ingredients = [...this._editingMeal.ingredients];
     ingredients[index] = { ...ingredients[index], grams };
     this._editingMeal = { ...this._editingMeal, ingredients };
+  }
+
+  _addMealIngredientFromAi(ingredient: MealIngredient): void {
+    if (!this._editingMeal) return;
+    this._editingMeal = {
+      ...this._editingMeal,
+      ingredients: [...this._editingMeal.ingredients, ingredient],
+    };
   }
 
   private _removeMealIngredient(index: number): void {

@@ -5,6 +5,7 @@
 import { html, nothing, type TemplateResult } from "lit";
 import type {
   MealCategory,
+  MealIngredient,
   Product,
   ParsedProduct,
   ParseFoodResponse,
@@ -24,7 +25,11 @@ export interface AiControllerHost {
   _loadLog(): Promise<void>;
   _openFileInput(id: string): void;
   _setDialogMode(mode: string): void;
+  _addMealIngredientFromAi(ingredient: MealIngredient): void;
 }
+
+/** Whether the AI validation flow is adding to a log or building a meal. */
+type ValidateMode = "log" | "meal";
 
 export class AiController {
   host: AiControllerHost;
@@ -32,6 +37,7 @@ export class AiController {
   validateIndex = 0;
   validateSearch = "";
   validateSearchResults: Product[] = [];
+  private _validateMode: ValidateMode = "log";
 
   constructor(host: AiControllerHost) {
     this.host = host;
@@ -42,6 +48,37 @@ export class AiController {
     this.validateIndex = 0;
     this.validateSearch = "";
     this.validateSearchResults = [];
+    this._validateMode = "log";
+  }
+
+  renderMealTextDialog(): TemplateResult {
+    const h = this.host;
+    return html`
+      <div class="dialog-header">
+        <h2>AI ingrediënten invoer</h2>
+        <button class="close-btn" @click=${() => h._setDialogMode("meal-edit")}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
+          Beschrijf de ingrediënten. AI herkent de producten en zoekt voedingswaarden op.
+        </p>
+        <textarea
+          id="ai-text-input"
+          class="ai-textarea"
+          placeholder="Bijv. 200g kipfilet, 100g rijst, 150g broccoli, scheutje olijfolie"
+        ></textarea>
+        ${h._analyzing
+          ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
+          : html`
+            <button class="btn-primary btn-confirm" @click=${() => this.submitText("meal")}>
+              <ha-icon icon="mdi:auto-fix"></ha-icon>
+              Analyseren
+            </button>
+          `}
+      </div>
+    `;
   }
 
   renderTextDialog(): TemplateResult {
@@ -200,25 +237,27 @@ export class AiController {
             min="1" step="1" inputmode="numeric" />
         </div>
 
-        <div class="form-field">
-          <label>Maaltijd</label>
-          <select id="ai-validate-category">
-            ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-              (cat) => html`
-                <option value=${cat} ?selected=${cat === defaultCategory()}>
-                  ${(h._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
-                </option>
-              `
-            )}
-          </select>
-        </div>
+        ${this._validateMode === "log" ? html`
+          <div class="form-field">
+            <label>Maaltijd</label>
+            <select id="ai-validate-category">
+              ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
+                (cat) => html`
+                  <option value=${cat} ?selected=${cat === defaultCategory()}>
+                    ${(h._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
+                  </option>
+                `
+              )}
+            </select>
+          </div>
+        ` : nothing}
 
         <div class="ai-validate-actions">
           <button class="btn-secondary btn-confirm" @click=${() => this.skip()}>
             Overslaan
           </button>
           <button class="btn-primary btn-confirm" @click=${() => this.confirm()} ?disabled=${!product.matched}>
-            Bevestigen
+            ${this._validateMode === "meal" ? "Toevoegen" : "Bevestigen"}
           </button>
         </div>
       </div>
@@ -227,7 +266,7 @@ export class AiController {
 
   // ── Actions ──────────────────────────────────────────────────
 
-  async submitText(): Promise<void> {
+  async submitText(mode: ValidateMode = "log"): Promise<void> {
     const h = this.host;
     const textarea = h.shadowRoot?.getElementById("ai-text-input") as HTMLTextAreaElement | null;
     const text = textarea?.value?.trim();
@@ -243,6 +282,7 @@ export class AiController {
         this.validateIndex = 0;
         this.validateSearch = "";
         this.validateSearchResults = [];
+        this._validateMode = mode;
         h._setDialogMode("ai-validate");
       } else {
         alert("Geen producten herkend. Probeer het opnieuw met meer detail.");
@@ -326,8 +366,12 @@ export class AiController {
     this.validateSearch = "";
     this.validateSearchResults = [];
     if (this.validateIndex >= this.parsedProducts.length) {
-      this.host._closeDialog();
-      this.host._loadLog();
+      if (this._validateMode === "meal") {
+        this.host._setDialogMode("meal-edit");
+      } else {
+        this.host._closeDialog();
+        this.host._loadLog();
+      }
     } else {
       this.host.requestUpdate();
     }
@@ -339,31 +383,45 @@ export class AiController {
     if (!product) return;
 
     const gramsInput = h.shadowRoot?.getElementById("ai-validate-grams") as HTMLInputElement | null;
-    const catSelect = h.shadowRoot?.getElementById("ai-validate-category") as HTMLSelectElement | null;
     const grams = parseFloat(gramsInput?.value || "") || product.serving_grams || 100;
-    const category = (catSelect?.value as MealCategory) || defaultCategory();
 
-    try {
-      await h.hass.callWS({
-        type: "voedingslog/log_product",
-        person: h._selectedPerson,
+    if (this._validateMode === "meal") {
+      // Add as meal ingredient
+      h._addMealIngredientFromAi({
         name: product.name,
         grams,
         nutrients: product.nutrients || {},
-        category,
       });
-    } catch (err) {
-      console.error("Failed to log AI product:", err);
-      alert("Fout bij opslaan.");
-      return;
+    } else {
+      // Log to daily intake
+      const catSelect = h.shadowRoot?.getElementById("ai-validate-category") as HTMLSelectElement | null;
+      const category = (catSelect?.value as MealCategory) || defaultCategory();
+      try {
+        await h.hass.callWS({
+          type: "voedingslog/log_product",
+          person: h._selectedPerson,
+          name: product.name,
+          grams,
+          nutrients: product.nutrients || {},
+          category,
+        });
+      } catch (err) {
+        console.error("Failed to log AI product:", err);
+        alert("Fout bij opslaan.");
+        return;
+      }
     }
 
     this.validateIndex++;
     this.validateSearch = "";
     this.validateSearchResults = [];
     if (this.validateIndex >= this.parsedProducts.length) {
-      h._closeDialog();
-      h._loadLog();
+      if (this._validateMode === "meal") {
+        h._setDialogMode("meal-edit");
+      } else {
+        h._closeDialog();
+        h._loadLog();
+      }
     } else {
       h.requestUpdate();
     }
