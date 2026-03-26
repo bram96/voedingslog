@@ -45,8 +45,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _pendingProduct: Product | null = null;
   @state() private _searchResults: Product[] = [];
   @state() private _searchQuery = "";
-  @state() private _scanning = false;
-  @state() private _cameraFailed = false;
+  @state() private _cameraActive = false;
   @state() private _analyzing = false;
   @state() private _editingItem: IndexedLogItem | null = null;
   @state() private _meals: CustomMeal[] = [];
@@ -56,6 +55,7 @@ export class VoedingslogPanel extends LitElement {
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
+  private _cameraStream: MediaStream | null = null;
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -67,6 +67,7 @@ export class VoedingslogPanel extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this._stopCamera();
+    this._stopCameraStream();
     this._cleanupScannerContainer();
   }
 
@@ -326,6 +327,37 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {
+    const fileChangeHandler = purpose === "barcode"
+      ? (e: Event) => this._handleBarcodePhoto(e)
+      : (e: Event) => this._handlePhotoCapture(e);
+
+    return html`
+      ${this._cameraActive
+        ? html`
+          <div class="camera-preview">
+            <video id="camera-video" autoplay playsinline></video>
+            <button class="btn-primary camera-capture-btn" @click=${() => this._captureFrame(purpose)}>
+              <ha-icon icon="mdi:camera"></ha-icon> Maak foto
+            </button>
+          </div>
+        `
+        : html`
+          <div class="photo-buttons">
+            <button class="btn-primary photo-btn" @click=${() => this._openCamera(purpose)}>
+              <ha-icon icon="mdi:camera"></ha-icon> Open camera
+            </button>
+            <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("file-input-gallery-" + purpose)}>
+              <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
+            </button>
+          </div>
+          <input type="file" accept="image/*"
+            id=${"file-input-gallery-" + purpose}
+            @change=${fileChangeHandler} style="display:none" />
+        `}
+    `;
+  }
+
   private _renderBarcodeDialog(): TemplateResult {
     return html`
       <div class="dialog-header">
@@ -335,31 +367,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        ${this._cameraFailed
-          ? html`
-            <div class="barcode-photo-fallback">
-              <p class="scanner-hint-text">Maak een foto van de barcode of voer het nummer hieronder in.</p>
-              <input type="file" accept="image/*" capture="environment"
-                id="barcode-photo-camera" @change=${(e: Event) => this._handleBarcodePhoto(e)} style="display:none" />
-              <input type="file" accept="image/*"
-                id="barcode-photo-gallery" @change=${(e: Event) => this._handleBarcodePhoto(e)} style="display:none" />
-              <div class="photo-buttons">
-                <button class="btn-primary photo-btn" @click=${() => this._openFileInput("barcode-photo-camera")}>
-                  <ha-icon icon="mdi:camera"></ha-icon> Maak foto
-                </button>
-                <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("barcode-photo-gallery")}>
-                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
-                </button>
-              </div>
-            </div>
-          `
-          : html`
-            <div id="barcode-scanner-placeholder" class="scanner-area">
-              ${this._scanning
-                ? nothing
-                : html`<p class="scanner-hint">Camera wordt gestart...</p>`}
-            </div>
-          `}
+        ${this._renderCameraCapture("barcode")}
         <div class="manual-barcode">
           <span>Of voer handmatig in:</span>
           <div class="input-row">
@@ -433,18 +441,7 @@ export class VoedingslogPanel extends LitElement {
             </div>`
           : html`
               <p class="photo-hint">Maak een foto van het voedingsetiket op de verpakking.</p>
-              <input type="file" accept="image/*" capture="environment"
-                id="photo-input-camera" @change=${(e: Event) => this._handlePhotoCapture(e)} style="display:none" />
-              <input type="file" accept="image/*"
-                id="photo-input-gallery" @change=${(e: Event) => this._handlePhotoCapture(e)} style="display:none" />
-              <div class="photo-buttons">
-                <button class="btn-primary photo-btn" @click=${() => this._openFileInput("photo-input-camera")}>
-                  <ha-icon icon="mdi:camera"></ha-icon> Maak foto
-                </button>
-                <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("photo-input-gallery")}>
-                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
-                </button>
-              </div>
+              ${this._renderCameraCapture("photo")}
             `}
       </div>
     `;
@@ -731,9 +728,7 @@ export class VoedingslogPanel extends LitElement {
 
   private _openBarcodeScanner(): void {
     this._dialogMode = "barcode";
-    this._scanning = false;
-    this._cameraFailed = false;
-    this.updateComplete.then(() => this._startCamera());
+    this._cameraActive = false;
   }
 
   private _openSearch(): void {
@@ -866,74 +861,102 @@ export class VoedingslogPanel extends LitElement {
 
   private _closeDialog(): void {
     this._stopCamera();
+    this._stopCameraStream();
     this._dialogMode = null;
     this._pendingProduct = null;
     this._editingItem = null;
     this._searchResults = [];
     this._analyzing = false;
-    this._cameraFailed = false;
+    this._cameraActive = false;
     this._editingMeal = null;
     this._mealIngredientSearch = "";
     this._mealIngredientResults = [];
   }
 
-  private async _startCamera(): Promise<void> {
-    // Skip camera attempt on mobile — go straight to photo fallback
-    // getUserMedia is unreliable in HA companion app WebView
-    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-    if (isMobile) {
-      this._cameraFailed = true;
-      return;
-    }
+  private async _openCamera(_purpose: "barcode" | "photo"): Promise<void> {
 
     try {
-      this._cleanupScannerContainer();
+      this._cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      this._cameraActive = true;
 
+      // Wait for render, then attach stream to video element
+      await this.updateComplete;
+      const video = this.shadowRoot?.getElementById("camera-video") as HTMLVideoElement | null;
+      if (video) {
+        video.srcObject = this._cameraStream;
+      }
+    } catch (e) {
+      console.warn("getUserMedia failed:", e);
+      this._cameraActive = false;
+      alert("Camera niet beschikbaar. Gebruik 'Kies afbeelding' om een foto te selecteren.");
+    }
+  }
+
+  private async _captureFrame(purpose: "barcode" | "photo"): Promise<void> {
+    const video = this.shadowRoot?.getElementById("camera-video") as HTMLVideoElement | null;
+    if (!video) return;
+
+    // Draw video frame to canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+
+    this._stopCameraStream();
+
+    if (purpose === "barcode") {
+      // Decode barcode from captured frame
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      if (!blob) return;
+      const file = new File([blob], "barcode.jpg", { type: "image/jpeg" });
+
+      this._cleanupScannerContainer();
       const container = document.createElement("div");
       container.id = this._scannerContainerId;
+      container.style.display = "none";
       document.body.appendChild(container);
 
-      const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
-      if (placeholder) {
-        const rect = placeholder.getBoundingClientRect();
-        container.style.cssText = `
-          position: fixed;
-          top: ${rect.top}px;
-          left: ${rect.left}px;
-          width: ${rect.width}px;
-          height: ${Math.max(rect.height, 250)}px;
-          z-index: 101;
-          border-radius: 8px;
-          overflow: hidden;
-        `;
-        placeholder.style.minHeight = "250px";
+      try {
+        const scanner = new Html5Qrcode(this._scannerContainerId);
+        const result = await scanner.scanFile(file, false);
+        this._cleanupScannerContainer();
+        await this._lookupBarcode(result);
+      } catch {
+        this._cleanupScannerContainer();
+        alert("Kon geen barcode herkennen. Probeer opnieuw of voer het nummer handmatig in.");
       }
+    } else {
+      // Send photo for AI analysis
+      this._analyzing = true;
+      try {
+        const b64 = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+        const res = await this.hass.callWS<AnalyzePhotoResponse>({
+          type: "voedingslog/analyze_photo",
+          photo_b64: b64,
+        });
+        if (res.product) {
+          this._analyzing = false;
+          this._selectProduct(res.product);
+        } else {
+          this._analyzing = false;
+          alert("Kon voedingswaarden niet herkennen. Probeer een duidelijkere foto.");
+        }
+      } catch (err) {
+        this._analyzing = false;
+        alert("Fout bij analyseren foto: " + ((err as Error).message || err));
+      }
+    }
+  }
 
-      this._html5Qrcode = new Html5Qrcode(this._scannerContainerId);
-      this._scanning = true;
-
-      // Race camera start against a timeout
-      const startPromise = this._html5Qrcode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.5 },
-        (decodedText: string) => {
-          this._scanning = false;
-          this._stopCamera();
-          this._lookupBarcode(decodedText);
-        },
-        () => {}
-      );
-
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Camera timeout")), 8000)
-      );
-
-      await Promise.race([startPromise, timeout]);
-    } catch (e) {
-      console.warn("Camera/scanner not available:", e);
-      this._scanning = false;
-      this._cameraFailed = true;
-      this._stopCamera();
+  private _stopCameraStream(): void {
+    this._cameraActive = false;
+    if (this._cameraStream) {
+      this._cameraStream.getTracks().forEach((t) => t.stop());
+      this._cameraStream = null;
     }
   }
 
@@ -970,7 +993,6 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _stopCamera(): void {
-    this._scanning = false;
     if (this._html5Qrcode) {
       this._html5Qrcode
         .stop()
@@ -1524,6 +1546,21 @@ export class VoedingslogPanel extends LitElement {
     .scanner-hint {
       color: #999;
       font-size: 14px;
+    }
+    .camera-preview {
+      position: relative;
+      margin-bottom: 12px;
+    }
+    #camera-video {
+      width: 100%;
+      border-radius: 8px;
+      background: #000;
+      max-height: 300px;
+      object-fit: cover;
+    }
+    .camera-capture-btn {
+      margin-top: 8px;
+      width: 100%;
     }
     .manual-barcode {
       margin-top: 16px;
