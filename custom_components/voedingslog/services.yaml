@@ -1,0 +1,111 @@
+log_barcode:
+  name: Log barcode
+  description: Zoek een product op barcode en log het.
+  fields:
+    config_entry_id:
+      name: Voedingslog integratie
+      description: Kies de persoon (integratie) waarvoor je wilt loggen.
+      required: true
+      selector:
+        config_entry:
+          integration: voedingslog
+    barcode:
+      name: Barcode
+      description: De barcode van het product.
+      required: true
+      example: "8710400301929"
+      selector:
+        text:
+    gram:
+      name: Gram
+      description: Gewicht in gram (optioneel, standaard de portiegrootte van het product).
+      selector:
+        number:
+          min: 1
+          step: 1
+          unit_of_measurement: g
+    category:
+      name: Maaltijd
+      description: Maaltijdcategorie (optioneel, standaard op basis van tijdstip).
+      selector:
+        select:
+          options:
+            - label: Ontbijt
+              value: breakfast
+            - label: Lunch
+              value: lunch
+            - label: Avondeten
+              value: dinner
+            - label: Tussendoor
+              value: snack
+
+log_product:
+  name: Log product
+  description: Zoek een product op naam en log het eerste resultaat.
+  fields:
+    config_entry_id:
+      name: Voedingslog integratie
+      description: Kies de persoon (integratie) waarvoor je wilt loggen.
+      required: true
+      selector:
+        config_entry:
+          integration: voedingslog
+    naam:
+      name: Productnaam
+      description: Naam om te zoeken in Open Food Facts.
+      required: true
+      example: "hagelslag melk"
+      selector:
+        text:
+    gram:
+      name: Gram
+      description: Gewicht in gram.
+      default: 100
+      selector:
+        number:
+          min: 1
+          step: 1
+          unit_of_measurement: g
+    category:
+      name: Maaltijd
+      description: Maaltijdcategorie (optioneel).
+      selector:
+        select:
+          options:
+            - label: Ontbijt
+              value: breakfast
+            - label: Lunch
+              value: lunch
+            - label: Avondeten
+              value: dinner
+            - label: Tussendoor
+              value: snack
+
+reset_dag:
+  name: Reset dag
+  description: Wis de voedingslog voor een dag.
+  fields:
+    config_entry_id:
+      name: Voedingslog integratie
+      description: Kies de persoon (integratie) waarvan je de dag wilt wissen.
+      required: true
+      selector:
+        config_entry:
+          integration: voedingslog
+    dag:
+      name: Datum
+      description: Datum om te wissen (optioneel, standaard vandaag).
+      selector:
+        date:
+
+verwijder_laatste:
+  name: Verwijder laatste
+  description: Verwijder het laatst gelogde item.
+  fields:
+    config_entry_id:
+      name: Voedingslog integratie
+      description: Kies de persoon (integratie) waarvan je het laatste item wilt verwijderen.
+      required: true
+      selector:
+        config_entry:
+          integration: voedingslog

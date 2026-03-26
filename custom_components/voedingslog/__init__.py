@@ -91,15 +91,30 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
+def _resolve_entry(hass: HomeAssistant, call: ServiceCall) -> tuple[VoedingslogCoordinator, str] | tuple[None, None]:
+    """Resolve coordinator and person from a service call's config_entry_id."""
+    entry_id = call.data.get("config_entry_id")
+    if not entry_id:
+        _LOGGER.error("config_entry_id is required")
+        return None, None
+    coord = hass.data.get(DOMAIN, {}).get(entry_id)
+    if not coord:
+        _LOGGER.error("Config entry %s not found", entry_id)
+        return None, None
+    return coord, coord.persons[0] if coord.persons else ""
+
+
 def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator):
-    """Register all HA services."""
+    """Register all HA services (once, routing to correct config entry)."""
 
     async def handle_log_barcode(call: ServiceCall):
-        person = call.data["persoon"]
+        coord, person = _resolve_entry(hass, call)
+        if not coord or not person:
+            return
         barcode = call.data["barcode"]
         grams = call.data.get("gram")
         category = call.data.get("category")
-        ok = await coordinator.log_barcode(person, barcode, grams, category)
+        ok = await coord.log_barcode(person, barcode, grams, category)
         if not ok:
             _LOGGER.info("Barcode %s not found for %s", barcode, person)
             await _send_notification(
@@ -115,7 +130,7 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
             handle_log_barcode,
             schema=vol.Schema(
                 {
-                    vol.Required("persoon"): cv.string,
+                    vol.Required("config_entry_id"): cv.string,
                     vol.Required("barcode"): cv.string,
                     vol.Optional("gram"): vol.Coerce(float),
                     vol.Optional("category"): cv.string,
@@ -124,13 +139,15 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
         )
 
     async def handle_log_product(call: ServiceCall):
-        person = call.data["persoon"]
+        coord, person = _resolve_entry(hass, call)
+        if not coord or not person:
+            return
         name = call.data["naam"]
         grams = call.data.get("gram", 100)
         category = call.data.get("category")
-        ok = await coordinator.log_product_by_name(person, name, grams, category)
+        ok = await coord.log_product_by_name(person, name, grams, category)
         if ok:
-            log = coordinator.get_log_today(person)
+            log = coord.get_log_today(person)
             last = log[-1] if log else None
             if last:
                 kcal = round(
@@ -149,7 +166,7 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
             handle_log_product,
             schema=vol.Schema(
                 {
-                    vol.Required("persoon"): cv.string,
+                    vol.Required("config_entry_id"): cv.string,
                     vol.Required("naam"): cv.string,
                     vol.Optional("gram", default=100): vol.Coerce(float),
                     vol.Optional("category"): cv.string,
@@ -158,9 +175,11 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
         )
 
     async def handle_reset_day(call: ServiceCall):
-        person = call.data["persoon"]
+        coord, person = _resolve_entry(hass, call)
+        if not coord or not person:
+            return
         day = call.data.get("dag")
-        await coordinator.reset_day(person, day)
+        await coord.reset_day(person, day)
         _LOGGER.info("Log reset for %s (day: %s)", person, day or "today")
 
     if not hass.services.has_service(DOMAIN, SERVICE_RESET_DAY):
@@ -170,22 +189,28 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
             handle_reset_day,
             schema=vol.Schema(
                 {
-                    vol.Required("persoon"): cv.string,
+                    vol.Required("config_entry_id"): cv.string,
                     vol.Optional("dag"): cv.string,
                 }
             ),
         )
 
     async def handle_delete_last(call: ServiceCall):
-        person = call.data["persoon"]
-        await coordinator.delete_last(person)
+        coord, person = _resolve_entry(hass, call)
+        if not coord or not person:
+            return
+        await coord.delete_last(person)
 
     if not hass.services.has_service(DOMAIN, SERVICE_DELETE_LAST):
         hass.services.async_register(
             DOMAIN,
             SERVICE_DELETE_LAST,
             handle_delete_last,
-            schema=vol.Schema({vol.Required("persoon"): cv.string}),
+            schema=vol.Schema(
+                {
+                    vol.Required("config_entry_id"): cv.string,
+                }
+            ),
         )
 
 
