@@ -12,8 +12,6 @@ import type {
   SaveMealResponse,
   DialogMode,
 } from "../types.js";
-import { ProductSearch } from "../product-search.js";
-
 export interface MealsControllerHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
   shadowRoot: ShadowRoot | null;
@@ -23,6 +21,7 @@ export interface MealsControllerHost {
   _closeDialog(): void;
   _setDialogMode(mode: string): void;
   _selectProduct(product: Product): void;
+  _openSearchDialog(callback: (p: Product) => void, returnMode?: DialogMode): Promise<void>;
 }
 
 export class MealsController {
@@ -30,17 +29,14 @@ export class MealsController {
   meals: CustomMeal[] = [];
   editingMeal: CustomMeal | null = null;
   editingIngredientIndex: number | null = null;
-  ingredientSearch: ProductSearch;
 
   constructor(host: MealsControllerHost) {
     this.host = host;
-    this.ingredientSearch = new ProductSearch(host);
   }
 
   reset(): void {
     this.editingMeal = null;
     this.editingIngredientIndex = null;
-    this.ingredientSearch.reset();
   }
 
   renderMealsDialog(): TemplateResult {
@@ -145,12 +141,9 @@ export class MealsController {
             `
           )}
 
-          <div class="add-ingredient">
-            ${this.ingredientSearch.renderSearchBar(
-              (p) => this.addIngredient(p),
-              { placeholder: "Zoek ingrediënt..." },
-            )}
-          </div>
+          <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => this.openIngredientSearch()}>
+            <ha-icon icon="mdi:plus"></ha-icon> Ingrediënt zoeken
+          </button>
         </div>
 
         ${!!h._config?.ai_task_entity ? html`
@@ -184,7 +177,7 @@ export class MealsController {
     this.editingMeal = meal
       ? { ...meal, ingredients: [...meal.ingredients] }
       : { id: "", name: "", ingredients: [], total_grams: 0, nutrients_per_100g: {} };
-    this.ingredientSearch.reset();
+
     this.host._setDialogMode("meal-edit");
   }
 
@@ -207,6 +200,13 @@ export class MealsController {
     this.host._selectProduct(product);
   }
 
+  openIngredientSearch(): void {
+    this.host._openSearchDialog(
+      (p) => this.addIngredient(p),
+      "meal-edit",
+    );
+  }
+
   addIngredient(product: Product): void {
     if (!this.editingMeal) return;
     const grams = parseFloat(prompt(`Hoeveel gram ${product.name}?`, String(product.serving_grams || 100)) || "");
@@ -216,7 +216,7 @@ export class MealsController {
       ...this.editingMeal,
       ingredients: [...this.editingMeal.ingredients, ingredient],
     };
-    this.ingredientSearch.reset();
+
     this.host.requestUpdate();
   }
 

@@ -54,6 +54,8 @@ export class VoedingslogPanel extends LitElement {
   @state() private _favorites: Product[] = [];
 
   private _search = new ProductSearch(this);
+  private _searchCallback: ((p: Product) => void) | null = null;
+  private _searchReturnMode: DialogMode = null;
   private _ai = new AiController(this);
   private _meals = new MealsController(this);
   private _export = new ExportController(this);
@@ -449,7 +451,7 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-header">
         <h2>Zoek product</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
+        <button class="close-btn" @click=${() => this._closeSearchDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -463,31 +465,44 @@ export class VoedingslogPanel extends LitElement {
           `
           : nothing}
         ${this._search.renderSearchBar(
-          (p) => this._selectProduct(p),
+          (p) => this._onSearchProductSelected(p),
           { renderResult: (p) => this._renderSearchResultWithFav(p) },
         )}
 
-        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
-          <div class="section-label">Barcode</div>
-          <div class="input-row">
-            <input type="text" id="manual-barcode" placeholder="Barcode nummer"
-              inputmode="numeric"
-              @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this._lookupManualBarcode(); }} />
-            <button class="btn-primary" @click=${() => this._lookupManualBarcode()}>
-              <ha-icon icon="mdi:magnify"></ha-icon>
-            </button>
-            <button class="btn-secondary" @click=${() => this._openBarcodeScanner()}>
-              <ha-icon icon="mdi:barcode-scan"></ha-icon>
-            </button>
-          </div>
+        <div class="ai-validate-actions" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
+          <button class="btn-secondary btn-confirm" @click=${() => this._openBarcodeScanner()}>
+            <ha-icon icon="mdi:barcode-scan"></ha-icon>
+            Barcode
+          </button>
+          <button class="btn-secondary btn-confirm" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
+            <ha-icon icon="mdi:pencil-plus"></ha-icon>
+            Handmatig
+          </button>
         </div>
-
-        <button class="btn-secondary btn-confirm" style="margin-top:16px" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
-          <ha-icon icon="mdi:pencil-plus"></ha-icon>
-          Handmatig invoeren
-        </button>
       </div>
     `;
+  }
+
+  private _closeSearchDialog(): void {
+    if (this._searchReturnMode) {
+      this._dialogMode = this._searchReturnMode;
+      this._searchReturnMode = null;
+    } else {
+      this._closeDialog();
+    }
+  }
+
+  private _onSearchProductSelected(product: Product): void {
+    if (this._searchCallback) {
+      this._searchCallback(product);
+      this._searchCallback = null;
+      if (this._searchReturnMode) {
+        this._dialogMode = this._searchReturnMode;
+        this._searchReturnMode = null;
+      }
+    } else {
+      this._selectProduct(product);
+    }
   }
 
   private _renderPhotoDialog(): TemplateResult {
@@ -841,7 +856,14 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _openSearch(): Promise<void> {
-    this._dialogMode = "search";
+    this._searchCallback = null;
+    this._searchReturnMode = null;
+    await this._openSearchDialog();
+  }
+
+  async _openSearchDialog(callback?: (p: Product) => void, returnMode?: DialogMode): Promise<void> {
+    this._searchCallback = callback || null;
+    this._searchReturnMode = returnMode || null;
     this._search.reset();
     try {
       const res = await this.hass.callWS<GetFavoritesResponse>({ type: "voedingslog/get_favorites" });
@@ -849,6 +871,7 @@ export class VoedingslogPanel extends LitElement {
     } catch {
       this._favorites = [];
     }
+    this._dialogMode = "search";
   }
 
   private _openEditDialog(item: IndexedLogItem): void {
@@ -978,6 +1001,8 @@ export class VoedingslogPanel extends LitElement {
     this._scanFailed = false;
     this._prefillProduct = null;
     this._search.reset();
+    this._searchCallback = null;
+    this._searchReturnMode = null;
     this._meals.reset();
     this._export.reset();
     this._ai.reset();
