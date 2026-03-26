@@ -12,7 +12,6 @@ import type {
   GetLogResponse,
   GetFavoritesResponse,
   LookupBarcodeResponse,
-  SearchProductsResponse,
   AnalyzePhotoResponse,
   DialogMode,
 } from "./types.js";
@@ -30,6 +29,7 @@ import { AiController } from "./mixins/ai-mixin.js";
 import { MealsController } from "./controllers/meals-controller.js";
 import { ExportController } from "./controllers/export-controller.js";
 import { renderPhotoPicker, captureVideoFrame, readFileAsBase64 } from "./photo-capture.js";
+import { ProductSearch } from "./product-search.js";
 
 @customElement("voedingslog-panel")
 export class VoedingslogPanel extends LitElement {
@@ -45,18 +45,15 @@ export class VoedingslogPanel extends LitElement {
 
   @state() _dialogMode: DialogMode = null;
   @state() private _pendingProduct: Product | null = null;
-  @state() private _searchResults: Product[] = [];
-  @state() private _searchQuery = "";
   @state() private _scanning = false;
   @state() private _scanFailed = false;
   @state() _photoCameraActive = false;
   @state() private _prefillProduct: Product | null = null;
   @state() _analyzing = false;
-  @state() _searching = false;
-  @state() private _searchSource: "local" | "online" = "local";
   @state() private _editingItem: IndexedLogItem | null = null;
   @state() private _favorites: Product[] = [];
 
+  private _search = new ProductSearch(this);
   private _ai = new AiController(this);
   private _meals = new MealsController(this);
   private _export = new ExportController(this);
@@ -450,24 +447,22 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
-  private _renderSearchResult(p: Product, showFavToggle = false): TemplateResult {
+  private _renderSearchResultWithFav(p: Product): TemplateResult {
     return html`
       <div class="search-result">
         <div class="search-result-main" @click=${() => this._selectProduct(p)}>
           <span class="result-name">${p.name}</span>
           <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
         </div>
-        ${showFavToggle
-          ? html`<button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this._toggleFavorite(p); }}>
-              <ha-icon icon=${p.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
-            </button>`
-          : nothing}
+        <button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this._toggleFavorite(p); }}>
+          <ha-icon icon=${p.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
+        </button>
       </div>
     `;
   }
 
   private _renderSearchDialog(): TemplateResult {
-    const showFavorites = !this._searchQuery.trim() && this._favorites.length > 0;
+    const showFavorites = !this._search.query.trim() && this._favorites.length > 0;
     return html`
       <div class="dialog-header">
         <h2>Zoek product</h2>
@@ -476,40 +471,18 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        <div class="input-row">
-          <input
-            type="text"
-            id="search-input"
-            placeholder="Productnaam..."
-            .value=${this._searchQuery}
-            @input=${(e: Event) => {
-              this._searchQuery = (e.target as HTMLInputElement).value;
-            }}
-            @keydown=${(e: KeyboardEvent) => {
-              if (e.key === "Enter") this._doSearch();
-            }}
-          />
-          <button class="btn-primary" @click=${() => this._doSearch()}>Zoek</button>
-        </div>
-        ${this._searching
-          ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
-          : nothing}
         ${showFavorites
           ? html`
             <div class="favorites-section">
               <div class="section-label"><ha-icon icon="mdi:star" style="--mdc-icon-size:16px;vertical-align:middle;color:#ff9800"></ha-icon> Favorieten</div>
-              ${this._favorites.map((p) => this._renderSearchResult(p, true))}
+              ${this._favorites.map((p) => this._renderSearchResultWithFav(p))}
             </div>
           `
           : nothing}
-        <div class="search-results">
-          ${this._searchResults.map((p) => this._renderSearchResult(p, true))}
-        </div>
-        ${this._searchSource === "local" && this._searchQuery.trim()
-          ? html`<button class="btn-secondary search-online-btn" @click=${() => this._doSearch(true)}>
-              <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
-            </button>`
-          : nothing}
+        ${this._search.renderSearchBar(
+          (p) => this._selectProduct(p),
+          { renderResult: (p) => this._renderSearchResultWithFav(p) },
+        )}
       </div>
     `;
   }
@@ -860,9 +833,7 @@ export class VoedingslogPanel extends LitElement {
 
   private async _openSearch(): Promise<void> {
     this._dialogMode = "search";
-    this._searchResults = [];
-    this._searchQuery = "";
-    this._searchSource = "local";
+    this._search.reset();
     try {
       const res = await this.hass.callWS<GetFavoritesResponse>({ type: "voedingslog/get_favorites" });
       this._favorites = res.products || [];
@@ -993,11 +964,11 @@ export class VoedingslogPanel extends LitElement {
     this._dialogMode = null;
     this._pendingProduct = null;
     this._editingItem = null;
-    this._searchResults = [];
     this._analyzing = false;
     this._scanning = false;
     this._scanFailed = false;
     this._prefillProduct = null;
+    this._search.reset();
     this._meals.reset();
     this._export.reset();
     this._ai.reset();
@@ -1090,26 +1061,6 @@ export class VoedingslogPanel extends LitElement {
       console.error("Barcode lookup failed:", e);
       alert("Fout bij opzoeken barcode.");
     }
-  }
-
-  private async _doSearch(online = false): Promise<void> {
-    const input = this.shadowRoot?.getElementById("search-input") as HTMLInputElement | null;
-    const query = (input?.value || this._searchQuery).trim();
-    if (!query) return;
-    this._searching = true;
-    try {
-      const res = await this.hass.callWS<SearchProductsResponse & { source?: string }>({
-        type: "voedingslog/search_products",
-        query,
-        online,
-      });
-      this._searchResults = res.products || [];
-      this._searchSource = (res.source as "local" | "online") || "local";
-    } catch (e) {
-      console.error("Search failed:", e);
-      alert("Fout bij zoeken. Controleer de verbinding.");
-    }
-    this._searching = false;
   }
 
   private async _toggleFavorite(product: Product): Promise<void> {

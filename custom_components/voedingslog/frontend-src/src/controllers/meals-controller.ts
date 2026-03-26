@@ -9,17 +9,16 @@ import type {
   CustomMeal,
   VoedingslogConfig,
   GetMealsResponse,
-  SearchProductsResponse,
   SaveMealResponse,
   DialogMode,
 } from "../types.js";
+import { ProductSearch } from "../product-search.js";
 
 export interface MealsControllerHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
   shadowRoot: ShadowRoot | null;
   _config: VoedingslogConfig | null;
   _dialogMode: DialogMode;
-  _searching: boolean;
   requestUpdate(): void;
   _closeDialog(): void;
   _setDialogMode(mode: string): void;
@@ -30,19 +29,18 @@ export class MealsController {
   host: MealsControllerHost;
   meals: CustomMeal[] = [];
   editingMeal: CustomMeal | null = null;
-  ingredientSearch = "";
-  ingredientResults: Product[] = [];
   editingIngredientIndex: number | null = null;
+  ingredientSearch: ProductSearch;
 
   constructor(host: MealsControllerHost) {
     this.host = host;
+    this.ingredientSearch = new ProductSearch(host);
   }
 
   reset(): void {
     this.editingMeal = null;
-    this.ingredientSearch = "";
-    this.ingredientResults = [];
     this.editingIngredientIndex = null;
+    this.ingredientSearch.reset();
   }
 
   renderMealsDialog(): TemplateResult {
@@ -148,26 +146,10 @@ export class MealsController {
           )}
 
           <div class="add-ingredient">
-            <div class="input-row">
-              <input type="text" id="ingredient-search" placeholder="Zoek ingrediënt..."
-                .value=${this.ingredientSearch}
-                @input=${(e: Event) => { this.ingredientSearch = (e.target as HTMLInputElement).value; h.requestUpdate(); }}
-                @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this.searchIngredient(); }} />
-              <button class="btn-primary" @click=${() => this.searchIngredient()}>Zoek</button>
-            </div>
-            ${h._searching
-              ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
-              : nothing}
-            <div class="search-results">
-              ${this.ingredientResults.map(
-                (p) => html`
-                  <div class="search-result" @click=${() => this.addIngredient(p)}>
-                    <span class="result-name">${p.name}</span>
-                    <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
-                  </div>
-                `
-              )}
-            </div>
+            ${this.ingredientSearch.renderSearchBar(
+              (p) => this.addIngredient(p),
+              { placeholder: "Zoek ingrediënt..." },
+            )}
           </div>
         </div>
 
@@ -202,8 +184,7 @@ export class MealsController {
     this.editingMeal = meal
       ? { ...meal, ingredients: [...meal.ingredients] }
       : { id: "", name: "", ingredients: [], total_grams: 0, nutrients_per_100g: {} };
-    this.ingredientSearch = "";
-    this.ingredientResults = [];
+    this.ingredientSearch.reset();
     this.host._setDialogMode("meal-edit");
   }
 
@@ -226,22 +207,6 @@ export class MealsController {
     this.host._selectProduct(product);
   }
 
-  async searchIngredient(): Promise<void> {
-    const h = this.host;
-    const query = this.ingredientSearch.trim();
-    if (!query) return;
-    h._searching = true;
-    h.requestUpdate();
-    try {
-      const res = await h.hass.callWS<SearchProductsResponse>({ type: "voedingslog/search_products", query });
-      this.ingredientResults = res.products || [];
-    } catch (e) {
-      console.error("Ingredient search failed:", e);
-    }
-    h._searching = false;
-    h.requestUpdate();
-  }
-
   addIngredient(product: Product): void {
     if (!this.editingMeal) return;
     const grams = parseFloat(prompt(`Hoeveel gram ${product.name}?`, String(product.serving_grams || 100)) || "");
@@ -251,8 +216,7 @@ export class MealsController {
       ...this.editingMeal,
       ingredients: [...this.editingMeal.ingredients, ingredient],
     };
-    this.ingredientResults = [];
-    this.ingredientSearch = "";
+    this.ingredientSearch.reset();
     this.host.requestUpdate();
   }
 
