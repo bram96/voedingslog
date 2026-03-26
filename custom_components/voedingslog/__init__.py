@@ -72,8 +72,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a config entry."""
-    persons = entry.data["personen"]
-    coordinator = VoedingslogCoordinator(hass, persons)
+    opts = {**entry.data, **entry.options}
+    persons = opts.get("personen", [])
+    coordinator = VoedingslogCoordinator(hass, persons, entry.entry_id)
     await coordinator.async_load_from_store()
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = coordinator

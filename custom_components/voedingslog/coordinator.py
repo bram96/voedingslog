@@ -36,17 +36,21 @@ def _default_category() -> str:
 class VoedingslogCoordinator(DataUpdateCoordinator):
     """Keeps daily nutrition logs for all persons, persisted to disk."""
 
-    def __init__(self, hass: HomeAssistant, persons: list[str]):
+    def __init__(self, hass: HomeAssistant, persons: list[str], entry_id: str = ""):
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
         )
         self.persons = persons
+        self._entry_id = entry_id
         # { "Jan": { "2024-01-15": [ {name, grams, nutrients, time, category}, ... ] } }
         self._logs: dict[str, dict[str, list]] = {p: {} for p in persons}
         self._session: aiohttp.ClientSession | None = None
-        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        # Logs are per-entry so each person has their own storage
+        log_key = f"{STORAGE_KEY}.{entry_id}" if entry_id else STORAGE_KEY
+        self._store = Store(hass, STORAGE_VERSION, log_key)
+        # Meals and products are shared across all entries
         self._meals_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_MEALS)
         self._products_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PRODUCTS)
         self._meals: list[dict] = []
@@ -61,6 +65,17 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 if person in data:
                     self._logs[person] = data[person]
             _LOGGER.info("Loaded persisted logs for %d persons", len(self.persons))
+        elif self._entry_id:
+            # Migration: try loading from the old shared storage key
+            old_store = Store(self.hass, STORAGE_VERSION, STORAGE_KEY)
+            old_data = await old_store.async_load()
+            if old_data and isinstance(old_data, dict):
+                for person in self.persons:
+                    if person in old_data:
+                        self._logs[person] = old_data[person]
+                        _LOGGER.info("Migrated logs for %s from shared storage", person)
+                if any(self._logs[p] for p in self.persons):
+                    await self._async_save()
 
         meals_data = await self._meals_store.async_load()
         if meals_data and isinstance(meals_data, list):
