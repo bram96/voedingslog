@@ -18,8 +18,6 @@ import type {
   SearchProductsResponse,
   SaveMealResponse,
   AnalyzePhotoResponse,
-  ParsedProduct,
-  ParseFoodResponse,
   DialogMode,
 } from "./types.js";
 import {
@@ -34,6 +32,7 @@ import {
   NUTRIENTS_META,
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
+import { AiController } from "./mixins/ai-mixin.js";
 
 @customElement("voedingslog-panel")
 export class VoedingslogPanel extends LitElement {
@@ -41,13 +40,13 @@ export class VoedingslogPanel extends LitElement {
   @property({ type: Boolean }) narrow = false;
   @property({ attribute: false }) panel?: Record<string, unknown>;
 
-  @state() private _config: VoedingslogConfig | null = null;
-  @state() private _selectedPerson: string | null = null;
+  @state() _config: VoedingslogConfig | null = null;
+  @state() _selectedPerson: string | null = null;
   @state() private _selectedDate: string = new Date().toISOString().split("T")[0];
   @state() private _items: LogItem[] = [];
   @state() private _loading = true;
 
-  @state() private _dialogMode: DialogMode = null;
+  @state() _dialogMode: DialogMode = null;
   @state() private _pendingProduct: Product | null = null;
   @state() private _searchResults: Product[] = [];
   @state() private _searchQuery = "";
@@ -55,7 +54,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _scanFailed = false;
   @state() private _photoCameraActive = false;
   @state() private _prefillProduct: Product | null = null;
-  @state() private _analyzing = false;
+  @state() _analyzing = false;
   @state() private _searching = false;
   @state() private _searchSource: "local" | "online" = "local";
   @state() private _editingItem: IndexedLogItem | null = null;
@@ -65,10 +64,8 @@ export class VoedingslogPanel extends LitElement {
   @state() private _mealIngredientResults: Product[] = [];
   @state() private _favorites: Product[] = [];
   @state() private _exportImageUrl: string | null = null;
-  @state() private _aiParsedProducts: ParsedProduct[] = [];
-  @state() private _aiValidateIndex = 0;
-  @state() private _aiValidateSearch = "";
-  @state() private _aiValidateSearchResults: Product[] = [];
+
+  private _ai = new AiController(this);
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
@@ -76,12 +73,12 @@ export class VoedingslogPanel extends LitElement {
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
-  override async connectedCallback(): Promise<void> {
+  async connectedCallback(): Promise<void> {
     super.connectedCallback();
     await this._loadConfig();
   }
 
-  override disconnectedCallback(): void {
+  disconnectedCallback(): void {
     super.disconnectedCallback();
     this._stopCamera();
     this._cleanupScannerContainer();
@@ -128,7 +125,7 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private async _loadLog(): Promise<void> {
+  async _loadLog(): Promise<void> {
     if (!this._selectedPerson) return;
     this._loading = true;
     try {
@@ -146,7 +143,7 @@ export class VoedingslogPanel extends LitElement {
 
   // ── Rendering ────────────────────────────────────────────────────
 
-  override render(): TemplateResult {
+  render(): TemplateResult {
     if (!this._config || this._loading) {
       return html`<div class="container"><p>Laden...</p></div>`;
     }
@@ -351,9 +348,9 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "meal-edit" ? this._renderMealEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._renderManualEntryDialog() : nothing}
           ${this._dialogMode === "day-detail" ? this._renderDayDetailDialog() : nothing}
-          ${this._dialogMode === "ai-text" ? this._renderAiTextDialog() : nothing}
-          ${this._dialogMode === "ai-handwriting" ? this._renderAiHandwritingDialog() : nothing}
-          ${this._dialogMode === "ai-validate" ? this._renderAiValidateDialog() : nothing}
+          ${this._dialogMode === "ai-text" ? this._ai.renderTextDialog() : nothing}
+          ${this._dialogMode === "ai-handwriting" ? this._ai.renderHandwritingDialog() : nothing}
+          ${this._dialogMode === "ai-validate" ? this._ai.renderValidateDialog() : nothing}
         </div>
       </div>
     `;
@@ -706,316 +703,6 @@ export class VoedingslogPanel extends LitElement {
     } catch (e) {
       // User cancelled or share not supported — fall back to download
       this._downloadExportImage();
-    }
-  }
-
-  // ── AI text / handwriting dialogs ─────────────────────────────
-
-  private _renderAiTextDialog(): TemplateResult {
-    return html`
-      <div class="dialog-header">
-        <h2>AI tekst invoer</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
-          Beschrijf wat je gegeten hebt. AI herkent de producten en zoekt voedingswaarden op.
-        </p>
-        <textarea
-          id="ai-text-input"
-          class="ai-textarea"
-          placeholder="Bijv. 2 boterhammen met kaas, een appel, kop koffie met melk"
-        ></textarea>
-        ${this._analyzing
-          ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
-          : html`
-            <button class="btn-primary btn-confirm" @click=${() => this._submitAiText()}>
-              <ha-icon icon="mdi:auto-fix"></ha-icon>
-              Analyseren
-            </button>
-          `}
-      </div>
-    `;
-  }
-
-  private _renderAiHandwritingDialog(): TemplateResult {
-    return html`
-      <div class="dialog-header">
-        <h2>Handgeschreven lijst</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
-          Maak een foto van je handgeschreven lijst. AI leest de tekst en zoekt producten op.
-        </p>
-        <input type="file" accept="image/*"
-          id="file-input-handwriting"
-          @change=${(e: Event) => this._handleHandwritingPhoto(e)} style="display:none" />
-        ${this._analyzing
-          ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
-          : html`
-            <button class="btn-primary photo-btn" @click=${() => this._openFileInput("file-input-handwriting")}>
-              <ha-icon icon="mdi:camera"></ha-icon>
-              Foto maken of kiezen
-            </button>
-          `}
-      </div>
-    `;
-  }
-
-  private _renderAiValidateDialog(): TemplateResult | typeof nothing {
-    const products = this._aiParsedProducts;
-    if (!products.length) return nothing;
-    const idx = this._aiValidateIndex;
-    if (idx >= products.length) {
-      // All done
-      return html`
-        <div class="dialog-header">
-          <h2>Klaar!</h2>
-          <button class="close-btn" @click=${() => this._closeDialog()}>
-            <ha-icon icon="mdi:close"></ha-icon>
-          </button>
-        </div>
-        <div class="dialog-body">
-          <p>Alle producten zijn verwerkt.</p>
-          <button class="btn-primary btn-confirm" @click=${() => { this._closeDialog(); this._loadLog(); }}>
-            Sluiten
-          </button>
-        </div>
-      `;
-    }
-
-    const product = products[idx];
-    const pct = Math.round(((idx) / products.length) * 100);
-
-    return html`
-      <div class="dialog-header">
-        <h2>Product ${idx + 1} van ${products.length}</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="ai-validate-progress">
-          <div class="ai-validate-bar">
-            <div class="ai-validate-fill" style="width:${pct}%"></div>
-          </div>
-          <span>${idx + 1}/${products.length}</span>
-        </div>
-
-        <div class="ai-context">AI herkende: <strong>${product.ai_name || product.name}</strong></div>
-
-        ${!product.matched
-          ? html`<div class="ai-warning">Niet gevonden in database — zoek een product of sla over</div>`
-          : nothing}
-
-        <div class="ai-validate-search">
-          <input
-            type="text"
-            placeholder="Zoek ander product..."
-            .value=${this._aiValidateSearch}
-            @input=${(e: Event) => { this._aiValidateSearch = (e.target as HTMLInputElement).value; }}
-            @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this._searchAiValidate(); }}
-          />
-          <div style="display:flex;gap:4px;margin-top:4px">
-            <button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${() => this._searchAiValidate()}>
-              Zoek lokaal
-            </button>
-            <button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${() => this._searchAiValidate(true)}>
-              Zoek online
-            </button>
-          </div>
-          ${this._aiValidateSearchResults.length > 0
-            ? html`
-              <div class="search-results">
-                ${this._aiValidateSearchResults.map(
-                  (r) => html`
-                    <div class="search-result">
-                      <div class="search-result-main" @click=${() => this._selectAiValidateProduct(r)}>
-                        <span class="result-name">${r.name}</span>
-                        <span class="result-meta">${Math.round(r.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
-                      </div>
-                    </div>
-                  `
-                )}
-              </div>
-            ` : nothing}
-        </div>
-
-        <div class="nutrient-preview">
-          <div class="preview-title">${product.name}</div>
-          <div class="nutrient-grid">
-            ${KEY_NUTRIENTS_DISPLAY.map(
-              (n) => html`
-                <div class="nutrient-row">
-                  <span>${n.label}</span>
-                  <span>${(product.nutrients?.[n.key] || 0).toFixed(n.decimals)} ${n.unit}</span>
-                </div>
-              `
-            )}
-          </div>
-        </div>
-
-        <div class="form-field">
-          <label>Gewicht (gram)</label>
-          <input type="number" id="ai-validate-grams" .value=${String(product.serving_grams || 100)}
-            min="1" step="1" inputmode="numeric" />
-        </div>
-
-        <div class="form-field">
-          <label>Maaltijd</label>
-          <select id="ai-validate-category">
-            ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-              (cat) => html`
-                <option value=${cat} ?selected=${cat === defaultCategory()}>
-                  ${(this._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
-                </option>
-              `
-            )}
-          </select>
-        </div>
-
-        <div class="ai-validate-actions">
-          <button class="btn-secondary btn-confirm" @click=${() => this._skipAiProduct()}>
-            Overslaan
-          </button>
-          <button class="btn-primary btn-confirm" @click=${() => this._confirmAiProduct()} ?disabled=${!product.matched}>
-            Bevestigen
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  private async _submitAiText(): Promise<void> {
-    const textarea = this.shadowRoot?.getElementById("ai-text-input") as HTMLTextAreaElement | null;
-    const text = textarea?.value?.trim();
-    if (!text) { alert("Voer tekst in."); return; }
-
-    this._analyzing = true;
-    try {
-      const res = await this.hass.callWS<ParseFoodResponse>({ type: "voedingslog/parse_text", text });
-      this._analyzing = false;
-      if (res.products?.length) {
-        this._aiParsedProducts = res.products;
-        this._aiValidateIndex = 0;
-        this._aiValidateSearch = "";
-        this._aiValidateSearchResults = [];
-        this._dialogMode = "ai-validate";
-      } else {
-        alert("Geen producten herkend. Probeer het opnieuw met meer detail.");
-      }
-    } catch (err) {
-      this._analyzing = false;
-      console.error("AI text parsing failed:", err);
-      alert("Fout bij analyseren: " + ((err as Error).message || err));
-    }
-  }
-
-  private async _handleHandwritingPhoto(e: Event): Promise<void> {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    this._analyzing = true;
-    try {
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      const res = await this.hass.callWS<ParseFoodResponse>({ type: "voedingslog/parse_handwriting", photo_b64: b64 });
-      this._analyzing = false;
-      if (res.products?.length) {
-        this._aiParsedProducts = res.products;
-        this._aiValidateIndex = 0;
-        this._aiValidateSearch = "";
-        this._aiValidateSearchResults = [];
-        this._dialogMode = "ai-validate";
-      } else {
-        alert("Geen producten herkend. Probeer een duidelijkere foto.");
-      }
-    } catch (err) {
-      this._analyzing = false;
-      console.error("AI handwriting parsing failed:", err);
-      alert("Fout bij analyseren: " + ((err as Error).message || err));
-    }
-  }
-
-  private async _searchAiValidate(online = false): Promise<void> {
-    const query = this._aiValidateSearch.trim();
-    if (!query) return;
-    try {
-      const res = await this.hass.callWS<SearchProductsResponse>({
-        type: "voedingslog/search_products",
-        query,
-        online,
-      });
-      this._aiValidateSearchResults = res.products || [];
-    } catch (err) {
-      console.error("AI validate search failed:", err);
-    }
-  }
-
-  private _selectAiValidateProduct(product: Product): void {
-    const idx = this._aiValidateIndex;
-    const current = this._aiParsedProducts[idx];
-    // Replace product but keep AI-estimated grams
-    this._aiParsedProducts = [
-      ...this._aiParsedProducts.slice(0, idx),
-      { ...product, serving_grams: current.serving_grams, ai_name: current.ai_name, matched: true },
-      ...this._aiParsedProducts.slice(idx + 1),
-    ];
-    this._aiValidateSearchResults = [];
-    this._aiValidateSearch = "";
-  }
-
-  private _skipAiProduct(): void {
-    this._aiValidateIndex++;
-    this._aiValidateSearch = "";
-    this._aiValidateSearchResults = [];
-    if (this._aiValidateIndex >= this._aiParsedProducts.length) {
-      this._closeDialog();
-      this._loadLog();
-    }
-  }
-
-  private async _confirmAiProduct(): Promise<void> {
-    const product = this._aiParsedProducts[this._aiValidateIndex];
-    if (!product) return;
-
-    const gramsInput = this.shadowRoot?.getElementById("ai-validate-grams") as HTMLInputElement | null;
-    const catSelect = this.shadowRoot?.getElementById("ai-validate-category") as HTMLSelectElement | null;
-    const grams = parseFloat(gramsInput?.value || "") || product.serving_grams || 100;
-    const category = (catSelect?.value as MealCategory) || defaultCategory();
-
-    try {
-      await this.hass.callWS({
-        type: "voedingslog/log_product",
-        person: this._selectedPerson,
-        name: product.name,
-        grams,
-        nutrients: product.nutrients || {},
-        category,
-      });
-    } catch (err) {
-      console.error("Failed to log AI product:", err);
-      alert("Fout bij opslaan.");
-      return;
-    }
-
-    this._aiValidateIndex++;
-    this._aiValidateSearch = "";
-    this._aiValidateSearchResults = [];
-    if (this._aiValidateIndex >= this._aiParsedProducts.length) {
-      this._closeDialog();
-      this._loadLog();
     }
   }
 
@@ -1894,7 +1581,7 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private _closeDialog(): void {
+  _closeDialog(): void {
     this._stopCamera();
     this._stopPhotoCamera();
     this._dialogMode = null;
@@ -1909,13 +1596,14 @@ export class VoedingslogPanel extends LitElement {
     this._mealIngredientResults = [];
     this._prefillProduct = null;
     this._exportImageUrl = null;
-    this._aiParsedProducts = [];
-    this._aiValidateIndex = 0;
-    this._aiValidateSearch = "";
-    this._aiValidateSearchResults = [];
+    this._ai.reset();
   }
 
-  private _openFileInput(id: string): void {
+  _setDialogMode(mode: string): void {
+    this._dialogMode = mode as DialogMode;
+  }
+
+  _openFileInput(id: string): void {
     const input = this.shadowRoot?.getElementById(id) as HTMLInputElement | null;
     if (input) {
       input.value = "";
@@ -2196,5 +1884,5 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  static override styles = panelStyles;
+  static styles = panelStyles;
 }
