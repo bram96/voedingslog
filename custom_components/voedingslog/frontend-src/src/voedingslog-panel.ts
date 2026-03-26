@@ -45,7 +45,6 @@ export class VoedingslogPanel extends LitElement {
   @state() private _pendingProduct: Product | null = null;
   @state() private _searchResults: Product[] = [];
   @state() private _searchQuery = "";
-  @state() private _cameraActive = false;
   @state() private _scanning = false;
   @state() private _scanFailed = false;
   @state() private _analyzing = false;
@@ -57,7 +56,6 @@ export class VoedingslogPanel extends LitElement {
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
-  private _cameraStream: MediaStream | null = null;
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -69,7 +67,6 @@ export class VoedingslogPanel extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this._stopCamera();
-    this._stopCameraStream();
     this._cleanupScannerContainer();
   }
 
@@ -335,28 +332,13 @@ export class VoedingslogPanel extends LitElement {
       : (e: Event) => this._handlePhotoCapture(e);
 
     return html`
-      ${this._cameraActive
-        ? html`
-          <div class="camera-preview">
-            <video id="camera-video" autoplay playsinline></video>
-            <button class="btn-primary camera-capture-btn" @click=${() => this._captureFrame(purpose)}>
-              <ha-icon icon="mdi:camera"></ha-icon> Maak foto
-            </button>
-          </div>
-        `
-        : html`
-          <div class="photo-buttons">
-            <button class="btn-primary photo-btn" @click=${() => this._openCamera(purpose)}>
-              <ha-icon icon="mdi:camera"></ha-icon> Open camera
-            </button>
-            <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("file-input-gallery-" + purpose)}>
-              <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
-            </button>
-          </div>
-          <input type="file" accept="image/*"
-            id=${"file-input-gallery-" + purpose}
-            @change=${fileChangeHandler} style="display:none" />
-        `}
+      <input type="file" accept="image/*"
+        id=${"file-input-" + purpose}
+        @change=${fileChangeHandler} style="display:none" />
+      <button class="btn-primary photo-btn" @click=${() => this._openFileInput("file-input-" + purpose)}>
+        <ha-icon icon="mdi:image"></ha-icon>
+        ${purpose === "barcode" ? "Foto van barcode" : "Foto van etiket"}
+      </button>
     `;
   }
 
@@ -743,7 +725,6 @@ export class VoedingslogPanel extends LitElement {
     this._dialogMode = "barcode";
     this._scanning = false;
     this._scanFailed = false;
-    this._cameraActive = false;
     this.updateComplete.then(() => this._startLiveScanner());
   }
 
@@ -936,105 +917,16 @@ export class VoedingslogPanel extends LitElement {
 
   private _closeDialog(): void {
     this._stopCamera();
-    this._stopCameraStream();
     this._dialogMode = null;
     this._pendingProduct = null;
     this._editingItem = null;
     this._searchResults = [];
     this._analyzing = false;
-    this._cameraActive = false;
     this._scanning = false;
     this._scanFailed = false;
     this._editingMeal = null;
     this._mealIngredientSearch = "";
     this._mealIngredientResults = [];
-  }
-
-  private async _openCamera(_purpose: "barcode" | "photo"): Promise<void> {
-
-    try {
-      this._cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-      this._cameraActive = true;
-
-      // Wait for render, then attach stream to video element
-      await this.updateComplete;
-      const video = this.shadowRoot?.getElementById("camera-video") as HTMLVideoElement | null;
-      if (video) {
-        video.srcObject = this._cameraStream;
-      }
-    } catch (e) {
-      console.warn("getUserMedia failed:", e);
-      this._cameraActive = false;
-      alert("Camera niet beschikbaar. Gebruik 'Kies afbeelding' om een foto te selecteren.");
-    }
-  }
-
-  private async _captureFrame(purpose: "barcode" | "photo"): Promise<void> {
-    const video = this.shadowRoot?.getElementById("camera-video") as HTMLVideoElement | null;
-    if (!video) return;
-
-    // Draw video frame to canvas
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-
-    this._stopCameraStream();
-
-    if (purpose === "barcode") {
-      // Decode barcode from captured frame
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-      if (!blob) return;
-      const file = new File([blob], "barcode.jpg", { type: "image/jpeg" });
-
-      this._cleanupScannerContainer();
-      const container = document.createElement("div");
-      container.id = this._scannerContainerId;
-      container.style.display = "none";
-      document.body.appendChild(container);
-
-      try {
-        const scanner = new Html5Qrcode(this._scannerContainerId);
-        const result = await scanner.scanFile(file, false);
-        this._cleanupScannerContainer();
-        await this._lookupBarcode(result);
-      } catch {
-        this._cleanupScannerContainer();
-        alert("Kon geen barcode herkennen. Probeer opnieuw of voer het nummer handmatig in.");
-      }
-    } else {
-      // Send photo for AI analysis
-      this._analyzing = true;
-      try {
-        const b64 = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
-        const res = await this.hass.callWS<AnalyzePhotoResponse>({
-          type: "voedingslog/analyze_photo",
-          photo_b64: b64,
-        });
-        if (res.product) {
-          this._analyzing = false;
-          this._selectProduct(res.product);
-        } else {
-          this._analyzing = false;
-          alert("Kon voedingswaarden niet herkennen. Probeer een duidelijkere foto.");
-        }
-      } catch (err) {
-        this._analyzing = false;
-        alert("Fout bij analyseren foto: " + ((err as Error).message || err));
-      }
-    }
-  }
-
-  private _stopCameraStream(): void {
-    this._cameraActive = false;
-    if (this._cameraStream) {
-      this._cameraStream.getTracks().forEach((t) => t.stop());
-      this._cameraStream = null;
-    }
   }
 
   private _openFileInput(id: string): void {
