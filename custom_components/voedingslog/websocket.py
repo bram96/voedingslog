@@ -1,8 +1,10 @@
 """WebSocket API handlers for the Voedingslog panel."""
 from __future__ import annotations
 
+import base64
 import json
 import logging
+from pathlib import Path
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -25,6 +27,7 @@ from .const import (
     WS_GET_MEALS,
     WS_SAVE_MEAL,
     WS_DELETE_MEAL,
+    WS_EXPORT_IMAGE,
     WS_GET_FAVORITES,
     WS_TOGGLE_FAVORITE,
 )
@@ -77,7 +80,7 @@ async def ws_get_config(hass, connection, msg):
 
     opts = {**entry.data, **entry.options}
     connection.send_result(msg["id"], {
-        "persons": entry.data.get("personen", []),
+        "persons": opts.get("personen", []),
         "calories_goal": opts.get("doel_calorieen", 2000),
         "macro_goals": {
             "carbs": opts.get("carbs_goal", 0),
