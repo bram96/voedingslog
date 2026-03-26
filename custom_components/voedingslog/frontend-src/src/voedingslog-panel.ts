@@ -20,7 +20,7 @@ import {
   sumNutrients,
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
-import { AiController } from "./mixins/ai-mixin.js";
+import { AiController } from "./controllers/ai-controller.js";
 import { MealsController } from "./controllers/meals-controller.js";
 import { SearchController } from "./controllers/search-controller.js";
 import { EntryController } from "./controllers/entry-controller.js";
