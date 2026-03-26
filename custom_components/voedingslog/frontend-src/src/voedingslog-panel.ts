@@ -48,6 +48,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _scanning = false;
   @state() private _scanFailed = false;
   @state() private _analyzing = false;
+  @state() private _searching = false;
   @state() private _editingItem: IndexedLogItem | null = null;
   @state() private _meals: CustomMeal[] = [];
   @state() private _editingMeal: CustomMeal | null = null;
@@ -421,6 +422,9 @@ export class VoedingslogPanel extends LitElement {
           />
           <button class="btn-primary" @click=${() => this._doSearch()}>Zoek</button>
         </div>
+        ${this._searching
+          ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
+          : nothing}
         <div class="search-results">
           ${this._searchResults.map(
             (p) => html`
@@ -682,15 +686,35 @@ export class VoedingslogPanel extends LitElement {
           />
         </div>
 
+        <div class="weight-section">
+          <label>Standaard portie (gram)</label>
+          <input
+            type="number"
+            id="meal-portion-input"
+            .value=${String(meal?.preferred_portion || "")}
+            placeholder="Bijv. 400"
+            min="1"
+            step="1"
+            inputmode="numeric"
+          />
+        </div>
+
         <div class="meal-ingredients-section">
           <label class="section-label">Ingrediënten</label>
           ${ingredients.map(
             (ing, idx) => html`
               <div class="ingredient-row">
-                <div class="ingredient-info">
-                  <span class="ingredient-name">${ing.name}</span>
-                  <span class="ingredient-grams">${ing.grams}g</span>
-                </div>
+                <span class="ingredient-name">${ing.name}</span>
+                <input
+                  type="number"
+                  class="ingredient-grams-input"
+                  .value=${String(ing.grams)}
+                  min="1"
+                  step="1"
+                  inputmode="numeric"
+                  @change=${(e: Event) => this._updateIngredientGrams(idx, parseFloat((e.target as HTMLInputElement).value))}
+                />
+                <span class="ingredient-unit">g</span>
                 <button class="item-delete" @click=${() => this._removeMealIngredient(idx)}>
                   <ha-icon icon="mdi:close"></ha-icon>
                 </button>
@@ -714,6 +738,9 @@ export class VoedingslogPanel extends LitElement {
               />
               <button class="btn-primary" @click=${() => this._searchMealIngredient()}>Zoek</button>
             </div>
+            ${this._searching
+              ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
+              : nothing}
             <div class="search-results">
               ${this._mealIngredientResults.map(
                 (p) => html`
@@ -831,14 +858,20 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _logMeal(meal: CustomMeal): void {
-    // Convert meal to a Product and open the weight dialog
+    const defaultGrams = meal.preferred_portion || meal.total_grams;
+    const portions: Portion[] = [];
+    if (meal.preferred_portion) {
+      portions.push({ label: `Portie (${Math.round(meal.preferred_portion)}g)`, grams: meal.preferred_portion });
+    }
+    portions.push({ label: `Heel recept (${Math.round(meal.total_grams)}g)`, grams: meal.total_grams });
+    if (defaultGrams !== 100 && meal.total_grams !== 100) {
+      portions.push({ label: "100g", grams: 100 });
+    }
+
     const product: Product = {
       name: meal.name,
-      serving_grams: meal.total_grams,
-      portions: [
-        { label: `Heel recept (${Math.round(meal.total_grams)}g)`, grams: meal.total_grams },
-        { label: "100g", grams: 100 },
-      ],
+      serving_grams: defaultGrams,
+      portions,
       nutrients: meal.nutrients_per_100g,
     };
     this._pendingProduct = product;
@@ -848,6 +881,7 @@ export class VoedingslogPanel extends LitElement {
   private async _searchMealIngredient(): Promise<void> {
     const query = this._mealIngredientSearch.trim();
     if (!query) return;
+    this._searching = true;
     try {
       const res = await this.hass.callWS<SearchProductsResponse>({
         type: "voedingslog/search_products",
@@ -857,6 +891,7 @@ export class VoedingslogPanel extends LitElement {
     } catch (e) {
       console.error("Ingredient search failed:", e);
     }
+    this._searching = false;
   }
 
   private _addMealIngredient(product: Product): void {
@@ -875,6 +910,13 @@ export class VoedingslogPanel extends LitElement {
     };
     this._mealIngredientResults = [];
     this._mealIngredientSearch = "";
+  }
+
+  private _updateIngredientGrams(index: number, grams: number): void {
+    if (!this._editingMeal || !grams || grams <= 0) return;
+    const ingredients = [...this._editingMeal.ingredients];
+    ingredients[index] = { ...ingredients[index], grams };
+    this._editingMeal = { ...this._editingMeal, ingredients };
   }
 
   private _removeMealIngredient(index: number): void {
@@ -897,6 +939,9 @@ export class VoedingslogPanel extends LitElement {
       return;
     }
 
+    const portionInput = this.shadowRoot?.getElementById("meal-portion-input") as HTMLInputElement | null;
+    const preferredPortion = parseFloat(portionInput?.value || "") || undefined;
+
     try {
       await this.hass.callWS<SaveMealResponse>({
         type: "voedingslog/save_meal",
@@ -904,6 +949,7 @@ export class VoedingslogPanel extends LitElement {
           id: this._editingMeal.id || undefined,
           name,
           ingredients: this._editingMeal.ingredients,
+          preferred_portion: preferredPortion,
         },
       });
       await this._openMeals(); // Refresh list and go back
@@ -1022,6 +1068,7 @@ export class VoedingslogPanel extends LitElement {
     const input = this.shadowRoot?.getElementById("search-input") as HTMLInputElement | null;
     const query = (input?.value || this._searchQuery).trim();
     if (!query) return;
+    this._searching = true;
     try {
       const res = await this.hass.callWS<SearchProductsResponse>({
         type: "voedingslog/search_products",
@@ -1032,6 +1079,7 @@ export class VoedingslogPanel extends LitElement {
       console.error("Search failed:", e);
       alert("Fout bij zoeken. Controleer de verbinding.");
     }
+    this._searching = false;
   }
 
   private _selectProduct(product: Product): void {
@@ -1801,22 +1849,39 @@ export class VoedingslogPanel extends LitElement {
     .ingredient-row {
       display: flex;
       align-items: center;
+      gap: 8px;
       padding: 6px 0;
       border-bottom: 1px solid var(--divider-color);
     }
-    .ingredient-info {
-      flex: 1;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
     .ingredient-name {
+      flex: 1;
       font-size: 14px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .ingredient-grams {
+    .ingredient-grams-input {
+      width: 65px;
+      padding: 4px 8px;
+      border: 1px solid var(--divider-color);
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: right;
+      background: var(--primary-background-color);
+      color: var(--primary-text-color);
+    }
+    .ingredient-unit {
       font-size: 13px;
       color: var(--secondary-text-color);
-      margin-right: 8px;
+    }
+    .search-loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 0;
+      font-size: 13px;
+      color: var(--secondary-text-color);
     }
     .add-ingredient {
       margin-top: 12px;

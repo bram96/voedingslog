@@ -225,12 +225,14 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             nutrients_per_100g = {k: 0.0 for k in NUTRIENTS}
 
         meal_id = meal.get("id") or str(uuid.uuid4())[:8]
+        preferred_portion = meal.get("preferred_portion")
         saved = {
             "id": meal_id,
             "name": meal.get("name", "Naamloze maaltijd"),
             "ingredients": ingredients,
             "total_grams": total_grams,
             "nutrients_per_100g": nutrients_per_100g,
+            "preferred_portion": preferred_portion,
         }
 
         # Update existing or append

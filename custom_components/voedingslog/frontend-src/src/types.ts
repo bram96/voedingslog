@@ -74,6 +74,7 @@ export interface CustomMeal {
   ingredients: MealIngredient[];
   total_grams: number;
   nutrients_per_100g: NutrientMap;
+  preferred_portion?: number;
 }
 
 export interface GetMealsResponse {
