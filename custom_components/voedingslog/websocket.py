@@ -1,14 +1,12 @@
 """WebSocket API handlers for the Voedingslog panel."""
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import time
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant, Event
+from homeassistant.core import HomeAssistant
 
 from .const import (
     DOMAIN,
@@ -27,7 +25,6 @@ from .const import (
     WS_GET_MEALS,
     WS_SAVE_MEAL,
     WS_DELETE_MEAL,
-    WS_TRIGGER_APP_SCAN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,7 +58,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_meals)
     websocket_api.async_register_command(hass, ws_save_meal)
     websocket_api.async_register_command(hass, ws_delete_meal)
-    websocket_api.async_register_command(hass, ws_trigger_app_scan)
 
 
 @websocket_api.websocket_command(
@@ -83,7 +79,6 @@ async def ws_get_config(hass, connection, msg):
         "category_labels": MEAL_CATEGORY_LABELS,
         "nutrients": {k: {"label": v["label"], "unit": v["unit"]} for k, v in NUTRIENTS.items()},
         "ai_task_entity": entry.options.get("ai_task_entity", ""),
-        "mobile_app_device": entry.options.get("mobile_app_device", ""),
     })
 
 
@@ -385,63 +380,3 @@ async def ws_delete_meal(hass, connection, msg):
     else:
         connection.send_error(msg["id"], "not_found", "Meal not found")
 
-
-# ── Companion app barcode scanner ─────────────────────────────────
-
-# Pending scan state: {person, timestamp}
-_pending_scan: dict | None = None
-_scan_listener_unsub = None
-
-
-def setup_tag_listener(hass: HomeAssistant) -> None:
-    """Set up a persistent listener for tag_scanned events."""
-    global _scan_listener_unsub
-
-    if _scan_listener_unsub is not None:
-        return  # Already listening
-
-    async def on_tag_scanned(event: Event) -> None:
-        global _pending_scan
-        if not _pending_scan:
-            return
-
-        # Only process if scan was requested within last 120 seconds
-        if time.time() - _pending_scan["time"] > 120:
-            _pending_scan = None
-            return
-
-        tag_id = event.data.get("tag_id", "")
-        if not tag_id:
-            return
-
-        person = _pending_scan["person"]
-        _pending_scan = None
-
-        coordinator = _get_coordinator(hass)
-        if not coordinator:
-            return
-
-        ok = await coordinator.log_barcode(person, tag_id)
-        if ok:
-            _LOGGER.info("App scan: logged barcode %s for %s", tag_id, person)
-        else:
-            _LOGGER.warning("App scan: barcode %s not found for %s", tag_id, person)
-
-    _scan_listener_unsub = hass.bus.async_listen("tag_scanned", on_tag_scanned)
-
-
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): WS_TRIGGER_APP_SCAN,
-        vol.Required("person"): str,
-    }
-)
-@websocket_api.async_response
-async def ws_trigger_app_scan(hass, connection, msg):
-    """Register a pending scan and return immediately. User navigates to tag scanner."""
-    global _pending_scan
-
-    setup_tag_listener(hass)
-    _pending_scan = {"person": msg["person"], "time": time.time()}
-
-    connection.send_result(msg["id"], {"success": True})

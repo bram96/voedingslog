@@ -42,7 +42,6 @@ export interface VoedingslogConfig {
   category_labels: Record<MealCategory, string>;
   nutrients: Record<string, { label: string; unit: string }>;
   ai_task_entity: string;
-  mobile_app_device: string;
 }
 
 export interface GetLogResponse {
