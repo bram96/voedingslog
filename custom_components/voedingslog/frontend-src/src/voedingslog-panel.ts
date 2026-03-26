@@ -445,6 +445,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _openSearch(): void {
+    console.log("[voedingslog] _openSearch called");
     this._dialogMode = "search";
     this._searchResults = [];
     this._searchQuery = "";
@@ -544,21 +545,35 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _doSearch(): Promise<void> {
-    // Read directly from DOM as primary source to avoid stale reactive state
+    console.log("[voedingslog] _doSearch called");
+    console.log("[voedingslog] this:", this);
+    console.log("[voedingslog] this.hass:", this.hass);
+    console.log("[voedingslog] shadowRoot:", this.shadowRoot);
+
     const input = this.shadowRoot?.getElementById("search-input") as HTMLInputElement | null;
+    console.log("[voedingslog] search input element:", input);
+    console.log("[voedingslog] input.value:", input?.value);
+    console.log("[voedingslog] _searchQuery state:", this._searchQuery);
+
     const query = (input?.value || this._searchQuery).trim();
-    if (!query) return;
+    console.log("[voedingslog] final query:", JSON.stringify(query));
+
+    if (!query) {
+      console.log("[voedingslog] query is empty, returning early");
+      return;
+    }
+
+    console.log("[voedingslog] sending WS call voedingslog/search_products with query:", query);
     try {
       const res = await this.hass.callWS<SearchProductsResponse>({
         type: "voedingslog/search_products",
         query,
       });
+      console.log("[voedingslog] WS response:", JSON.stringify(res));
       this._searchResults = res.products || [];
-      if (this._searchResults.length === 0) {
-        this._searchResults = [];
-      }
+      console.log("[voedingslog] searchResults set, count:", this._searchResults.length);
     } catch (e) {
-      console.error("Search failed:", e);
+      console.error("[voedingslog] Search WS call failed:", e);
       alert("Fout bij zoeken. Controleer de verbinding.");
     }
   }
