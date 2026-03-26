@@ -621,12 +621,10 @@ export class VoedingslogPanel extends LitElement {
             </div>`
           : this._photoCameraActive
             ? html`
-              <div class="camera-preview">
-                <video id="photo-camera-video" autoplay playsinline></video>
-                <button class="btn-primary camera-capture-btn" @click=${() => this._capturePhotoFrame()}>
-                  <ha-icon icon="mdi:camera"></ha-icon> Maak foto
-                </button>
-              </div>
+              <div id="photo-camera-placeholder" class="scanner-area"></div>
+              <button class="btn-primary camera-capture-btn" style="margin-top:8px" @click=${() => this._capturePhotoFrame()}>
+                <ha-icon icon="mdi:camera"></ha-icon> Maak foto
+              </button>
             `
             : html`
               <p class="photo-hint">Maak een foto van het voedingsetiket op de verpakking.</p>
@@ -1119,25 +1117,68 @@ export class VoedingslogPanel extends LitElement {
     this._photoCameraActive = false;
   }
 
+  private _photoCameraContainerId = "vl-photo-camera";
+  private _photoPosFrame: number | null = null;
+
+  private _trackPhotoCameraPosition(): void {
+    const container = document.getElementById(this._photoCameraContainerId);
+    const placeholder = this.shadowRoot?.getElementById("photo-camera-placeholder");
+    if (!container || !placeholder) return;
+    const rect = placeholder.getBoundingClientRect();
+    container.style.cssText = `
+      position:fixed; top:${rect.top}px; left:${rect.left}px;
+      width:${rect.width}px; height:${Math.max(rect.height, 250)}px;
+      z-index:101; border-radius:8px; overflow:hidden;
+    `;
+    this._photoPosFrame = requestAnimationFrame(() => this._trackPhotoCameraPosition());
+  }
+
   private async _startPhotoCamera(): Promise<void> {
     try {
+      // Clean up any previous
+      this._cleanupPhotoCameraContainer();
+
       this._photoCameraStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
+
+      // Create video in light DOM (same approach as barcode scanner)
+      const container = document.createElement("div");
+      container.id = this._photoCameraContainerId;
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.style.cssText = "width:100%; height:100%; object-fit:cover;";
+      video.srcObject = this._photoCameraStream;
+      container.appendChild(video);
+      document.body.appendChild(container);
+
       this._photoCameraActive = true;
       await this.updateComplete;
-      const video = this.shadowRoot?.getElementById("photo-camera-video") as HTMLVideoElement | null;
-      if (video) {
-        video.srcObject = this._photoCameraStream;
-      }
+
+      // Track position over placeholder
+      const placeholder = this.shadowRoot?.getElementById("photo-camera-placeholder");
+      if (placeholder) placeholder.style.minHeight = "250px";
+      this._trackPhotoCameraPosition();
     } catch (e) {
       console.warn("Photo camera failed:", e);
+      this._cleanupPhotoCameraContainer();
       alert("Camera niet beschikbaar. Gebruik 'Kies afbeelding'.");
     }
   }
 
+  private _cleanupPhotoCameraContainer(): void {
+    if (this._photoPosFrame) {
+      cancelAnimationFrame(this._photoPosFrame);
+      this._photoPosFrame = null;
+    }
+    const existing = document.getElementById(this._photoCameraContainerId);
+    if (existing) existing.remove();
+  }
+
   private async _capturePhotoFrame(): Promise<void> {
-    const video = this.shadowRoot?.getElementById("photo-camera-video") as HTMLVideoElement | null;
+    const container = document.getElementById(this._photoCameraContainerId);
+    const video = container?.querySelector("video");
     if (!video) return;
 
     const canvas = document.createElement("canvas");
@@ -1174,6 +1215,7 @@ export class VoedingslogPanel extends LitElement {
       this._photoCameraStream.getTracks().forEach((t) => t.stop());
       this._photoCameraStream = null;
     }
+    this._cleanupPhotoCameraContainer();
   }
 
   private async _openMeals(): Promise<void> {
