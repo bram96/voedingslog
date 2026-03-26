@@ -235,6 +235,7 @@ export const panelStyles = css`
   .ingredient-grams-input { width: 65px; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color); }
   .ingredient-unit { font-size: 13px; color: var(--secondary-text-color); }
   .add-ingredient { margin-top: 12px; }
+  .ingredient-nutrients { padding: 8px 0 8px 12px; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); border-radius: 0 0 8px 8px; margin-bottom: 4px; }
 
   /* Day detail / pie chart */
   .pie-section { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 20px; }

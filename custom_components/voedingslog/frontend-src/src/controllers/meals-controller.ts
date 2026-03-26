@@ -32,6 +32,7 @@ export class MealsController {
   editingMeal: CustomMeal | null = null;
   ingredientSearch = "";
   ingredientResults: Product[] = [];
+  editingIngredientIndex: number | null = null;
 
   constructor(host: MealsControllerHost) {
     this.host = host;
@@ -41,6 +42,7 @@ export class MealsController {
     this.editingMeal = null;
     this.ingredientSearch = "";
     this.ingredientResults = [];
+    this.editingIngredientIndex = null;
   }
 
   renderMealsDialog(): TemplateResult {
@@ -110,15 +112,38 @@ export class MealsController {
           ${ingredients.map(
             (ing, idx) => html`
               <div class="ingredient-row">
-                <span class="ingredient-name">${ing.name}</span>
+                <span class="ingredient-name" @click=${() => this.toggleIngredientEdit(idx)}
+                  style="cursor:pointer;flex:1">${ing.name}</span>
                 <input type="number" class="ingredient-grams-input" .value=${String(ing.grams)}
                   min="1" step="1" inputmode="numeric"
                   @change=${(e: Event) => this.updateIngredientGrams(idx, parseFloat((e.target as HTMLInputElement).value))} />
                 <span class="ingredient-unit">g</span>
+                <button class="item-edit" @click=${() => this.toggleIngredientEdit(idx)}>
+                  <ha-icon icon="mdi:pencil"></ha-icon>
+                </button>
                 <button class="item-delete" @click=${() => this.removeIngredient(idx)}>
                   <ha-icon icon="mdi:close"></ha-icon>
                 </button>
               </div>
+              ${this.editingIngredientIndex === idx ? html`
+                <div class="ingredient-nutrients">
+                  <div class="form-field form-field-inline">
+                    <label>Naam</label>
+                    <input type="text" .value=${ing.name}
+                      @change=${(e: Event) => this.updateIngredientName(idx, (e.target as HTMLInputElement).value)} />
+                  </div>
+                  ${Object.entries(h._config?.nutrients || {}).map(
+                    ([key, meta]) => html`
+                      <div class="form-field form-field-inline">
+                        <label>${meta.label} (${meta.unit}/100g)</label>
+                        <input type="number" .value=${String((ing.nutrients?.[key] || 0).toFixed(2))}
+                          min="0" step="0.01" inputmode="decimal"
+                          @change=${(e: Event) => this.updateIngredientNutrient(idx, key, parseFloat((e.target as HTMLInputElement).value))} />
+                      </div>
+                    `
+                  )}
+                </div>
+              ` : nothing}
             `
           )}
 
@@ -237,6 +262,28 @@ export class MealsController {
       ...this.editingMeal,
       ingredients: [...this.editingMeal.ingredients, ingredient],
     };
+    this.host.requestUpdate();
+  }
+
+  toggleIngredientEdit(index: number): void {
+    this.editingIngredientIndex = this.editingIngredientIndex === index ? null : index;
+    this.host.requestUpdate();
+  }
+
+  updateIngredientName(index: number, name: string): void {
+    if (!this.editingMeal || !name.trim()) return;
+    const ingredients = [...this.editingMeal.ingredients];
+    ingredients[index] = { ...ingredients[index], name: name.trim() };
+    this.editingMeal = { ...this.editingMeal, ingredients };
+    this.host.requestUpdate();
+  }
+
+  updateIngredientNutrient(index: number, key: string, value: number): void {
+    if (!this.editingMeal) return;
+    const ingredients = [...this.editingMeal.ingredients];
+    const nutrients = { ...ingredients[index].nutrients, [key]: value || 0 };
+    ingredients[index] = { ...ingredients[index], nutrients };
+    this.editingMeal = { ...this.editingMeal, ingredients };
     this.host.requestUpdate();
   }
 
