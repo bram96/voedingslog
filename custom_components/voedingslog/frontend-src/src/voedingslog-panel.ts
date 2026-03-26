@@ -338,19 +338,19 @@ export class VoedingslogPanel extends LitElement {
         ${this._cameraFailed
           ? html`
             <div class="barcode-photo-fallback">
-              <p class="scanner-hint-text">Camera niet beschikbaar. Maak een foto van de barcode of voer het nummer in.</p>
-              <input
-                type="file"
-                accept="image/*"
-                id="barcode-photo-input"
-                @change=${(e: Event) => this._handleBarcodePhoto(e)}
-                style="display:none"
-              />
-              <button class="btn-primary photo-btn" @click=${() =>
-                this._openFileInput("barcode-photo-input")}>
-                <ha-icon icon="mdi:barcode-scan"></ha-icon>
-                Foto maken of kiezen
-              </button>
+              <p class="scanner-hint-text">Maak een foto van de barcode of voer het nummer hieronder in.</p>
+              <input type="file" accept="image/*" capture="environment"
+                id="barcode-photo-camera" @change=${(e: Event) => this._handleBarcodePhoto(e)} style="display:none" />
+              <input type="file" accept="image/*"
+                id="barcode-photo-gallery" @change=${(e: Event) => this._handleBarcodePhoto(e)} style="display:none" />
+              <div class="photo-buttons">
+                <button class="btn-primary photo-btn" @click=${() => this._openFileInput("barcode-photo-camera")}>
+                  <ha-icon icon="mdi:camera"></ha-icon> Maak foto
+                </button>
+                <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("barcode-photo-gallery")}>
+                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
+                </button>
+              </div>
             </div>
           `
           : html`
@@ -433,20 +433,18 @@ export class VoedingslogPanel extends LitElement {
             </div>`
           : html`
               <p class="photo-hint">Maak een foto van het voedingsetiket op de verpakking.</p>
-              <input
-                type="file"
-                accept="image/*"
-                id="photo-input"
-                @change=${(e: Event) => this._handlePhotoCapture(e)}
-                style="display:none"
-              />
-              <button
-                class="btn-primary photo-btn"
-                @click=${() => this._openFileInput("photo-input")}
-              >
-                <ha-icon icon="mdi:camera"></ha-icon>
-                Foto maken of kiezen
-              </button>
+              <input type="file" accept="image/*" capture="environment"
+                id="photo-input-camera" @change=${(e: Event) => this._handlePhotoCapture(e)} style="display:none" />
+              <input type="file" accept="image/*"
+                id="photo-input-gallery" @change=${(e: Event) => this._handlePhotoCapture(e)} style="display:none" />
+              <div class="photo-buttons">
+                <button class="btn-primary photo-btn" @click=${() => this._openFileInput("photo-input-camera")}>
+                  <ha-icon icon="mdi:camera"></ha-icon> Maak foto
+                </button>
+                <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("photo-input-gallery")}>
+                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
+                </button>
+              </div>
             `}
       </div>
     `;
@@ -634,8 +632,8 @@ export class VoedingslogPanel extends LitElement {
                   <div class="meal-info" @click=${() => this._logMeal(meal)}>
                     <span class="meal-name">${meal.name}</span>
                     <span class="meal-meta">
-                      ${meal.ingredients.length} ingrediënten · ${Math.round(meal.total_grams)}g ·
-                      ${Math.round(meal.nutrients_per_100g?.["energy-kcal_100g"] || 0)} kcal/100g
+                      ${meal.ingredients.length} ingrediënten · ${Math.round(meal.total_grams)}g totaal ·
+                      ${Math.round((meal.nutrients_per_100g?.["energy-kcal_100g"] || 0) * meal.total_grams / 100)} kcal
                     </span>
                   </div>
                   <button class="item-edit" @click=${() => this._openMealEditor(meal)}>
@@ -880,26 +878,23 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _startCamera(): Promise<void> {
+    // Skip camera attempt on mobile — go straight to photo fallback
+    // getUserMedia is unreliable in HA companion app WebView
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile) {
+      this._cameraFailed = true;
+      return;
+    }
+
     try {
-      // html5-qrcode needs a container in the light DOM (uses document.getElementById)
-      // Create one in document.body and position it over our dialog placeholder
       this._cleanupScannerContainer();
 
       const container = document.createElement("div");
       container.id = this._scannerContainerId;
-      container.style.cssText =
-        "width:100%;max-width:568px;margin:0 auto;border-radius:8px;overflow:hidden;";
+      document.body.appendChild(container);
 
-      // Insert into the placeholder area in our shadow DOM won't work for html5-qrcode,
-      // so we append to document.body and position it. However, a simpler approach:
-      // we place it in the dialog body via a slot-like mechanism using the light DOM.
       const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
       if (placeholder) {
-        // Move the container into the shadow DOM placeholder — html5-qrcode won't find it.
-        // Instead, append to body and absolutely position it.
-        document.body.appendChild(container);
-
-        // Position the container over the placeholder
         const rect = placeholder.getBoundingClientRect();
         container.style.cssText = `
           position: fixed;
@@ -907,40 +902,38 @@ export class VoedingslogPanel extends LitElement {
           left: ${rect.left}px;
           width: ${rect.width}px;
           height: ${Math.max(rect.height, 250)}px;
-          z-index: 200;
+          z-index: 101;
           border-radius: 8px;
           overflow: hidden;
         `;
-        // Reserve space in the placeholder
         placeholder.style.minHeight = "250px";
-      } else {
-        document.body.appendChild(container);
       }
 
       this._html5Qrcode = new Html5Qrcode(this._scannerContainerId);
       this._scanning = true;
 
-      await this._html5Qrcode.start(
+      // Race camera start against a timeout
+      const startPromise = this._html5Qrcode.start(
         { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 150 },
-          aspectRatio: 1.5,
-        },
+        { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.5 },
         (decodedText: string) => {
           this._scanning = false;
           this._stopCamera();
           this._lookupBarcode(decodedText);
         },
-        () => {
-          // Ignore per-frame scan failures
-        }
+        () => {}
       );
+
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Camera timeout")), 8000)
+      );
+
+      await Promise.race([startPromise, timeout]);
     } catch (e) {
       console.warn("Camera/scanner not available:", e);
       this._scanning = false;
       this._cameraFailed = true;
-      this._cleanupScannerContainer();
+      this._stopCamera();
     }
   }
 
