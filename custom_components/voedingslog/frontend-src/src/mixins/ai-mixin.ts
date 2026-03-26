@@ -13,7 +13,7 @@ import type {
   VoedingslogConfig,
 } from "../types.js";
 import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory } from "../helpers.js";
-import { renderPhotoPicker, captureVideoFrame, readFileAsBase64, type PhotoCaptureHost } from "../photo-capture.js";
+import { renderPhotoPicker, readFileAsBase64, type PhotoCaptureHost } from "../photo-capture.js";
 
 export interface AiControllerHost extends PhotoCaptureHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
@@ -26,6 +26,7 @@ export interface AiControllerHost extends PhotoCaptureHost {
   _setDialogMode(mode: string): void;
   _addMealIngredientFromAi(ingredient: MealIngredient): void;
   _stopPhotoCamera(): void;
+  _capturePhotoFrame(): string | null;
 }
 
 /** Whether the AI validation flow is adding to a log or building a meal. */
@@ -267,7 +268,7 @@ export class AiController {
   }
 
   async _captureForHandwriting(): Promise<void> {
-    const b64 = captureVideoFrame();
+    const b64 = this.host._capturePhotoFrame();
     if (!b64) return;
     this.host._stopPhotoCamera();
     await this._processHandwritingB64(b64);

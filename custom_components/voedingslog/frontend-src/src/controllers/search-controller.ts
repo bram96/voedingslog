@@ -4,7 +4,7 @@
 import { html, nothing, type TemplateResult } from "lit";
 import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
 import { ProductSearch } from "../product-search.js";
-import { renderPhotoPicker, captureVideoFrame, readFileAsBase64 } from "../photo-capture.js";
+import { renderPhotoPicker, readFileAsBase64 } from "../photo-capture.js";
 
 export interface SearchControllerHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
@@ -26,6 +26,7 @@ export interface SearchControllerHost {
   _openBarcodeScanner(): void;
   _handleBarcodePhoto(e: Event): void;
   _openManualWithPrefill(product: Product): void;
+  _capturePhotoFrame(): string | null;
 }
 
 export class SearchController {
@@ -298,7 +299,7 @@ export class SearchController {
   }
 
   async capturePhotoFrame(): Promise<void> {
-    const b64 = captureVideoFrame();
+    const b64 = this.host._capturePhotoFrame();
     if (!b64) return;
     this.host._stopPhotoCamera();
     await this._analyzePhoto(b64);

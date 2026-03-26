@@ -1,6 +1,6 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Camera } from "./barcode-capture.js";
 import type {
   HomeAssistant,
   MealCategory,
@@ -55,9 +55,8 @@ export class VoedingslogPanel extends LitElement {
   private _meals = new MealsController(this);
   private _export = new ExportController(this);
 
-  private _html5Qrcode: Html5Qrcode | null = null;
-  private _scannerContainerId = "vl-barcode-reader";
-  private _positionFrame: number | null = null;
+  private _barcodeCamera = new Html5Camera(this, "vl-barcode-reader", "barcode-scanner-placeholder");
+  private _photoCamera = new Html5Camera(this, "vl-photo-camera", "photo-camera-placeholder");
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -68,8 +67,8 @@ export class VoedingslogPanel extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
-    this._stopCamera();
-    this._cleanupScannerContainer();
+    this._barcodeCamera.stop();
+    this._photoCamera.stop();
   }
 
   private _autoSelectPerson(): void {
@@ -400,69 +399,17 @@ export class VoedingslogPanel extends LitElement {
     this._dialogMode = "barcode";
     this._scanning = false;
     this._scanFailed = false;
-    this.updateComplete.then(() => this._startLiveScanner());
-  }
-
-  private _trackScannerPosition(): void {
-    const container = document.getElementById(this._scannerContainerId);
-    const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
-    if (!container || !placeholder) return;
-
-    const rect = placeholder.getBoundingClientRect();
-    container.style.position = "fixed";
-    container.style.top = `${rect.top}px`;
-    container.style.left = `${rect.left}px`;
-    container.style.width = `${rect.width}px`;
-    container.style.height = `${Math.max(rect.height, 250)}px`;
-    container.style.zIndex = "101";
-    container.style.borderRadius = "8px";
-    container.style.overflow = "hidden";
-
-    this._positionFrame = requestAnimationFrame(() => this._trackScannerPosition());
-  }
-
-  private async _startLiveScanner(): Promise<void> {
-    try {
-      this._cleanupScannerContainer();
-
-      const container = document.createElement("div");
-      container.id = this._scannerContainerId;
-      document.body.appendChild(container);
-
-      const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
-      if (placeholder) {
-        placeholder.style.minHeight = "250px";
-      }
-
-      // Continuously track placeholder position (dialog animates in)
-      this._trackScannerPosition();
-
-      this._html5Qrcode = new Html5Qrcode(this._scannerContainerId);
+    this.updateComplete.then(() => {
       this._scanning = true;
-
-      const startPromise = this._html5Qrcode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.5 },
-        (decodedText: string) => {
-          this._scanning = false;
-          this._stopCamera();
-          this._lookupBarcode(decodedText);
-        },
-        () => {}
+      this.requestUpdate();
+      this._barcodeCamera.startScanner(
+        (barcode) => { this._scanning = false; this._lookupBarcode(barcode); },
+        () => { this._scanning = false; this._scanFailed = true; this.requestUpdate(); },
       );
-
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Camera timeout")), 10000)
-      );
-
-      await Promise.race([startPromise, timeout]);
-    } catch (e) {
-      console.warn("Live barcode scanner failed:", e);
-      this._scanning = false;
-      this._scanFailed = true;
-      this._stopCamera();
-    }
+    });
   }
+
+
 
   private async _openSearch(): Promise<void> {
     await this._searchCtrl.open();
@@ -478,74 +425,30 @@ export class VoedingslogPanel extends LitElement {
   }
 
 
-  private _photoCameraContainerId = "vl-photo-camera";
-  private _photoHtml5Qrcode: Html5Qrcode | null = null;
-  private _photoPosFrame: number | null = null;
 
-  private _trackPhotoCameraPosition(): void {
-    const container = document.getElementById(this._photoCameraContainerId);
-    const placeholder = this.shadowRoot?.getElementById("photo-camera-placeholder");
-    if (!container || !placeholder) return;
-    const rect = placeholder.getBoundingClientRect();
-    container.style.cssText = `
-      position:fixed; top:${rect.top}px; left:${rect.left}px;
-      width:${rect.width}px; height:${Math.max(rect.height, 250)}px;
-      z-index:101; border-radius:8px; overflow:hidden;
-    `;
-    this._photoPosFrame = requestAnimationFrame(() => this._trackPhotoCameraPosition());
-  }
+
 
   async _startPhotoCamera(): Promise<void> {
-    try {
-      this._cleanupPhotoCameraContainer();
-      // Set active first so the placeholder renders
-      this._photoCameraActive = true;
-      await this.updateComplete;
-
-      const container = document.createElement("div");
-      container.id = this._photoCameraContainerId;
-      document.body.appendChild(container);
-
-      const placeholder = this.shadowRoot?.getElementById("photo-camera-placeholder");
-      if (placeholder) placeholder.style.minHeight = "250px";
-      this._trackPhotoCameraPosition();
-
-      this._photoHtml5Qrcode = new Html5Qrcode(this._photoCameraContainerId);
-      await this._photoHtml5Qrcode.start(
-        { facingMode: "environment" },
-        { fps: 2, qrbox: { width: 9999, height: 9999 } },
-        () => {},
-        () => {}
-      );
-    } catch (e) {
-      console.warn("Photo camera failed:", e);
+    this._photoCameraActive = true;
+    this.requestUpdate();
+    const ok = await this._photoCamera.startViewfinder();
+    if (!ok) {
       this._photoCameraActive = false;
-      this._cleanupPhotoCameraContainer();
+      this.requestUpdate();
       alert("Camera niet beschikbaar. Gebruik 'Kies afbeelding'.");
     }
   }
 
-  private _cleanupPhotoCameraContainer(): void {
-    if (this._photoPosFrame) {
-      cancelAnimationFrame(this._photoPosFrame);
-      this._photoPosFrame = null;
-    }
-    const existing = document.getElementById(this._photoCameraContainerId);
-    if (existing) existing.remove();
-  }
 
 
 
   _stopPhotoCamera(): void {
     this._photoCameraActive = false;
-    if (this._photoHtml5Qrcode) {
-      this._photoHtml5Qrcode.stop().catch(() => {}).finally(() => {
-        this._photoHtml5Qrcode = null;
-        this._cleanupPhotoCameraContainer();
-      });
-    } else {
-      this._cleanupPhotoCameraContainer();
-    }
+    this._photoCamera.stop();
+  }
+
+  _capturePhotoFrame(): string | null {
+    return this._photoCamera.captureFrame();
   }
 
 
@@ -555,12 +458,12 @@ export class VoedingslogPanel extends LitElement {
 
   _selectProduct(product: Product): void {
     this._pendingProduct = product;
-    this._stopCamera();
+    this._barcodeCamera.stop();
     this._dialogMode = "weight";
   }
 
   _closeDialog(): void {
-    this._stopCamera();
+    this._barcodeCamera.stop();
     this._stopPhotoCamera();
     this._dialogMode = null;
     this._pendingProduct = null;
@@ -588,32 +491,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
 
-  private _stopCamera(): void {
-    if (this._html5Qrcode) {
-      this._html5Qrcode
-        .stop()
-        .catch(() => {
-          // ignore stop errors
-        })
-        .finally(() => {
-          this._html5Qrcode = null;
-          this._cleanupScannerContainer();
-        });
-    } else {
-      this._cleanupScannerContainer();
-    }
-  }
 
-  private _cleanupScannerContainer(): void {
-    if (this._positionFrame) {
-      cancelAnimationFrame(this._positionFrame);
-      this._positionFrame = null;
-    }
-    const existing = document.getElementById(this._scannerContainerId);
-    if (existing) {
-      existing.remove();
-    }
-  }
 
 
 

@@ -5,8 +5,6 @@
  */
 import { html, type TemplateResult } from "lit";
 
-const CAMERA_CONTAINER_ID = "vl-photo-camera";
-
 export interface PhotoCaptureHost {
   _photoCameraActive: boolean;
   _analyzing: boolean;
@@ -62,24 +60,6 @@ export function renderPhotoPicker(
       @change=${onFileChange}
       style="display:none" />
   `;
-}
-
-/**
- * Capture the current video frame from the live camera as base64 JPEG.
- * Returns null if no video element is found.
- */
-export function captureVideoFrame(): string | null {
-  const container = document.getElementById(CAMERA_CONTAINER_ID);
-  const video = container?.querySelector("video");
-  if (!video) return null;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(video, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
 }
 
 /**
