@@ -37,7 +37,7 @@ async def search_by_name(session: aiohttp.ClientSession, name: str) -> list[dict
         "action": "process",
         "json": 1,
         "page_size": 10,
-        "fields": "product_name,brands,nutriments,product_name_nl,serving_size,quantity",
+        "fields": "product_name,brands,nutriments,product_name_nl,serving_size,serving_quantity,product_quantity,product_quantity_unit,quantity",
     }
     try:
         async with session.get(
@@ -69,10 +69,12 @@ def _process_product(product: dict) -> dict:
     )
     brand = product.get("brands", "")
     serving_grams = _parse_serving(product.get("serving_size", ""))
+    portions = _build_portions(product)
 
     return {
         "name": f"{name} ({brand})" if brand else name,
         "serving_grams": serving_grams or 100,
+        "portions": portions,
         "nutrients": {
             "energy-kcal_100g":   _to_float(nm.get("energy-kcal_100g") or nm.get("energy_100g", 0) / 4.184),
             "fat_100g":           _to_float(nm.get("fat_100g", 0)),
@@ -88,6 +90,37 @@ def _process_product(product: dict) -> dict:
             "vitamin-d_100g":     _to_float(nm.get("vitamin-d_100g", 0)),
         },
     }
+
+
+def _build_portions(product: dict) -> list[dict]:
+    """Build a list of portion presets from OFF product data."""
+    portions: list[dict] = []
+    seen: set[float] = set()
+
+    # Serving size (e.g. "1 serving (23 g)" or "200ml")
+    serving_size = product.get("serving_size", "") or ""
+    serving_qty = product.get("serving_quantity")
+    if serving_qty:
+        grams = _to_float(serving_qty)
+        if grams > 0 and grams not in seen:
+            label = serving_size if serving_size else f"Portie ({grams:.0f}g)"
+            portions.append({"label": label, "grams": grams})
+            seen.add(grams)
+
+    # Product quantity (total package weight)
+    product_qty = product.get("product_quantity")
+    product_unit = (product.get("product_quantity_unit") or "").lower()
+    if product_qty and product_unit in ("g", "gr", "gram", ""):
+        grams = _to_float(product_qty)
+        if grams > 0 and grams not in seen:
+            portions.append({"label": f"Heel product ({grams:.0f}g)", "grams": grams})
+            seen.add(grams)
+
+    # Always include 100g as a preset
+    if 100.0 not in seen:
+        portions.append({"label": "100g", "grams": 100.0})
+
+    return portions
 
 
 def _to_float(value) -> float:

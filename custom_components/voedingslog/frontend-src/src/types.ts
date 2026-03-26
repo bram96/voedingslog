@@ -22,9 +22,15 @@ export interface IndexedLogItem extends LogItem {
   _index: number;
 }
 
+export interface Portion {
+  label: string;
+  grams: number;
+}
+
 export interface Product {
   name: string;
   serving_grams: number;
+  portions?: Portion[];
   nutrients: NutrientMap;
 }
 
@@ -62,5 +68,5 @@ export interface NutrientDisplayConfig {
   decimals: number;
 }
 
-type DialogMode = "barcode" | "search" | "photo" | "weight" | null;
+type DialogMode = "barcode" | "search" | "photo" | "weight" | "edit" | null;
 export type { DialogMode };

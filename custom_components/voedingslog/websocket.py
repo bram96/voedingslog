@@ -19,6 +19,7 @@ from .const import (
     WS_SEARCH_PRODUCTS,
     WS_LOG_PRODUCT,
     WS_DELETE_ITEM,
+    WS_EDIT_ITEM,
     WS_RESET_DAY,
     WS_ANALYZE_PHOTO,
 )
@@ -48,6 +49,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_search_products)
     websocket_api.async_register_command(hass, ws_log_product)
     websocket_api.async_register_command(hass, ws_delete_item)
+    websocket_api.async_register_command(hass, ws_edit_item)
     websocket_api.async_register_command(hass, ws_reset_day)
     websocket_api.async_register_command(hass, ws_analyze_photo)
 
@@ -188,6 +190,37 @@ async def ws_delete_item(hass, connection, msg):
 
     await coordinator.delete_item(msg["person"], msg["index"], msg.get("date"))
     connection.send_result(msg["id"], {"success": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_EDIT_ITEM,
+        vol.Required("person"): str,
+        vol.Required("index"): int,
+        vol.Optional("grams"): vol.Coerce(float),
+        vol.Optional("category"): vol.In(MEAL_CATEGORIES),
+        vol.Optional("date"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_edit_item(hass, connection, msg):
+    """Edit the grams and/or category of an existing item."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+
+    ok = await coordinator.edit_item(
+        person=msg["person"],
+        index=msg["index"],
+        grams=msg.get("grams"),
+        category=msg.get("category"),
+        day=msg.get("date"),
+    )
+    if ok:
+        connection.send_result(msg["id"], {"success": True})
+    else:
+        connection.send_error(msg["id"], "not_found", "Item not found")
 
 
 @websocket_api.websocket_command(

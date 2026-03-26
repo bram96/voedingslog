@@ -102,6 +102,28 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         product = {"name": name, "serving_grams": grams, "nutrients": nutrients}
         await self._add_item(person, product, grams, category)
 
+    async def edit_item(
+        self,
+        person: str,
+        index: int,
+        grams: float | None = None,
+        category: str | None = None,
+        day: str | None = None,
+    ) -> bool:
+        """Edit the grams and/or category of an existing log item."""
+        day = day or str(date.today())
+        log = self._logs[person].get(day, [])
+        if not (0 <= index < len(log)):
+            return False
+        item = log[index]
+        if grams is not None:
+            item["grams"] = grams
+        if category and category in MEAL_CATEGORIES:
+            item["category"] = category
+        _LOGGER.info("Edited: %s for %s (%.0fg, %s)", item["name"], person, item["grams"], item["category"])
+        await self.async_refresh()
+        return True
+
     async def lookup_barcode(self, barcode: str) -> dict | None:
         """Look up a product by barcode without logging it."""
         session = await self._get_session()

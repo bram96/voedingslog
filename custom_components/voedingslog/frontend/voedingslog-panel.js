@@ -676,6 +676,7 @@ var VoedingslogPanel = class extends i4 {
     this._searchQuery = "";
     this._scanning = false;
     this._analyzing = false;
+    this._editingItem = null;
     this._stream = null;
     this._barcodeDetector = null;
     this._scanAnimFrame = null;
@@ -838,13 +839,16 @@ var VoedingslogPanel = class extends i4 {
     const vals = calcItemNutrients(item);
     return b2`
       <div class="food-item">
-        <div class="item-main">
+        <div class="item-main" @click=${() => this._openEditDialog(item)}>
           <span class="item-name">${item.name}</span>
           <span class="item-meta">${item.grams}g · ${item.time}</span>
         </div>
         <div class="item-nutrients">
           <span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>
         </div>
+        <button class="item-edit" @click=${() => this._openEditDialog(item)}>
+          <ha-icon icon="mdi:pencil"></ha-icon>
+        </button>
         <button class="item-delete" @click=${() => this._deleteItem(item._index)}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
@@ -861,6 +865,7 @@ var VoedingslogPanel = class extends i4 {
           ${this._dialogMode === "search" ? this._renderSearchDialog() : A}
           ${this._dialogMode === "photo" ? this._renderPhotoDialog() : A}
           ${this._dialogMode === "weight" ? this._renderWeightDialog() : A}
+          ${this._dialogMode === "edit" ? this._renderEditDialog() : A}
         </div>
       </div>
     `;
@@ -964,6 +969,29 @@ var VoedingslogPanel = class extends i4 {
       </div>
     `;
   }
+  _renderPortionChips(portions) {
+    if (!portions || portions.length === 0) return A;
+    return b2`
+      <div class="portion-chips">
+        ${portions.map(
+      (p3) => b2`
+            <button
+              class="portion-chip"
+              @click=${() => {
+        const input = this.shadowRoot?.getElementById("weight-input");
+        if (input) {
+          input.value = String(p3.grams);
+          this.requestUpdate();
+        }
+      }}
+            >
+              ${p3.label}
+            </button>
+          `
+    )}
+      </div>
+    `;
+  }
   _renderWeightDialog() {
     if (!this._pendingProduct) return A;
     const p3 = this._pendingProduct;
@@ -991,6 +1019,7 @@ var VoedingslogPanel = class extends i4 {
 
         <div class="weight-section">
           <label>Gewicht (gram)</label>
+          ${this._renderPortionChips(p3.portions || [])}
           <input
             type="number"
             id="weight-input"
@@ -1022,6 +1051,64 @@ var VoedingslogPanel = class extends i4 {
       </div>
     `;
   }
+  _renderEditDialog() {
+    if (!this._editingItem) return A;
+    const item = this._editingItem;
+    return b2`
+      <div class="dialog-header">
+        <h2>${item.name}</h2>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="nutrient-preview">
+          <div class="preview-title">Voedingswaarden per 100g</div>
+          <div class="nutrient-grid">
+            ${KEY_NUTRIENTS_DISPLAY.map(
+      (n5) => b2`
+                <div class="nutrient-row">
+                  <span>${n5.label}</span>
+                  <span>${(item.nutrients?.[n5.key] || 0).toFixed(n5.decimals)} ${n5.unit}</span>
+                </div>
+              `
+    )}
+          </div>
+        </div>
+
+        <div class="weight-section">
+          <label>Gewicht (gram)</label>
+          <input
+            type="number"
+            id="edit-weight-input"
+            .value=${String(item.grams)}
+            min="1"
+            step="1"
+            inputmode="numeric"
+            @input=${() => this.requestUpdate()}
+          />
+        </div>
+
+        <div class="category-section-dialog">
+          <label>Maaltijd</label>
+          <select id="edit-category-select">
+            ${["breakfast", "lunch", "dinner", "snack"].map(
+      (cat) => b2`
+                <option value=${cat} ?selected=${cat === item.category}>
+                  ${(this._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
+                </option>
+              `
+    )}
+          </select>
+        </div>
+
+        <button class="btn-primary btn-confirm" @click=${() => this._confirmEdit()}>
+          <ha-icon icon="mdi:check"></ha-icon>
+          Opslaan
+        </button>
+      </div>
+    `;
+  }
   // ── Actions ──────────────────────────────────────────────────────
   _openBarcodeScanner() {
     this._dialogMode = "barcode";
@@ -1033,6 +1120,10 @@ var VoedingslogPanel = class extends i4 {
     this._searchResults = [];
     this._searchQuery = "";
   }
+  _openEditDialog(item) {
+    this._editingItem = item;
+    this._dialogMode = "edit";
+  }
   _openPhotoCapture() {
     this._dialogMode = "photo";
     this._analyzing = false;
@@ -1041,6 +1132,7 @@ var VoedingslogPanel = class extends i4 {
     this._stopCamera();
     this._dialogMode = null;
     this._pendingProduct = null;
+    this._editingItem = null;
     this._searchResults = [];
     this._analyzing = false;
   }
@@ -1192,6 +1284,33 @@ var VoedingslogPanel = class extends i4 {
     } catch (e5) {
       console.error("Failed to log product:", e5);
       alert("Fout bij opslaan.");
+    }
+  }
+  async _confirmEdit() {
+    const item = this._editingItem;
+    if (!item) return;
+    const gramsInput = this.shadowRoot?.getElementById(
+      "edit-weight-input"
+    );
+    const catSelect = this.shadowRoot?.getElementById(
+      "edit-category-select"
+    );
+    const grams = parseFloat(gramsInput?.value || "") || item.grams;
+    const category = catSelect?.value || item.category;
+    try {
+      await this.hass.callWS({
+        type: "voedingslog/edit_item",
+        person: this._selectedPerson,
+        index: item._index,
+        grams,
+        category,
+        date: this._selectedDate
+      });
+      this._closeDialog();
+      await this._loadLog();
+    } catch (e5) {
+      console.error("Failed to edit item:", e5);
+      alert("Fout bij bewerken.");
     }
   }
   async _deleteItem(index) {
@@ -1422,6 +1541,7 @@ VoedingslogPanel.styles = i`
       white-space: nowrap;
       font-weight: 500;
     }
+    .item-edit,
     .item-delete {
       background: none;
       border: none;
@@ -1431,11 +1551,18 @@ VoedingslogPanel.styles = i`
       border-radius: 50%;
       display: flex;
     }
+    .item-edit:hover {
+      color: var(--primary-color);
+    }
     .item-delete:hover {
       color: var(--error-color, #db4437);
     }
+    .item-edit ha-icon,
     .item-delete ha-icon {
       --mdc-icon-size: 18px;
+    }
+    .item-main {
+      cursor: pointer;
     }
 
     /* Dialog overlay */
@@ -1636,6 +1763,27 @@ VoedingslogPanel.styles = i`
       color: var(--secondary-text-color);
       margin-bottom: 6px;
     }
+    .portion-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .portion-chip {
+      background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color);
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--primary-text-color);
+      transition: background 0.2s;
+    }
+    .portion-chip:hover {
+      background: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+      border-color: var(--primary-color);
+    }
     .weight-section input,
     .category-section-dialog select {
       width: 100%;
@@ -1696,6 +1844,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], VoedingslogPanel.prototype, "_analyzing", 2);
+__decorateClass([
+  r5()
+], VoedingslogPanel.prototype, "_editingItem", 2);
 VoedingslogPanel = __decorateClass([
   t3("voedingslog-panel")
 ], VoedingslogPanel);
