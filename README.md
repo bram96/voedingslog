@@ -4,10 +4,18 @@ Houd calorieën, macronutriënten, zout en vitamines bij per persoon.
 Data komt van **Open Food Facts** — gratis, open database met miljoenen producten inclusief Nederlandse supermarktproducten.
 
 ### Features
-- **Eigen pagina in de sidebar** met dagoverzicht per maaltijd (ontbijt, lunch, avondeten, tussendoor)
-- **Barcode scanner** — scan producten direct met je camera
-- **Foto-analyse** — maak een foto van het voedingsetiket en laat AI de waarden uitlezen (via HA AI Task)
-- **Meerdere personen** — schakel eenvoudig tussen personen via tabs
+
+- **Sidebar panel** — eigen pagina met dagoverzicht per maaltijd (ontbijt, lunch, avondeten, tussendoor)
+- **Barcode scanner** — scan producten met je camera via html5-qrcode (HTTPS vereist)
+- **Foto-analyse** — maak een foto van het voedingsetiket, AI leest de waarden uit en je kunt ze controleren
+- **Product zoeken** — zoek lokaal in je cache of online in Open Food Facts
+- **Handmatig invoeren** — voer zelf een product in met alle voedingswaarden
+- **Custom maaltijden** — sla recepten op (bijv. macaroni) met ingrediënten en portiegrootte
+- **Meerdere personen** — schakel tussen personen via tabs
+- **Datum navigatie** — blader door dagen met pijltjes of kies een datum
+- **Bewerken** — tik op een item om gewicht, maaltijd of datum aan te passen
+- **Lokale cache** — eerder gebruikte producten worden lokaal opgeslagen voor sneller zoeken
+- **Persistentie** — alle data blijft bewaard na herstart
 - **HA Sensoren** — alle voedingswaarden beschikbaar als sensoren voor automations en dashboards
 
 ---
@@ -41,18 +49,37 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 Na installatie verschijnt **Voedingslog** automatisch in de sidebar. Het panel biedt:
 
 - **Dagoverzicht** gegroepeerd per maaltijd (ontbijt, lunch, avondeten, tussendoor)
-- **Barcode scanner** — tik op "Scan barcode" om een product te scannen met je camera
-- **Product zoeken** — zoek op naam in de Open Food Facts database
-- **Foto van etiket** — maak een foto van het voedingsetiket, AI leest de waarden uit
-- **Gewicht invoeren** — na scannen/zoeken voer je het gewicht in gram in
-- **Maaltijd kiezen** — wordt automatisch ingesteld op basis van het tijdstip
+- **Dagtotalen** met voortgangsbalk voor calorieën en macro-overzicht
+- **Datum navigatie** — pijltjes om door dagen te bladeren, tik op de datum om te kiezen
+- **6 acties** om voeding toe te voegen:
+  - **Scan barcode** — live camera scanner (html5-qrcode, HTTPS vereist)
+  - **Zoek product** — zoekt eerst lokaal, daarna online met "Zoek online" knop
+  - **Foto etiket** — maak een foto van het voedingsetiket, AI analyseert het, je controleert de waarden
+  - **Maaltijden** — kies een opgeslagen recept en log het met de ingestelde portie
+  - **Handmatig** — voer naam en alle macro's per 100g zelf in
+- **Bewerken** — tik op een item om gewicht, maaltijdcategorie of datum aan te passen
+- **Verwijderen** — tik op het kruisje (met bevestiging)
+- **Portie presets** — kies uit portiegroottes van Open Food Facts of je eigen recepten
 
 ### AI Foto-analyse instellen
 
 1. Zorg dat je een AI integratie hebt met AI Task support (bijv. OpenAI, Google AI, Claude)
 2. Ga naar **Instellingen → Apparaten & Diensten → Voedingslog → Opties**
-3. Vul het `ai_task_entity` veld in met je AI Task entity ID (bijv. `ai_task.openai`)
+3. Kies je AI Task entity in de dropdown
 4. De "Foto etiket" knop wordt nu actief in het panel
+5. Na analyse opent het controlescherm waar je de herkende waarden kunt aanpassen
+
+### Custom Maaltijden
+
+Sla recepten op die je vaak eet:
+
+1. Tik op **Maaltijden** → **Nieuwe maaltijd**
+2. Geef een naam (bijv. "Macaroni")
+3. Zoek en voeg ingrediënten toe met hun gewicht
+4. Stel een standaard portie in (bijv. 400g)
+5. Tik op **Opslaan**
+
+Volgende keer: tik op **Maaltijden** → tik op het recept → gewicht is al ingevuld → **Toevoegen**
 
 ---
 
@@ -88,8 +115,9 @@ Scan een barcode en log automatisch.
 service: voedingslog.log_barcode
 data:
   persoon: "Jan"
-  barcode: "8710400301929"   # bijv. AH crackers
-  gram: 30                   # optioneel, anders portiegrootte uit database
+  barcode: "8710400301929"
+  gram: 30                   # optioneel
+  category: "breakfast"      # optioneel (breakfast/lunch/dinner/snack)
 ```
 
 ### `voedingslog.log_product`
@@ -101,6 +129,7 @@ data:
   persoon: "Lisa"
   naam: "hagelslag melk"
   gram: 20
+  category: "breakfast"      # optioneel
 ```
 
 ### `voedingslog.reset_dag`
@@ -110,6 +139,7 @@ Wis de log voor vandaag (of een specifieke dag).
 service: voedingslog.reset_dag
 data:
   persoon: "Jan"
+  dag: "2026-03-25"          # optioneel
 ```
 
 ### `voedingslog.verwijder_laatste`
@@ -119,31 +149,6 @@ Verwijder het laatst gelogde item.
 service: voedingslog.verwijder_laatste
 data:
   persoon: "Jan"
-```
-
----
-
-## Companion App — Barcode scannen
-
-Maak een automation die de barcode scanner van de companion app gebruikt:
-
-```yaml
-alias: "Voeding scannen – Jan"
-trigger:
-  - platform: event
-    event_type: mobile_app_notification_action
-    event_data:
-      action: SCAN_BARCODE_JAN
-action:
-  - service: voedingslog.log_barcode
-    data:
-      persoon: "Jan"
-      barcode: "{{ trigger.event.data.reply_text }}"
-```
-
-Of via een knop in het dashboard die de barcode scanner opent via de companion app URI:
-```
-homeassistant://navigate/lovelace/voeding
 ```
 
 ---
@@ -183,30 +188,22 @@ entities:
     name: Gelogde items
 ```
 
-Of met een gauge card voor calorieën:
+---
 
-```yaml
-type: gauge
-entity: sensor.voedingslog_jan_calorieen
-name: Calorieën Jan
-min: 0
-max: 2000
-needle: true
-severity:
-  green: 0
-  yellow: 1600
-  red: 1900
-```
+## Data opslag
+
+Alle data wordt bewaard in de HA `.storage/` map:
+
+| Bestand | Inhoud |
+|---------|--------|
+| `.storage/voedingslog.logs` | Dagelijkse voedingslogs per persoon |
+| `.storage/voedingslog.meals` | Custom maaltijden (recepten) |
+| `.storage/voedingslog.products` | Lokale product cache |
 
 ---
 
-## Notificaties
+## Vereisten
 
-De component stuurt automatisch een notificatie na het loggen via de companion app.
-Pas in `__init__.py` de service naam aan naar jouw apparaat:
-
-```python
-"mobile_app_iphone_jan"   # of mobile_app_pixel_lisa etc.
-```
-
-Vind jouw apparaatnaam via **Instellingen → Companion App → Apparaatnaam**.
+- Home Assistant 2024.5.0 of hoger
+- **HTTPS vereist** voor barcode scanner en camera (anders werkt getUserMedia niet)
+- Optioneel: AI Task integratie voor foto-analyse (OpenAI, Google AI, Claude)
