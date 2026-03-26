@@ -4,6 +4,7 @@ from __future__ import annotations
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
 from .const import DOMAIN, DEFAULT_CALORIES_GOAL, DEFAULT_SODIUM_GOAL_MG
 
@@ -92,7 +93,12 @@ class VoedingslogOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     "ai_task_entity",
                     default=options.get("ai_task_entity", ""),
-                ): str,
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="ai_task",
+                        multiple=False,
+                    )
+                ),
             }
         )
 

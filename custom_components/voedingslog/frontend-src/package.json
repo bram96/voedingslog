@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/voedingslog-panel.ts --bundle --format=esm --outfile=../frontend/voedingslog-panel.js",
+    "build": "esbuild src/voedingslog-panel.ts --bundle --format=esm --minify --outfile=../frontend/voedingslog-panel.js",
     "watch": "pnpm build --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "html5-qrcode": "^2.3.8",
     "lit": "^3.1.0"
   },
   "devDependencies": {

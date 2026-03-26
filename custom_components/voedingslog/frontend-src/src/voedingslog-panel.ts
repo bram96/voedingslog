@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { Html5Qrcode } from "html5-qrcode";
 import type {
   HomeAssistant,
   MealCategory,
@@ -24,15 +25,6 @@ import {
   sumNutrients,
 } from "./helpers.js";
 
-// Extend window for BarcodeDetector (not yet in TS lib)
-declare global {
-  interface Window {
-    BarcodeDetector?: new (opts: { formats: string[] }) => {
-      detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]>;
-    };
-  }
-}
-
 @customElement("voedingslog-panel")
 export class VoedingslogPanel extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
@@ -53,9 +45,8 @@ export class VoedingslogPanel extends LitElement {
   @state() private _analyzing = false;
   @state() private _editingItem: IndexedLogItem | null = null;
 
-  private _stream: MediaStream | null = null;
-  private _barcodeDetector: InstanceType<NonNullable<Window["BarcodeDetector"]>> | null = null;
-  private _scanAnimFrame: number | null = null;
+  private _html5Qrcode: Html5Qrcode | null = null;
+  private _scannerContainerId = "vl-barcode-reader";
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -67,6 +58,7 @@ export class VoedingslogPanel extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this._stopCamera();
+    this._cleanupScannerContainer();
   }
 
   private async _loadConfig(): Promise<void> {
@@ -284,10 +276,11 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        <video id="barcode-video" autoplay playsinline></video>
-        ${this._scanning
-          ? html`<div class="scan-overlay"><div class="scan-line"></div></div>`
-          : nothing}
+        <div id="barcode-scanner-placeholder" class="scanner-area">
+          ${this._scanning
+            ? nothing
+            : html`<p class="scanner-hint">Camera wordt gestart...</p>`}
+        </div>
         <div class="manual-barcode">
           <span>Of voer handmatig in:</span>
           <div class="input-row">
@@ -562,56 +555,90 @@ export class VoedingslogPanel extends LitElement {
 
   private async _startCamera(): Promise<void> {
     try {
-      this._stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-      const video = this.shadowRoot?.getElementById(
-        "barcode-video"
-      ) as HTMLVideoElement | null;
-      if (video) {
-        video.srcObject = this._stream;
-        this._scanning = true;
-        if (window.BarcodeDetector) {
-          this._barcodeDetector = new window.BarcodeDetector({
-            formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
-          });
-          this._scanLoop(video);
-        }
-      }
-    } catch (e) {
-      console.warn("Camera not available:", e);
-      this._scanning = false;
-    }
-  }
+      // html5-qrcode needs a container in the light DOM (uses document.getElementById)
+      // Create one in document.body and position it over our dialog placeholder
+      this._cleanupScannerContainer();
 
-  private async _scanLoop(video: HTMLVideoElement): Promise<void> {
-    if (!this._scanning || !this._barcodeDetector) return;
-    try {
-      const barcodes = await this._barcodeDetector.detect(video);
-      if (barcodes.length > 0) {
-        const code = barcodes[0].rawValue;
-        this._scanning = false;
-        this._stopCamera();
-        await this._lookupBarcode(code);
-        return;
+      const container = document.createElement("div");
+      container.id = this._scannerContainerId;
+      container.style.cssText =
+        "width:100%;max-width:568px;margin:0 auto;border-radius:8px;overflow:hidden;";
+
+      // Insert into the placeholder area in our shadow DOM won't work for html5-qrcode,
+      // so we append to document.body and position it. However, a simpler approach:
+      // we place it in the dialog body via a slot-like mechanism using the light DOM.
+      const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
+      if (placeholder) {
+        // Move the container into the shadow DOM placeholder — html5-qrcode won't find it.
+        // Instead, append to body and absolutely position it.
+        document.body.appendChild(container);
+
+        // Position the container over the placeholder
+        const rect = placeholder.getBoundingClientRect();
+        container.style.cssText = `
+          position: fixed;
+          top: ${rect.top}px;
+          left: ${rect.left}px;
+          width: ${rect.width}px;
+          height: ${Math.max(rect.height, 250)}px;
+          z-index: 200;
+          border-radius: 8px;
+          overflow: hidden;
+        `;
+        // Reserve space in the placeholder
+        placeholder.style.minHeight = "250px";
+      } else {
+        document.body.appendChild(container);
       }
-    } catch {
-      // detect can fail on some frames, that's ok
+
+      this._html5Qrcode = new Html5Qrcode(this._scannerContainerId);
+      this._scanning = true;
+
+      await this._html5Qrcode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          aspectRatio: 1.5,
+        },
+        (decodedText: string) => {
+          this._scanning = false;
+          this._stopCamera();
+          this._lookupBarcode(decodedText);
+        },
+        () => {
+          // Ignore per-frame scan failures
+        }
+      );
+    } catch (e) {
+      console.warn("Camera/scanner not available:", e);
+      this._scanning = false;
+      this._cleanupScannerContainer();
     }
-    this._scanAnimFrame = requestAnimationFrame(() => this._scanLoop(video));
   }
 
   private _stopCamera(): void {
     this._scanning = false;
-    if (this._scanAnimFrame) {
-      cancelAnimationFrame(this._scanAnimFrame);
-      this._scanAnimFrame = null;
+    if (this._html5Qrcode) {
+      this._html5Qrcode
+        .stop()
+        .catch(() => {
+          // ignore stop errors
+        })
+        .finally(() => {
+          this._html5Qrcode = null;
+          this._cleanupScannerContainer();
+        });
+    } else {
+      this._cleanupScannerContainer();
     }
-    if (this._stream) {
-      this._stream.getTracks().forEach((t) => t.stop());
-      this._stream = null;
+  }
+
+  private _cleanupScannerContainer(): void {
+    const existing = document.getElementById(this._scannerContainerId);
+    if (existing) {
+      existing.remove();
     }
-    this._barcodeDetector = null;
   }
 
   private async _lookupManualBarcode(): Promise<void> {
@@ -1052,32 +1079,17 @@ export class VoedingslogPanel extends LitElement {
     }
 
     /* Barcode scanner */
-    #barcode-video {
-      width: 100%;
-      border-radius: 8px;
+    .scanner-area {
+      min-height: 250px;
       background: #000;
-      max-height: 250px;
-      object-fit: cover;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .scan-overlay {
-      position: relative;
-      margin-top: -4px;
-      height: 4px;
-      overflow: hidden;
-    }
-    .scan-line {
-      height: 2px;
-      background: var(--primary-color);
-      animation: scan 1.5s ease-in-out infinite;
-    }
-    @keyframes scan {
-      0%,
-      100% {
-        transform: translateX(-100%);
-      }
-      50% {
-        transform: translateX(100%);
-      }
+    .scanner-hint {
+      color: #999;
+      font-size: 14px;
     }
     .manual-barcode {
       margin-top: 16px;

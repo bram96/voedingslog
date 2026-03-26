@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      html5-qrcode:
+        specifier: ^2.3.8
+        version: 2.3.8
       lit:
         specifier: ^3.1.0
         version: 3.3.2
@@ -173,6 +176,9 @@ packages:
     engines: {node: '>=12'}
     hasBin: true
 
+  html5-qrcode@2.3.8:
+    resolution: {integrity: sha512-jsr4vafJhwoLVEDW3n1KvPnCCXWaQfRng0/EEYk1vNcQGcG/htAdhJX0be8YyqMoSz7+hZvOZSTAepsabiuhiQ==}
+
   lit-element@4.2.2:
     resolution: {integrity: sha512-aFKhNToWxoyhkNDmWZwEva2SlQia+jfG0fjIWV//YeTaWrVnOxD89dPKfigCUspXFmjzOEUQpOkejH5Ly6sG0w==}
 
@@ -291,6 +297,8 @@ snapshots:
       '@esbuild/win32-arm64': 0.21.5
       '@esbuild/win32-ia32': 0.21.5
       '@esbuild/win32-x64': 0.21.5
+
+  html5-qrcode@2.3.8: {}
 
   lit-element@4.2.2:
     dependencies:
