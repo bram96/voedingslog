@@ -47,6 +47,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _searchQuery = "";
   @state() private _scanning = false;
   @state() private _scanFailed = false;
+  @state() private _photoCameraActive = false;
   @state() private _analyzing = false;
   @state() private _searching = false;
   @state() private _searchSource: "local" | "online" = "local";
@@ -59,6 +60,7 @@ export class VoedingslogPanel extends LitElement {
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
   private _positionFrame: number | null = null;
+  private _photoCameraStream: MediaStream | null = null;
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -447,15 +449,34 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-
         ${this._analyzing
           ? html`<div class="analyzing">
               <ha-circular-progress indeterminate></ha-circular-progress>
               <p>Analyseren...</p>
             </div>`
-          : html`
+          : this._photoCameraActive
+            ? html`
+              <div class="camera-preview">
+                <video id="photo-camera-video" autoplay playsinline></video>
+                <button class="btn-primary camera-capture-btn" @click=${() => this._capturePhotoFrame()}>
+                  <ha-icon icon="mdi:camera"></ha-icon> Maak foto
+                </button>
+              </div>
+            `
+            : html`
               <p class="photo-hint">Maak een foto van het voedingsetiket op de verpakking.</p>
-              ${this._renderCameraCapture("photo")}
+              <div class="photo-buttons">
+                <button class="btn-primary photo-btn" @click=${() => this._startPhotoCamera()}>
+                  <ha-icon icon="mdi:camera"></ha-icon> Open camera
+                </button>
+                <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("file-input-photo")}>
+                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
+                </button>
+              </div>
+              <input type="file" accept="image/*"
+                id="file-input-photo"
+                @change=${(e: Event) => this._handlePhotoCapture(e)}
+                style="display:none" />
             `}
       </div>
     `;
@@ -914,6 +935,65 @@ export class VoedingslogPanel extends LitElement {
   private _openPhotoCapture(): void {
     this._dialogMode = "photo";
     this._analyzing = false;
+    this._photoCameraActive = false;
+  }
+
+  private async _startPhotoCamera(): Promise<void> {
+    try {
+      this._photoCameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      this._photoCameraActive = true;
+      await this.updateComplete;
+      const video = this.shadowRoot?.getElementById("photo-camera-video") as HTMLVideoElement | null;
+      if (video) {
+        video.srcObject = this._photoCameraStream;
+      }
+    } catch (e) {
+      console.warn("Photo camera failed:", e);
+      alert("Camera niet beschikbaar. Gebruik 'Kies afbeelding'.");
+    }
+  }
+
+  private async _capturePhotoFrame(): Promise<void> {
+    const video = this.shadowRoot?.getElementById("photo-camera-video") as HTMLVideoElement | null;
+    if (!video) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+
+    this._stopPhotoCamera();
+    this._analyzing = true;
+
+    try {
+      const b64 = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+      const res = await this.hass.callWS<AnalyzePhotoResponse>({
+        type: "voedingslog/analyze_photo",
+        photo_b64: b64,
+      });
+      if (res.product) {
+        this._analyzing = false;
+        this._selectProduct(res.product);
+      } else {
+        this._analyzing = false;
+        alert("Kon voedingswaarden niet herkennen. Probeer een duidelijkere foto.");
+      }
+    } catch (err) {
+      this._analyzing = false;
+      alert("Fout bij analyseren foto: " + ((err as Error).message || err));
+    }
+  }
+
+  private _stopPhotoCamera(): void {
+    this._photoCameraActive = false;
+    if (this._photoCameraStream) {
+      this._photoCameraStream.getTracks().forEach((t) => t.stop());
+      this._photoCameraStream = null;
+    }
   }
 
   private async _openMeals(): Promise<void> {
@@ -1049,6 +1129,7 @@ export class VoedingslogPanel extends LitElement {
 
   private _closeDialog(): void {
     this._stopCamera();
+    this._stopPhotoCamera();
     this._dialogMode = null;
     this._pendingProduct = null;
     this._editingItem = null;
