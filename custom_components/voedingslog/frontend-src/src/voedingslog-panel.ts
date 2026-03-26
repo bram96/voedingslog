@@ -695,7 +695,7 @@ export class VoedingslogPanel extends LitElement {
           </div>
         </div>
 
-        <div class="weight-section">
+        <div class="form-field">
           <label>Gewicht (gram)</label>
           ${this._renderPortionChips(p.portions || [])}
           <input
@@ -709,7 +709,7 @@ export class VoedingslogPanel extends LitElement {
           />
         </div>
 
-        <div class="category-section-dialog">
+        <div class="form-field">
           <label>Maaltijd</label>
           <select id="category-select">
             ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
@@ -722,7 +722,7 @@ export class VoedingslogPanel extends LitElement {
           </select>
         </div>
 
-        <div class="date-section-dialog">
+        <div class="form-field">
           <label>Datum</label>
           <input
             type="date"
@@ -765,7 +765,7 @@ export class VoedingslogPanel extends LitElement {
           </div>
         </div>
 
-        <div class="weight-section">
+        <div class="form-field">
           <label>Gewicht (gram)</label>
           <input
             type="number"
@@ -778,7 +778,7 @@ export class VoedingslogPanel extends LitElement {
           />
         </div>
 
-        <div class="category-section-dialog">
+        <div class="form-field">
           <label>Maaltijd</label>
           <select id="edit-category-select">
             ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
@@ -791,7 +791,7 @@ export class VoedingslogPanel extends LitElement {
           </select>
         </div>
 
-        <div class="date-section-dialog">
+        <div class="form-field">
           <label>Datum</label>
           <input
             type="date"
@@ -832,7 +832,7 @@ export class VoedingslogPanel extends LitElement {
       </div>
       <div class="dialog-body">
         ${pre ? html`<p class="manual-hint">Door AI herkend. Controleer en pas aan indien nodig.</p>` : nothing}
-        <div class="weight-section">
+        <div class="form-field">
           <label>Productnaam</label>
           <input type="text" id="manual-name"
             placeholder="Bijv. Zelfgemaakte soep"
@@ -937,7 +937,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        <div class="weight-section">
+        <div class="form-field">
           <label>Naam</label>
           <input
             type="text"
@@ -947,7 +947,7 @@ export class VoedingslogPanel extends LitElement {
           />
         </div>
 
-        <div class="weight-section">
+        <div class="form-field">
           <label>Standaard portie (gram)</label>
           <input
             type="number"

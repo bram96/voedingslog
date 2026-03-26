@@ -19,7 +19,7 @@ export const panelStyles = css`
     padding: var(--panel-padding);
     padding-top: calc(var(--panel-padding) + env(safe-area-inset-top, 0px));
   }
-  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .header-top { display: flex; align-items: center; }
   .menu-btn {
     background: none; border: none; color: inherit; cursor: pointer;
     padding: 4px; margin-right: 8px; display: flex; align-items: center;
@@ -52,17 +52,16 @@ export const panelStyles = css`
   .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; }
 
   /* Actions */
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions { display: flex; gap: 8px; }
   .action-btn {
     flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
     padding: 12px 8px; background: var(--card-background-color);
     border: 1px solid var(--divider-color); border-radius: 12px;
     color: var(--primary-color); cursor: pointer; font-size: 12px; transition: background 0.2s;
-    min-width: 70px;
   }
   .action-btn:hover { background: var(--secondary-background-color); }
-  .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .action-btn ha-icon { --mdc-icon-size: 24px; }
+  .action-btn-primary { background: var(--primary-color) !important; color: var(--text-primary-color, #fff) !important; border-color: var(--primary-color) !important; }
 
   /* Cards */
   .card { background: var(--card-background-color); border-radius: 12px; padding: 16px; border: 1px solid var(--divider-color); }
@@ -98,6 +97,7 @@ export const panelStyles = css`
   .item-main { flex: 1; min-width: 0; }
   .item-name { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item-meta { display: block; font-size: 12px; color: var(--secondary-text-color); }
+  .item-nutrients { white-space: nowrap; }
   .item-kcal { font-size: 13px; white-space: nowrap; font-weight: 500; }
   .item-delete, .item-edit {
     background: none; border: none; color: var(--secondary-text-color);
@@ -107,7 +107,7 @@ export const panelStyles = css`
   .item-edit:hover { color: var(--primary-color); }
   .item-delete ha-icon, .item-edit ha-icon { --mdc-icon-size: 18px; }
 
-  /* Dialog overlay */
+  /* Dialog */
   .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
   .dialog { background: var(--card-background-color); border-radius: 16px 16px 0 0; width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto; padding: 0; }
   .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--divider-color); }
@@ -115,11 +115,9 @@ export const panelStyles = css`
   .close-btn { background: none; border: none; color: var(--secondary-text-color); cursor: pointer; padding: 4px; display: flex; }
   .dialog-body { padding: 16px; }
 
-  /* Barcode scanner */
+  /* Scanner / camera */
   .scanner-area { min-height: 250px; background: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
   .scanner-hint { color: #999; font-size: 14px; }
-  .camera-preview { position: relative; margin-bottom: 12px; }
-  #photo-camera-video { width: 100%; border-radius: 8px; background: #000; max-height: 300px; object-fit: cover; }
   .camera-capture-btn { margin-top: 8px; width: 100%; }
   .manual-barcode { margin-top: 16px; font-size: 13px; color: var(--secondary-text-color); }
   .manual-barcode span { display: block; margin-bottom: 8px; }
@@ -155,25 +153,24 @@ export const panelStyles = css`
   .search-online-btn { width: 100%; margin-top: 8px; }
   .search-loading { display: flex; align-items: center; gap: 8px; padding: 12px 0; font-size: 13px; color: var(--secondary-text-color); }
 
-  /* Photo */
+  /* Photo / file picker */
   .photo-hint { font-size: 14px; color: var(--secondary-text-color); margin-bottom: 16px; }
   .photo-buttons { display: flex; flex-direction: column; gap: 8px; }
   .photo-btn { width: 100%; padding: 14px; font-size: 16px; }
-  .scanner-hint-text { font-size: 14px; color: var(--secondary-text-color); margin-bottom: 16px; }
-  .barcode-photo-fallback { margin-bottom: 16px; }
   .analyzing { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 0; }
 
-  /* Weight / edit dialog */
+  /* Weight / edit / manual dialog */
   .nutrient-preview { background: var(--primary-background-color); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
   .preview-title { font-size: 13px; color: var(--secondary-text-color); margin-bottom: 8px; }
   .nutrient-grid { display: grid; gap: 4px; }
   .nutrient-row { display: flex; justify-content: space-between; font-size: 14px; padding: 2px 0; }
-  .weight-section, .category-section-dialog, .date-section-dialog { margin-bottom: 16px; }
-  .weight-section label, .category-section-dialog label, .date-section-dialog label { display: block; font-size: 13px; color: var(--secondary-text-color); margin-bottom: 6px; }
-  .weight-section input, .category-section-dialog select, .date-section-dialog input {
+  .form-field { margin-bottom: 16px; }
+  .form-field label { display: block; font-size: 13px; color: var(--secondary-text-color); margin-bottom: 6px; }
+  .form-field input, .form-field select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--divider-color); border-radius: 8px;
     font-size: 16px; background: var(--primary-background-color); color: var(--primary-text-color); box-sizing: border-box;
   }
+  .section-label { display: block; font-size: 13px; color: var(--secondary-text-color); margin-bottom: 8px; font-weight: 500; }
   .portion-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .portion-chip {
     background: var(--secondary-background-color); border: 1px solid var(--divider-color);
@@ -181,22 +178,6 @@ export const panelStyles = css`
     color: var(--primary-text-color); transition: background 0.2s;
   }
   .portion-chip:hover { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
-
-  /* Meals */
-  .meal-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--divider-color); }
-  .meal-item:last-of-type { border-bottom: none; }
-  .meal-info { flex: 1; cursor: pointer; min-width: 0; }
-  .meal-name { display: block; font-size: 15px; font-weight: 500; }
-  .meal-meta { display: block; font-size: 12px; color: var(--secondary-text-color); }
-  .section-label { display: block; font-size: 13px; color: var(--secondary-text-color); margin-bottom: 8px; font-weight: 500; }
-  .meal-ingredients-section { margin-bottom: 16px; }
-  .ingredient-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
-  .ingredient-name { flex: 1; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ingredient-grams-input { width: 65px; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color); }
-  .ingredient-unit { font-size: 13px; color: var(--secondary-text-color); }
-  .add-ingredient { margin-top: 12px; }
-
-  /* Manual entry */
   .manual-hint { font-size: 13px; color: var(--secondary-text-color); margin-bottom: 8px; }
   .manual-fields { display: grid; gap: 8px; margin-bottom: 16px; }
   .manual-field-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -206,21 +187,30 @@ export const panelStyles = css`
     font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color);
   }
 
-  /* Add chooser */
+  /* Chooser grid */
   .chooser-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .chooser-item {
     display: flex; flex-direction: column; align-items: center; gap: 8px;
     padding: 20px 12px; background: var(--secondary-background-color);
     border: 1px solid var(--divider-color); border-radius: 12px;
-    cursor: pointer; color: var(--primary-text-color); font-size: 14px;
-    transition: background 0.2s;
+    cursor: pointer; color: var(--primary-text-color); font-size: 14px; transition: background 0.2s;
   }
   .chooser-item:hover { background: var(--divider-color); }
   .chooser-item:disabled { opacity: 0.4; cursor: not-allowed; }
   .chooser-item ha-icon { --mdc-icon-size: 28px; color: var(--primary-color); }
 
-  /* Primary action button */
-  .action-btn-primary { background: var(--primary-color) !important; color: var(--text-primary-color, #fff) !important; border-color: var(--primary-color) !important; }
+  /* Meals */
+  .meal-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--divider-color); }
+  .meal-item:last-of-type { border-bottom: none; }
+  .meal-info { flex: 1; cursor: pointer; min-width: 0; }
+  .meal-name { display: block; font-size: 15px; font-weight: 500; }
+  .meal-meta { display: block; font-size: 12px; color: var(--secondary-text-color); }
+  .meal-ingredients-section { margin-bottom: 16px; }
+  .ingredient-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
+  .ingredient-name { flex: 1; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ingredient-grams-input { width: 65px; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color); }
+  .ingredient-unit { font-size: 13px; color: var(--secondary-text-color); }
+  .add-ingredient { margin-top: 12px; }
 
   /* Day detail / pie chart */
   .pie-section { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 20px; }
@@ -234,7 +224,7 @@ export const panelStyles = css`
     display: flex; flex-direction: column; align-items: center; justify-content: center;
   }
   .pie-kcal { font-size: 22px; font-weight: 600; line-height: 1; }
-  .pie-unit { font-size: 12px; color: var(--secondary-text-color); }
+  .pie-unit { font-size: 11px; color: var(--secondary-text-color); }
   .pie-legend { width: 100%; }
   .legend-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
   .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
@@ -242,9 +232,7 @@ export const panelStyles = css`
   .legend-top { display: flex; justify-content: space-between; align-items: center; }
   .legend-label { font-size: 14px; }
   .legend-value { font-size: 13px; color: var(--secondary-text-color); }
-
-  .detail-table { }
-  .detail-table-header { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--primary-text-color); }
+  .detail-table-header { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
   .detail-row {
     display: flex; justify-content: space-between; padding: 6px 0;
     border-bottom: 1px solid var(--divider-color); font-size: 14px;
@@ -252,4 +240,3 @@ export const panelStyles = css`
   .detail-row:last-child { border-bottom: none; }
   .detail-row span:last-child { color: var(--secondary-text-color); white-space: nowrap; }
 `;
-
