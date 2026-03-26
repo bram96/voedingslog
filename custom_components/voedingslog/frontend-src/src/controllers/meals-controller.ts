@@ -22,6 +22,7 @@ export interface MealsControllerHost {
   _setDialogMode(mode: string): void;
   _selectProduct(product: Product): void;
   _openSearchDialog(callback: (p: Product) => void, returnMode?: DialogMode): Promise<void>;
+  _openBatchAdd(mode: "log" | "meal"): void;
 }
 
 export class MealsController {
@@ -147,7 +148,7 @@ export class MealsController {
         </div>
 
         ${!!h._config?.ai_task_entity ? html`
-          <button class="btn-secondary btn-confirm" @click=${() => { h._setDialogMode("meal-ai-text"); }}>
+          <button class="btn-secondary btn-confirm" @click=${() => this.openAiIngredients()}>
             <ha-icon icon="mdi:text-box-outline"></ha-icon>
             AI ingrediënten invoer
           </button>
@@ -200,6 +201,10 @@ export class MealsController {
     this.host._selectProduct(product);
   }
 
+  openAiIngredients(): void {
+    this.host._openBatchAdd("meal");
+  }
+
   openIngredientSearch(): void {
     this.host._openSearchDialog(
       (p) => this.addIngredient(p),
@@ -209,8 +214,7 @@ export class MealsController {
 
   addIngredient(product: Product): void {
     if (!this.editingMeal) return;
-    const grams = parseFloat(prompt(`Hoeveel gram ${product.name}?`, String(product.serving_grams || 100)) || "");
-    if (!grams || grams <= 0) return;
+    const grams = product.serving_grams || 100;
     const ingredient: MealIngredient = { name: product.name, grams, nutrients: product.nutrients };
     this.editingMeal = {
       ...this.editingMeal,

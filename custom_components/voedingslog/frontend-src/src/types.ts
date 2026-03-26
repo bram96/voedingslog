@@ -118,5 +118,5 @@ export interface ParseFoodResponse {
   products: ParsedProduct[];
 }
 
-type DialogMode = "add-chooser" | "search" | "barcode" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | "manual" | "day-detail" | "batch-add" | "ai-validate" | "meal-ai-text" | null;
+type DialogMode = "add-chooser" | "search" | "barcode" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | "manual" | "day-detail" | "batch-add" | "ai-validate" | null;
 export type { DialogMode };

@@ -107,7 +107,7 @@ export class SearchController {
     return html`
       <div class="dialog-header">
         <h2>Scan barcode</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
+        <button class="close-btn" @click=${() => h._setDialogMode("search")}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -148,7 +148,7 @@ export class SearchController {
     return html`
       <div class="dialog-header">
         <h2>Foto van etiket</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
+        <button class="close-btn" @click=${() => h._setDialogMode("manual")}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -183,7 +183,7 @@ export class SearchController {
     return html`
       <div class="dialog-header">
         <h2>${pre ? "Controleer voedingswaarden" : "Handmatig toevoegen"}</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
+        <button class="close-btn" @click=${() => h._setDialogMode("search")}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>

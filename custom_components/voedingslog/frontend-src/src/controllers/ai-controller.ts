@@ -39,6 +39,7 @@ export class AiController {
   validateSearch = "";
   validateSearchResults: Product[] = [];
   batchMode: "text" | "photo" = "text";
+  currentMode: ValidateMode = "log";
   private _validateMode: ValidateMode = "log";
 
   constructor(host: AiControllerHost) {
@@ -51,6 +52,7 @@ export class AiController {
     this.validateSearch = "";
     this.validateSearchResults = [];
     this.batchMode = "text";
+    this.currentMode = "log";
     this._validateMode = "log";
   }
 

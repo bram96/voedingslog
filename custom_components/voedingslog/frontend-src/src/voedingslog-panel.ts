@@ -335,9 +335,8 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "meal-edit" ? this._meals.renderEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._searchCtrl.renderManualEntryDialog() : nothing}
           ${this._dialogMode === "day-detail" ? this._export.renderDayDetailDialog() : nothing}
-          ${this._dialogMode === "batch-add" ? this._ai.renderBatchAddDialog() : nothing}
+          ${this._dialogMode === "batch-add" ? this._ai.renderBatchAddDialog(this._ai.currentMode) : nothing}
           ${this._dialogMode === "ai-validate" ? this._ai.renderValidateDialog() : nothing}
-          ${this._dialogMode === "meal-ai-text" ? this._ai.renderBatchAddDialog("meal") : nothing}
         </div>
       </div>
     `;
@@ -360,7 +359,7 @@ export class VoedingslogPanel extends LitElement {
             <ha-icon icon="mdi:magnify"></ha-icon>
             <span>Zoek product</span>
           </button>
-          <button class="chooser-item" @click=${() => { this._ai.batchMode = "text"; this._dialogMode = "batch-add"; }} ?disabled=${!hasAI}>
+          <button class="chooser-item" @click=${() => this._openBatchAdd("log")} ?disabled=${!hasAI}>
             <ha-icon icon="mdi:text-box-outline"></ha-icon>
             <span>Batch toevoegen</span>
           </button>
@@ -410,6 +409,12 @@ export class VoedingslogPanel extends LitElement {
   }
 
 
+
+  _openBatchAdd(mode: "log" | "meal"): void {
+    this._ai.currentMode = mode;
+    this._ai.batchMode = "text";
+    this._dialogMode = "batch-add";
+  }
 
   private async _openSearch(): Promise<void> {
     await this._searchCtrl.open();
