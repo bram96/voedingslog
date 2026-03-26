@@ -13,21 +13,18 @@ import type {
   VoedingslogConfig,
 } from "../types.js";
 import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory } from "../helpers.js";
+import { renderPhotoPicker, captureVideoFrame, readFileAsBase64, type PhotoCaptureHost } from "../photo-capture.js";
 
-export interface AiControllerHost {
+export interface AiControllerHost extends PhotoCaptureHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
   shadowRoot: ShadowRoot | null;
   _config: VoedingslogConfig | null;
   _selectedPerson: string | null;
-  _analyzing: boolean;
-  _photoCameraActive: boolean;
   requestUpdate(): void;
   _closeDialog(): void;
   _loadLog(): Promise<void>;
-  _openFileInput(id: string): void;
   _setDialogMode(mode: string): void;
   _addMealIngredientFromAi(ingredient: MealIngredient): void;
-  _startPhotoCamera(): Promise<void>;
   _stopPhotoCamera(): void;
 }
 
@@ -124,36 +121,13 @@ export class AiController {
         </button>
       </div>
       <div class="dialog-body">
-        <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
-          Maak een foto van je handgeschreven lijst. AI leest de tekst en zoekt producten op.
-        </p>
-        ${h._analyzing
-          ? html`<div class="analyzing">
-              <ha-circular-progress indeterminate></ha-circular-progress>
-              <p>Analyseren...</p>
-            </div>`
-          : h._photoCameraActive
-            ? html`
-              <div id="photo-camera-placeholder" class="scanner-area"></div>
-              <button class="btn-primary camera-capture-btn" style="margin-top:8px" @click=${() => this._captureForHandwriting()}>
-                <ha-icon icon="mdi:camera"></ha-icon> Maak foto
-              </button>
-            `
-            : html`
-              <p class="photo-hint">Maak een foto of kies een afbeelding van je handgeschreven lijst.</p>
-              <div class="photo-buttons">
-                <button class="btn-primary photo-btn" @click=${() => h._startPhotoCamera()}>
-                  <ha-icon icon="mdi:camera"></ha-icon> Open camera
-                </button>
-                <button class="btn-secondary photo-btn" @click=${() => h._openFileInput("file-input-handwriting")}>
-                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
-                </button>
-              </div>
-              <input type="file" accept="image/*"
-                id="file-input-handwriting"
-                @change=${(e: Event) => this.handleHandwritingPhoto(e)}
-                style="display:none" />
-            `}
+        ${renderPhotoPicker(
+          h,
+          "file-input-handwriting",
+          (e: Event) => this.handleHandwritingPhoto(e),
+          () => this._captureForHandwriting(),
+          "Maak een foto of kies een afbeelding van je handgeschreven lijst.",
+        )}
       </div>
     `;
   }
@@ -316,36 +290,15 @@ export class AiController {
   }
 
   async _captureForHandwriting(): Promise<void> {
-    const h = this.host;
-    // Find the video element created by html5-qrcode in the light DOM
-    const containerId = "vl-photo-camera";
-    const container = document.getElementById(containerId);
-    const video = container?.querySelector("video");
-    if (!video) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-
-    h._stopPhotoCamera();
-    const b64 = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+    const b64 = captureVideoFrame();
+    if (!b64) return;
+    this.host._stopPhotoCamera();
     await this._processHandwritingB64(b64);
   }
 
   async handleHandwritingPhoto(e: Event): Promise<void> {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    const b64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    const b64 = await readFileAsBase64(e);
+    if (!b64) return;
     await this._processHandwritingB64(b64);
   }
 

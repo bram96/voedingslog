@@ -33,6 +33,7 @@ import {
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
 import { AiController } from "./mixins/ai-mixin.js";
+import { renderPhotoPicker, captureVideoFrame, readFileAsBase64 } from "./photo-capture.js";
 
 @customElement("voedingslog-panel")
 export class VoedingslogPanel extends LitElement {
@@ -836,33 +837,13 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        ${this._analyzing
-          ? html`<div class="analyzing">
-              <ha-circular-progress indeterminate></ha-circular-progress>
-              <p>Analyseren...</p>
-            </div>`
-          : this._photoCameraActive
-            ? html`
-              <div id="photo-camera-placeholder" class="scanner-area"></div>
-              <button class="btn-primary camera-capture-btn" style="margin-top:8px" @click=${() => this._capturePhotoFrame()}>
-                <ha-icon icon="mdi:camera"></ha-icon> Maak foto
-              </button>
-            `
-            : html`
-              <p class="photo-hint">Maak een foto van het voedingsetiket op de verpakking.</p>
-              <div class="photo-buttons">
-                <button class="btn-primary photo-btn" @click=${() => this._startPhotoCamera()}>
-                  <ha-icon icon="mdi:camera"></ha-icon> Open camera
-                </button>
-                <button class="btn-secondary photo-btn" @click=${() => this._openFileInput("file-input-photo")}>
-                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
-                </button>
-              </div>
-              <input type="file" accept="image/*"
-                id="file-input-photo"
-                @change=${(e: Event) => this._handlePhotoCapture(e)}
-                style="display:none" />
-            `}
+        ${renderPhotoPicker(
+          this,
+          "file-input-photo",
+          (e: Event) => this._handlePhotoCapture(e),
+          () => this._capturePhotoFrame(),
+          "Maak een foto van het voedingsetiket op de verpakking.",
+        )}
       </div>
     `;
   }
@@ -1413,23 +1394,15 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _capturePhotoFrame(): Promise<void> {
-    // Find the video element created by html5-qrcode
-    const container = document.getElementById(this._photoCameraContainerId);
-    const video = container?.querySelector("video");
-    if (!video) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-
+    const b64 = captureVideoFrame();
+    if (!b64) return;
     this._stopPhotoCamera();
-    this._analyzing = true;
+    await this._analyzePhotoB64(b64);
+  }
 
+  private async _analyzePhotoB64(b64: string): Promise<void> {
+    this._analyzing = true;
     try {
-      const b64 = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
       const res = await this.hass.callWS<AnalyzePhotoResponse>({
         type: "voedingslog/analyze_photo",
         photo_b64: b64,
@@ -1752,36 +1725,9 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _handlePhotoCapture(e: Event): Promise<void> {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    this._analyzing = true;
-
-    try {
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      const res = await this.hass.callWS<AnalyzePhotoResponse>({
-        type: "voedingslog/analyze_photo",
-        photo_b64: b64,
-      });
-
-      this._analyzing = false;
-      if (res.product) {
-        this._openManualWithPrefill(res.product);
-      } else {
-        alert("Kon voedingswaarden niet herkennen. Probeer een duidelijkere foto.");
-      }
-    } catch (err) {
-      console.error("Photo analysis failed:", err);
-      this._analyzing = false;
-      alert("Fout bij analyseren foto: " + ((err as Error).message || err));
-    }
+    const b64 = await readFileAsBase64(e);
+    if (!b64) return;
+    await this._analyzePhotoB64(b64);
   }
 
   private async _confirmLog(): Promise<void> {
