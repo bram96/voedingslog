@@ -326,6 +326,21 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  private _isCompanionApp(): boolean {
+    const w = window as unknown as Record<string, unknown>;
+    return !!w.externalApp || !!w.webkit;
+  }
+
+  private _renderBrowserHint(): TemplateResult | typeof nothing {
+    if (!this._isCompanionApp()) return nothing;
+    return html`
+      <p class="browser-hint">
+        Camera werkt alleen in de browser.
+        <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
+      </p>
+    `;
+  }
+
   private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {
     const fileChangeHandler = purpose === "barcode"
       ? (e: Event) => this._handleBarcodePhoto(e)
@@ -339,10 +354,6 @@ export class VoedingslogPanel extends LitElement {
         <ha-icon icon="mdi:image"></ha-icon>
         ${purpose === "barcode" ? "Foto van barcode" : "Foto van etiket"}
       </button>
-      <p class="browser-hint">
-        Camera werkt alleen in de browser.
-        <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
-      </p>
     `;
   }
 
@@ -355,6 +366,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
+        ${this._renderBrowserHint()}
         ${this._scanFailed
           ? html`
             ${this._renderCameraCapture("barcode")}
@@ -432,6 +444,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
+        ${this._renderBrowserHint()}
         ${this._analyzing
           ? html`<div class="analyzing">
               <ha-circular-progress indeterminate></ha-circular-progress>
