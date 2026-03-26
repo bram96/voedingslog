@@ -42,6 +42,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _searchResults: Product[] = [];
   @state() private _searchQuery = "";
   @state() private _scanning = false;
+  @state() private _cameraFailed = false;
   @state() private _analyzing = false;
   @state() private _editingItem: IndexedLogItem | null = null;
 
@@ -309,11 +310,31 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        <div id="barcode-scanner-placeholder" class="scanner-area">
-          ${this._scanning
-            ? nothing
-            : html`<p class="scanner-hint">Camera wordt gestart...</p>`}
-        </div>
+        ${this._cameraFailed
+          ? html`
+            <div class="barcode-photo-fallback">
+              <p class="scanner-hint-text">Camera niet beschikbaar. Maak een foto van de barcode of voer het nummer in.</p>
+              <input
+                type="file"
+                accept="image/*"
+                id="barcode-photo-input"
+                @change=${(e: Event) => this._handleBarcodePhoto(e)}
+                style="display:none"
+              />
+              <button class="btn-primary photo-btn" @click=${() =>
+                this._openFileInput("barcode-photo-input")}>
+                <ha-icon icon="mdi:barcode-scan"></ha-icon>
+                Foto maken of kiezen
+              </button>
+            </div>
+          `
+          : html`
+            <div id="barcode-scanner-placeholder" class="scanner-area">
+              ${this._scanning
+                ? nothing
+                : html`<p class="scanner-hint">Camera wordt gestart...</p>`}
+            </div>
+          `}
         <div class="manual-barcode">
           <span>Of voer handmatig in:</span>
           <div class="input-row">
@@ -390,18 +411,16 @@ export class VoedingslogPanel extends LitElement {
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 id="photo-input"
                 @change=${(e: Event) => this._handlePhotoCapture(e)}
                 style="display:none"
               />
               <button
                 class="btn-primary photo-btn"
-                @click=${() =>
-                  (this.shadowRoot?.getElementById("photo-input") as HTMLInputElement)?.click()}
+                @click=${() => this._openFileInput("photo-input")}
               >
                 <ha-icon icon="mdi:camera"></ha-icon>
-                Maak foto
+                Foto maken of kiezen
               </button>
             `}
       </div>
@@ -576,6 +595,7 @@ export class VoedingslogPanel extends LitElement {
   private _openBarcodeScanner(): void {
     this._dialogMode = "barcode";
     this._scanning = false;
+    this._cameraFailed = false;
     this.updateComplete.then(() => this._startCamera());
   }
 
@@ -602,6 +622,7 @@ export class VoedingslogPanel extends LitElement {
     this._editingItem = null;
     this._searchResults = [];
     this._analyzing = false;
+    this._cameraFailed = false;
   }
 
   private async _startCamera(): Promise<void> {
@@ -664,7 +685,40 @@ export class VoedingslogPanel extends LitElement {
     } catch (e) {
       console.warn("Camera/scanner not available:", e);
       this._scanning = false;
+      this._cameraFailed = true;
       this._cleanupScannerContainer();
+    }
+  }
+
+  private _openFileInput(id: string): void {
+    const input = this.shadowRoot?.getElementById(id) as HTMLInputElement | null;
+    if (input) {
+      input.value = "";
+      input.click();
+    }
+  }
+
+  private async _handleBarcodePhoto(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Create a hidden container in the light DOM for html5-qrcode
+    this._cleanupScannerContainer();
+    const container = document.createElement("div");
+    container.id = this._scannerContainerId;
+    container.style.display = "none";
+    document.body.appendChild(container);
+
+    try {
+      const scanner = new Html5Qrcode(this._scannerContainerId);
+      const result = await scanner.scanFile(file, false);
+      this._cleanupScannerContainer();
+      await this._lookupBarcode(result);
+    } catch (err) {
+      console.warn("Could not decode barcode from photo:", err);
+      this._cleanupScannerContainer();
+      alert("Kon geen barcode herkennen in de foto. Probeer opnieuw of voer het nummer handmatig in.");
     }
   }
 
@@ -1292,10 +1346,40 @@ export class VoedingslogPanel extends LitElement {
       color: var(--secondary-text-color);
       margin-bottom: 16px;
     }
+    .photo-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     .photo-btn {
       width: 100%;
       padding: 14px;
       font-size: 16px;
+    }
+    .btn-secondary {
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color);
+      border: 1px solid var(--divider-color);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: center;
+    }
+    .btn-secondary:hover {
+      background: var(--divider-color);
+    }
+    .scanner-hint-text {
+      font-size: 14px;
+      color: var(--secondary-text-color);
+      margin-bottom: 16px;
+    }
+    .barcode-photo-fallback {
+      margin-bottom: 16px;
     }
     .analyzing {
       display: flex;
