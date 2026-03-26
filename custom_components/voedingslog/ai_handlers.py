@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import uuid
 from pathlib import Path
 
@@ -58,6 +59,31 @@ def cleanup_temp_image(file_path: Path | None) -> None:
             file_path.unlink()
     except Exception:
         pass
+
+
+def _extract_json_array(raw: str) -> list:
+    """Extract a JSON array from a string that may contain extra text."""
+    if not isinstance(raw, str):
+        return raw if isinstance(raw, list) else []
+    # Strip markdown code fences
+    raw = re.sub(r"```json\s*", "", raw)
+    raw = re.sub(r"```\s*", "", raw)
+    raw = raw.strip()
+    # Find the JSON array
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(raw[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+    # Try parsing the whole thing
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except json.JSONDecodeError:
+        _LOGGER.warning("Could not parse AI items_json: %s", raw[:200])
+        return []
 
 
 _FOOD_PARSE_STRUCTURE = {
@@ -268,7 +294,7 @@ def _create_parse_handler(get_coordinator):
 
             data = result.get("data", {}) if result else {}
             raw = data.get("items_json", "[]")
-            items = json.loads(raw) if isinstance(raw, str) else raw
+            items = _extract_json_array(raw)
             products = await lookup_parsed_items(hass, get_coordinator, items)
             connection.send_result(msg["id"], {"products": products})
 
@@ -315,7 +341,7 @@ def _create_parse_handler(get_coordinator):
 
             data = result.get("data", {}) if result else {}
             raw = data.get("items_json", "[]")
-            items = json.loads(raw) if isinstance(raw, str) else raw
+            items = _extract_json_array(raw)
             products = await lookup_parsed_items(hass, get_coordinator, items)
             connection.send_result(msg["id"], {"products": products})
 
