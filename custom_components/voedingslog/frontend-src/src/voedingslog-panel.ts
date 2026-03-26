@@ -523,6 +523,13 @@ export class VoedingslogPanel extends LitElement {
   }
 
   _setDialogMode(mode: string): void {
+    // Stop cameras when leaving their dialogs
+    if (this._dialogMode === "barcode" && mode !== "barcode") {
+      this._barcodeCamera.stop();
+    }
+    if (this._dialogMode === "photo" && mode !== "photo") {
+      this._stopPhotoCamera();
+    }
     if (mode) {
       this._pushDialogHistory();
     }
