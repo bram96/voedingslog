@@ -58,6 +58,7 @@ export class VoedingslogPanel extends LitElement {
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
+  private _positionFrame: number | null = null;
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -333,20 +334,7 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
-  private _isCompanionApp(): boolean {
-    const w = window as unknown as Record<string, unknown>;
-    return !!w.externalApp || !!w.webkit;
-  }
 
-  private _renderBrowserHint(): TemplateResult | typeof nothing {
-    if (!this._isCompanionApp()) return nothing;
-    return html`
-      <p class="browser-hint">
-        Camera werkt alleen in de browser.
-        <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
-      </p>
-    `;
-  }
 
   private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {
     const fileChangeHandler = purpose === "barcode"
@@ -373,7 +361,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        ${this._renderBrowserHint()}
+
         ${this._scanFailed
           ? html`
             ${this._renderCameraCapture("barcode")}
@@ -459,7 +447,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        ${this._renderBrowserHint()}
+
         ${this._analyzing
           ? html`<div class="analyzing">
               <ha-circular-progress indeterminate></ha-circular-progress>
@@ -850,6 +838,24 @@ export class VoedingslogPanel extends LitElement {
     this.updateComplete.then(() => this._startLiveScanner());
   }
 
+  private _trackScannerPosition(): void {
+    const container = document.getElementById(this._scannerContainerId);
+    const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
+    if (!container || !placeholder) return;
+
+    const rect = placeholder.getBoundingClientRect();
+    container.style.position = "fixed";
+    container.style.top = `${rect.top}px`;
+    container.style.left = `${rect.left}px`;
+    container.style.width = `${rect.width}px`;
+    container.style.height = `${Math.max(rect.height, 250)}px`;
+    container.style.zIndex = "101";
+    container.style.borderRadius = "8px";
+    container.style.overflow = "hidden";
+
+    this._positionFrame = requestAnimationFrame(() => this._trackScannerPosition());
+  }
+
   private async _startLiveScanner(): Promise<void> {
     try {
       this._cleanupScannerContainer();
@@ -860,19 +866,11 @@ export class VoedingslogPanel extends LitElement {
 
       const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
       if (placeholder) {
-        const rect = placeholder.getBoundingClientRect();
-        container.style.cssText = `
-          position: fixed;
-          top: ${rect.top}px;
-          left: ${rect.left}px;
-          width: ${rect.width}px;
-          height: ${Math.max(rect.height, 250)}px;
-          z-index: 101;
-          border-radius: 8px;
-          overflow: hidden;
-        `;
         placeholder.style.minHeight = "250px";
       }
+
+      // Continuously track placeholder position (dialog animates in)
+      this._trackScannerPosition();
 
       this._html5Qrcode = new Html5Qrcode(this._scannerContainerId);
       this._scanning = true;
@@ -1112,6 +1110,10 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _cleanupScannerContainer(): void {
+    if (this._positionFrame) {
+      cancelAnimationFrame(this._positionFrame);
+      this._positionFrame = null;
+    }
     const existing = document.getElementById(this._scannerContainerId);
     if (existing) {
       existing.remove();
@@ -1781,15 +1783,6 @@ export class VoedingslogPanel extends LitElement {
       font-size: 14px;
       color: var(--secondary-text-color);
       margin-bottom: 16px;
-    }
-    .browser-hint {
-      font-size: 13px;
-      color: var(--secondary-text-color);
-      margin-top: 12px;
-      text-align: center;
-    }
-    .browser-hint a {
-      color: var(--primary-color);
     }
     .barcode-photo-fallback {
       margin-bottom: 16px;
