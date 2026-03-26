@@ -71,6 +71,7 @@ class VoedingslogOptionsFlow(config_entries.OptionsFlow):
                     "doel_calorieen": user_input["doel_calorieen"],
                     "doel_natrium_mg": user_input["doel_natrium_mg"],
                     "ai_task_entity": user_input.get("ai_task_entity", ""),
+                    "mobile_app_device": user_input.get("mobile_app_device", ""),
                 },
             )
 
@@ -99,6 +100,10 @@ class VoedingslogOptionsFlow(config_entries.OptionsFlow):
                         multiple=False,
                     )
                 ),
+                vol.Optional(
+                    "mobile_app_device",
+                    default=options.get("mobile_app_device", ""),
+                ): str,
             }
         )
 

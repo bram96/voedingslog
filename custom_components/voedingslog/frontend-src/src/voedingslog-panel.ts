@@ -343,6 +343,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _renderBarcodeDialog(): TemplateResult {
+    const hasAppScan = !!this._config?.mobile_app_device;
     return html`
       <div class="dialog-header">
         <h2>Scan barcode</h2>
@@ -351,9 +352,17 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
+        ${hasAppScan
+          ? html`
+            <button class="btn-primary photo-btn" style="margin-bottom:12px" @click=${() => this._triggerAppScan()}>
+              <ha-icon icon="mdi:barcode-scan"></ha-icon>
+              Scan via HA app
+            </button>
+          `
+          : nothing}
         ${this._scanFailed
           ? html`
-            <p class="scanner-hint-text">Live scanner niet beschikbaar.</p>
+            ${!hasAppScan ? html`<p class="scanner-hint-text">Live scanner niet beschikbaar.</p>` : nothing}
             ${this._renderCameraCapture("barcode")}
           `
           : html`
@@ -981,6 +990,26 @@ export class VoedingslogPanel extends LitElement {
     const existing = document.getElementById(this._scannerContainerId);
     if (existing) {
       existing.remove();
+    }
+  }
+
+  private async _triggerAppScan(): Promise<void> {
+    if (!this._selectedPerson) return;
+    try {
+      const res = await this.hass.callWS<{ success: boolean; barcode: string; product?: string; error?: string }>({
+        type: "voedingslog/trigger_app_scan",
+        person: this._selectedPerson,
+      });
+      if (res.success) {
+        this._closeDialog();
+        await this._loadLog();
+        alert(`${res.product} gelogd!`);
+      } else {
+        alert(res.error || `Barcode ${res.barcode} niet gevonden.`);
+      }
+    } catch (e) {
+      const err = e as Error & { message?: string };
+      alert(err.message || "Fout bij scannen via app.");
     }
   }
 

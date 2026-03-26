@@ -1,12 +1,14 @@
 """WebSocket API handlers for the Voedingslog panel."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, Event
 
 from .const import (
     DOMAIN,
@@ -25,6 +27,7 @@ from .const import (
     WS_GET_MEALS,
     WS_SAVE_MEAL,
     WS_DELETE_MEAL,
+    WS_TRIGGER_APP_SCAN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +61,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_meals)
     websocket_api.async_register_command(hass, ws_save_meal)
     websocket_api.async_register_command(hass, ws_delete_meal)
+    websocket_api.async_register_command(hass, ws_trigger_app_scan)
 
 
 @websocket_api.websocket_command(
@@ -79,6 +83,7 @@ async def ws_get_config(hass, connection, msg):
         "category_labels": MEAL_CATEGORY_LABELS,
         "nutrients": {k: {"label": v["label"], "unit": v["unit"]} for k, v in NUTRIENTS.items()},
         "ai_task_entity": entry.options.get("ai_task_entity", ""),
+        "mobile_app_device": entry.options.get("mobile_app_device", ""),
     })
 
 
@@ -374,3 +379,79 @@ async def ws_delete_meal(hass, connection, msg):
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Meal not found")
+
+
+# ── Companion app barcode scanner ─────────────────────────────────
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TRIGGER_APP_SCAN,
+        vol.Required("person"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_trigger_app_scan(hass, connection, msg):
+    """Trigger the companion app barcode scanner and wait for result."""
+    entry = _get_config_entry(hass)
+    device = entry.options.get("mobile_app_device", "") if entry else ""
+
+    if not device:
+        connection.send_error(
+            msg["id"], "no_device",
+            "Geen mobiel apparaat geconfigureerd. Ga naar instellingen en vul 'mobile_app_device' in (bijv. mobile_app_iphone_jan)."
+        )
+        return
+
+    person = msg["person"]
+
+    # Send the barcode scanner command to the companion app
+    try:
+        await hass.services.async_call(
+            "notify", device,
+            {"message": "command_barcode_scanner"},
+            blocking=True,
+        )
+    except Exception as e:
+        connection.send_error(msg["id"], "notify_failed", f"Kon scanner niet starten: {e}")
+        return
+
+    # Wait for a tag_scanned event (companion app fires this with the barcode)
+    barcode_future: asyncio.Future[str] = asyncio.Future()
+
+    def on_tag_scanned(event: Event) -> None:
+        tag_id = event.data.get("tag_id", "")
+        if tag_id and not barcode_future.done():
+            barcode_future.set_result(tag_id)
+
+    remove_listener = hass.bus.async_listen("tag_scanned", on_tag_scanned)
+
+    try:
+        barcode = await asyncio.wait_for(barcode_future, timeout=60)
+    except asyncio.TimeoutError:
+        remove_listener()
+        connection.send_error(msg["id"], "timeout", "Geen barcode ontvangen binnen 60 seconden.")
+        return
+
+    remove_listener()
+
+    # Look up and log the barcode
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+
+    ok = await coordinator.log_barcode(person, barcode)
+    if ok:
+        items = coordinator.get_log_today(person)
+        last = items[-1] if items else None
+        connection.send_result(msg["id"], {
+            "success": True,
+            "barcode": barcode,
+            "product": last["name"] if last else barcode,
+        })
+    else:
+        connection.send_result(msg["id"], {
+            "success": False,
+            "barcode": barcode,
+            "error": f"Barcode {barcode} niet gevonden in Open Food Facts",
+        })
