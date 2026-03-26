@@ -3,7 +3,6 @@
 DOMAIN = "voedingslog"
 
 DEFAULT_CALORIES_GOAL = 2000
-DEFAULT_SODIUM_GOAL_MG = 2000
 
 OFF_API = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 OFF_SEARCH = "https://world.openfoodfacts.net/cgi/search.pl"

@@ -39,10 +39,17 @@ export interface GetFavoritesResponse {
   products: Product[];
 }
 
+export interface MacroGoals {
+  carbs: number;
+  protein: number;
+  fat: number;
+  fiber: number;
+}
+
 export interface VoedingslogConfig {
   persons: string[];
   calories_goal: number;
-  sodium_goal_mg: number;
+  macro_goals: MacroGoals;
   categories: MealCategory[];
   category_labels: Record<MealCategory, string>;
   nutrients: Record<string, { label: string; unit: string }>;

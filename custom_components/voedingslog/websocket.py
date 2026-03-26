@@ -75,14 +75,20 @@ async def ws_get_config(hass, connection, msg):
         connection.send_error(msg["id"], "not_configured", "Voedingslog is not configured")
         return
 
+    opts = {**entry.data, **entry.options}
     connection.send_result(msg["id"], {
         "persons": entry.data.get("personen", []),
-        "calories_goal": entry.data.get("doel_calorieen", 2000),
-        "sodium_goal_mg": entry.data.get("doel_natrium_mg", 2000),
+        "calories_goal": opts.get("doel_calorieen", 2000),
+        "macro_goals": {
+            "carbs": opts.get("carbs_goal", 0),
+            "protein": opts.get("protein_goal", 0),
+            "fat": opts.get("fat_goal", 0),
+            "fiber": opts.get("fiber_goal", 0),
+        },
         "categories": MEAL_CATEGORIES,
         "category_labels": MEAL_CATEGORY_LABELS,
         "nutrients": {k: {"label": v["label"], "unit": v["unit"]} for k, v in NUTRIENTS.items()},
-        "ai_task_entity": entry.options.get("ai_task_entity", ""),
+        "ai_task_entity": opts.get("ai_task_entity", ""),
     })
 
 

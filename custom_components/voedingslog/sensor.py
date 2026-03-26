@@ -20,7 +20,6 @@ async def async_setup_entry(
     persons = entry.data["personen"]
     goals = {
         "energy-kcal_100g": entry.data.get("doel_calorieen", 2000),
-        "sodium_100g": entry.data.get("doel_natrium_mg", 2000) / 1000,
     }
 
     entities = []

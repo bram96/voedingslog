@@ -74,9 +74,11 @@ export const panelStyles = css`
   .progress-bar { height: 8px; background: var(--divider-color); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
   .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
   .macro-row { display: flex; justify-content: space-around; }
-  .macro-item { text-align: center; }
+  .macro-item { text-align: center; flex: 1; }
   .macro-value { display: block; font-size: 16px; font-weight: 500; }
-  .macro-label { display: block; font-size: 12px; color: var(--secondary-text-color); }
+  .macro-label { display: block; font-size: 11px; color: var(--secondary-text-color); }
+  .macro-bar { height: 4px; background: var(--divider-color); border-radius: 2px; margin: 3px 4px 1px; overflow: hidden; }
+  .macro-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
 
   /* Category sections */
   .category-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--divider-color); }
@@ -234,9 +236,11 @@ export const panelStyles = css`
   .pie-kcal { font-size: 22px; font-weight: 600; line-height: 1; }
   .pie-unit { font-size: 12px; color: var(--secondary-text-color); }
   .pie-legend { width: 100%; }
-  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-  .legend-label { flex: 1; font-size: 14px; }
+  .legend-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .legend-info { flex: 1; min-width: 0; }
+  .legend-top { display: flex; justify-content: space-between; align-items: center; }
+  .legend-label { font-size: 14px; }
   .legend-value { font-size: 13px; color: var(--secondary-text-color); }
 
   .detail-table { }

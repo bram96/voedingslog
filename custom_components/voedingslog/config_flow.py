@@ -6,7 +6,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
-from .const import DOMAIN, DEFAULT_CALORIES_GOAL, DEFAULT_SODIUM_GOAL_MG
+from .const import DOMAIN, DEFAULT_CALORIES_GOAL
 
 
 class VoedingslogConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -18,25 +18,23 @@ class VoedingslogConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            persons_raw = user_input.get("personen", "Persoon 1")
+            persons_raw = user_input.get("persons", "Persoon 1")
             persons = [p.strip() for p in persons_raw.split(",") if p.strip()]
             if not persons:
-                errors["personen"] = "Vul minimaal één persoon in"
+                errors["persons"] = "Vul minimaal één persoon in"
             else:
                 return self.async_create_entry(
                     title="Voedingslog",
                     data={
                         "personen": persons,
-                        "doel_calorieen": user_input["doel_calorieen"],
-                        "doel_natrium_mg": user_input["doel_natrium_mg"],
+                        "doel_calorieen": user_input["calories_goal"],
                     },
                 )
 
         schema = vol.Schema(
             {
-                vol.Required("personen", default="Persoon 1"): str,
-                vol.Required("doel_calorieen", default=DEFAULT_CALORIES_GOAL): int,
-                vol.Required("doel_natrium_mg", default=DEFAULT_SODIUM_GOAL_MG): int,
+                vol.Required("persons", default="Persoon 1"): str,
+                vol.Required("calories_goal", default=DEFAULT_CALORIES_GOAL): int,
             }
         )
 
@@ -63,36 +61,52 @@ class VoedingslogOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
-            persons = [p.strip() for p in user_input["personen"].split(",") if p.strip()]
+            persons = [p.strip() for p in user_input["persons"].split(",") if p.strip()]
             return self.async_create_entry(
                 title="",
                 data={
                     "personen": persons,
-                    "doel_calorieen": user_input["doel_calorieen"],
-                    "doel_natrium_mg": user_input["doel_natrium_mg"],
+                    "doel_calorieen": user_input["calories_goal"],
                     "ai_task_entity": user_input.get("ai_task_entity", ""),
+                    "carbs_goal": user_input.get("carbs_goal", 0),
+                    "protein_goal": user_input.get("protein_goal", 0),
+                    "fat_goal": user_input.get("fat_goal", 0),
+                    "fiber_goal": user_input.get("fiber_goal", 0),
                 },
             )
 
         current = self._config_entry.data
         options = self._config_entry.options
+        opts = {**current, **options}
         schema = vol.Schema(
             {
                 vol.Required(
-                    "personen",
+                    "persons",
                     default=",".join(current.get("personen", ["Persoon 1"])),
                 ): str,
                 vol.Required(
-                    "doel_calorieen",
-                    default=current.get("doel_calorieen", DEFAULT_CALORIES_GOAL),
+                    "calories_goal",
+                    default=opts.get("doel_calorieen", DEFAULT_CALORIES_GOAL),
                 ): int,
-                vol.Required(
-                    "doel_natrium_mg",
-                    default=current.get("doel_natrium_mg", DEFAULT_SODIUM_GOAL_MG),
+                vol.Optional(
+                    "carbs_goal",
+                    default=opts.get("carbs_goal", 0),
+                ): int,
+                vol.Optional(
+                    "protein_goal",
+                    default=opts.get("protein_goal", 0),
+                ): int,
+                vol.Optional(
+                    "fat_goal",
+                    default=opts.get("fat_goal", 0),
+                ): int,
+                vol.Optional(
+                    "fiber_goal",
+                    default=opts.get("fiber_goal", 0),
                 ): int,
                 vol.Optional(
                     "ai_task_entity",
-                    default=options.get("ai_task_entity", ""),
+                    default=opts.get("ai_task_entity", ""),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(
                         domain="ai_task",

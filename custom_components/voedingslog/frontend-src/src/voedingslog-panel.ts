@@ -266,14 +266,7 @@ export class VoedingslogPanel extends LitElement {
           <span class="totals-cal">${Math.round(kcal)} / ${goal} kcal</span>
         </div>
         <div class="progress-bar">
-          <div
-            class="progress-fill"
-            style="width: ${pct}%; background: ${
-              pct > 100
-                ? "var(--error-color, #db4437)"
-                : "var(--primary-color)"
-            }"
-          ></div>
+          <div class="progress-fill" style="width: ${pct}%; background: ${pct > 100 ? "var(--error-color, #db4437)" : "var(--primary-color)"}"></div>
         </div>
         <div class="macro-row">
           ${KEY_NUTRIENTS_DISPLAY.filter((n) => n.key !== "energy-kcal_100g").map(
@@ -385,6 +378,8 @@ export class VoedingslogPanel extends LitElement {
 
   private _renderDayDetailDialog(): TemplateResult {
     const totals = sumNutrients(this._items);
+    const mg = this._config?.macro_goals || { carbs: 0, protein: 0, fat: 0, fiber: 0 };
+    const goal = this._config?.calories_goal || 2000;
     const kcal = totals["energy-kcal_100g"] || 0;
     const protein = totals["proteins_100g"] || 0;
     const carbs = totals["carbohydrates_100g"] || 0;
@@ -397,14 +392,13 @@ export class VoedingslogPanel extends LitElement {
     const pctFat = macroTotal > 0 ? Math.round(fat / macroTotal * 100) : 0;
     const pctFiber = macroTotal > 0 ? 100 - pctProtein - pctCarbs - pctFat : 0;
 
-    // Build conic-gradient for pie chart
     let gradientStops = "";
     let angle = 0;
     const slices = [
-      { pct: pctCarbs, color: "var(--primary-color, #03a9f4)", label: "Koolhydraten", grams: carbs },
-      { pct: pctProtein, color: "#4caf50", label: "Eiwitten", grams: protein },
-      { pct: pctFat, color: "#ff9800", label: "Vetten", grams: fat },
-      { pct: pctFiber, color: "#8bc34a", label: "Vezels", grams: fiber },
+      { pct: pctCarbs, color: "var(--primary-color, #03a9f4)", label: "Koolhydraten", grams: carbs, goal: mg.carbs },
+      { pct: pctProtein, color: "#4caf50", label: "Eiwitten", grams: protein, goal: mg.protein },
+      { pct: pctFat, color: "#ff9800", label: "Vetten", grams: fat, goal: mg.fat },
+      { pct: pctFiber, color: "#8bc34a", label: "Vezels", grams: fiber, goal: mg.fiber },
     ];
     for (const s of slices) {
       const end = angle + s.pct;
@@ -426,18 +420,32 @@ export class VoedingslogPanel extends LitElement {
             style="background: conic-gradient(${gradientStops || "#eee 0% 100%"})">
             <div class="pie-center">
               <span class="pie-kcal">${Math.round(kcal)}</span>
-              <span class="pie-unit">kcal</span>
+              <span class="pie-unit">/ ${goal} kcal</span>
             </div>
           </div>
           <div class="pie-legend">
             ${slices.map(
-              (s) => html`
-                <div class="legend-item">
-                  <span class="legend-dot" style="background:${s.color}"></span>
-                  <span class="legend-label">${s.label}</span>
-                  <span class="legend-value">${s.grams.toFixed(1)}g (${s.pct}%)</span>
-                </div>
-              `
+              (s) => {
+                const goalPct = s.goal > 0 ? Math.min(100, Math.round(s.grams / s.goal * 100)) : -1;
+                return html`
+                  <div class="legend-item">
+                    <span class="legend-dot" style="background:${s.color}"></span>
+                    <div class="legend-info">
+                      <div class="legend-top">
+                        <span class="legend-label">${s.label}</span>
+                        <span class="legend-value">
+                          ${s.grams.toFixed(1)}g${s.goal > 0 ? html` / ${s.goal}g` : nothing} (${s.pct}%)
+                        </span>
+                      </div>
+                      ${goalPct >= 0 ? html`
+                        <div class="macro-bar">
+                          <div class="macro-bar-fill" style="width:${goalPct}%; background:${s.color}"></div>
+                        </div>
+                      ` : nothing}
+                    </div>
+                  </div>
+                `;
+              }
             )}
           </div>
         </div>
