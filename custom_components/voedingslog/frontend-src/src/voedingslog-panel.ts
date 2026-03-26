@@ -259,18 +259,15 @@ export class VoedingslogPanel extends LitElement {
   private _renderItem(item: IndexedLogItem): TemplateResult {
     const vals = calcItemNutrients(item);
     return html`
-      <div class="food-item">
-        <div class="item-main" @click=${() => this._openEditDialog(item)}>
+      <div class="food-item" @click=${() => this._openEditDialog(item)}>
+        <div class="item-main">
           <span class="item-name">${item.name}</span>
           <span class="item-meta">${item.grams}g · ${item.time}</span>
         </div>
         <div class="item-nutrients">
           <span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>
         </div>
-        <button class="item-edit" @click=${() => this._openEditDialog(item)}>
-          <ha-icon icon="mdi:pencil"></ha-icon>
-        </button>
-        <button class="item-delete" @click=${() => this._deleteItem(item._index)}>
+        <button class="item-delete" @click=${(e: Event) => { e.stopPropagation(); this._deleteItem(item._index); }}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -1051,7 +1048,6 @@ export class VoedingslogPanel extends LitElement {
     .food-item {
       display: flex;
       align-items: center;
-      padding: 8px 0;
       gap: 8px;
       border-bottom: 1px solid var(--divider-color);
     }
@@ -1079,7 +1075,16 @@ export class VoedingslogPanel extends LitElement {
       white-space: nowrap;
       font-weight: 500;
     }
-    .item-edit,
+    .food-item {
+      cursor: pointer;
+      border-radius: 8px;
+      margin: 0 -8px;
+      padding: 8px;
+      transition: background 0.15s;
+    }
+    .food-item:hover {
+      background: var(--secondary-background-color);
+    }
     .item-delete {
       background: none;
       border: none;
@@ -1089,18 +1094,11 @@ export class VoedingslogPanel extends LitElement {
       border-radius: 50%;
       display: flex;
     }
-    .item-edit:hover {
-      color: var(--primary-color);
-    }
     .item-delete:hover {
       color: var(--error-color, #db4437);
     }
-    .item-edit ha-icon,
     .item-delete ha-icon {
       --mdc-icon-size: 18px;
-    }
-    .item-main {
-      cursor: pointer;
     }
 
     /* Dialog overlay */

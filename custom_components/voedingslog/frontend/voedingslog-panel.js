@@ -107,18 +107,15 @@ var so=Object.create;var Fr=Object.defineProperty;var Ri=Object.getOwnPropertyDe
         ${x.length===0?Ce`<div class="empty-hint">Nog geen items</div>`:x.map(y=>this._renderItem(y))}
       </div>
     `}_renderItem(l){let d=li(l);return Ce`
-      <div class="food-item">
-        <div class="item-main" @click=${()=>this._openEditDialog(l)}>
+      <div class="food-item" @click=${()=>this._openEditDialog(l)}>
+        <div class="item-main">
           <span class="item-name">${l.name}</span>
           <span class="item-meta">${l.grams}g · ${l.time}</span>
         </div>
         <div class="item-nutrients">
           <span class="item-kcal">${Math.round(d["energy-kcal_100g"]||0)} kcal</span>
         </div>
-        <button class="item-edit" @click=${()=>this._openEditDialog(l)}>
-          <ha-icon icon="mdi:pencil"></ha-icon>
-        </button>
-        <button class="item-delete" @click=${()=>this._deleteItem(l._index)}>
+        <button class="item-delete" @click=${x=>{x.stopPropagation(),this._deleteItem(l._index)}}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -560,7 +557,6 @@ var so=Object.create;var Fr=Object.defineProperty;var Ri=Object.getOwnPropertyDe
     .food-item {
       display: flex;
       align-items: center;
-      padding: 8px 0;
       gap: 8px;
       border-bottom: 1px solid var(--divider-color);
     }
@@ -588,7 +584,16 @@ var so=Object.create;var Fr=Object.defineProperty;var Ri=Object.getOwnPropertyDe
       white-space: nowrap;
       font-weight: 500;
     }
-    .item-edit,
+    .food-item {
+      cursor: pointer;
+      border-radius: 8px;
+      margin: 0 -8px;
+      padding: 8px;
+      transition: background 0.15s;
+    }
+    .food-item:hover {
+      background: var(--secondary-background-color);
+    }
     .item-delete {
       background: none;
       border: none;
@@ -598,18 +603,11 @@ var so=Object.create;var Fr=Object.defineProperty;var Ri=Object.getOwnPropertyDe
       border-radius: 50%;
       display: flex;
     }
-    .item-edit:hover {
-      color: var(--primary-color);
-    }
     .item-delete:hover {
       color: var(--error-color, #db4437);
     }
-    .item-edit ha-icon,
     .item-delete ha-icon {
       --mdc-icon-size: 18px;
-    }
-    .item-main {
-      cursor: pointer;
     }
 
     /* Dialog overlay */
