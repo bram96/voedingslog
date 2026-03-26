@@ -46,6 +46,8 @@ export class VoedingslogPanel extends LitElement {
   @state() private _searchResults: Product[] = [];
   @state() private _searchQuery = "";
   @state() private _cameraActive = false;
+  @state() private _scanning = false;
+  @state() private _scanFailed = false;
   @state() private _analyzing = false;
   @state() private _editingItem: IndexedLogItem | null = null;
   @state() private _meals: CustomMeal[] = [];
@@ -367,7 +369,18 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        ${this._renderCameraCapture("barcode")}
+        ${this._scanFailed
+          ? html`
+            <p class="scanner-hint-text">Live scanner niet beschikbaar.</p>
+            ${this._renderCameraCapture("barcode")}
+          `
+          : html`
+            <div id="barcode-scanner-placeholder" class="scanner-area">
+              ${this._scanning
+                ? nothing
+                : html`<p class="scanner-hint">Camera wordt gestart...</p>`}
+            </div>
+          `}
         <div class="manual-barcode">
           <span>Of voer handmatig in:</span>
           <div class="input-row">
@@ -728,7 +741,61 @@ export class VoedingslogPanel extends LitElement {
 
   private _openBarcodeScanner(): void {
     this._dialogMode = "barcode";
+    this._scanning = false;
+    this._scanFailed = false;
     this._cameraActive = false;
+    this.updateComplete.then(() => this._startLiveScanner());
+  }
+
+  private async _startLiveScanner(): Promise<void> {
+    try {
+      this._cleanupScannerContainer();
+
+      const container = document.createElement("div");
+      container.id = this._scannerContainerId;
+      document.body.appendChild(container);
+
+      const placeholder = this.shadowRoot?.getElementById("barcode-scanner-placeholder");
+      if (placeholder) {
+        const rect = placeholder.getBoundingClientRect();
+        container.style.cssText = `
+          position: fixed;
+          top: ${rect.top}px;
+          left: ${rect.left}px;
+          width: ${rect.width}px;
+          height: ${Math.max(rect.height, 250)}px;
+          z-index: 101;
+          border-radius: 8px;
+          overflow: hidden;
+        `;
+        placeholder.style.minHeight = "250px";
+      }
+
+      this._html5Qrcode = new Html5Qrcode(this._scannerContainerId);
+      this._scanning = true;
+
+      const startPromise = this._html5Qrcode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.5 },
+        (decodedText: string) => {
+          this._scanning = false;
+          this._stopCamera();
+          this._lookupBarcode(decodedText);
+        },
+        () => {}
+      );
+
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Camera timeout")), 10000)
+      );
+
+      await Promise.race([startPromise, timeout]);
+    } catch (e) {
+      console.warn("Live barcode scanner failed:", e);
+      this._scanning = false;
+      this._scanFailed = true;
+      this._stopCamera();
+    }
   }
 
   private _openSearch(): void {
@@ -868,6 +935,8 @@ export class VoedingslogPanel extends LitElement {
     this._searchResults = [];
     this._analyzing = false;
     this._cameraActive = false;
+    this._scanning = false;
+    this._scanFailed = false;
     this._editingMeal = null;
     this._mealIngredientSearch = "";
     this._mealIngredientResults = [];
