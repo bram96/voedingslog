@@ -339,6 +339,10 @@ export class VoedingslogPanel extends LitElement {
         <ha-icon icon="mdi:image"></ha-icon>
         ${purpose === "barcode" ? "Foto van barcode" : "Foto van etiket"}
       </button>
+      <p class="browser-hint">
+        Camera werkt alleen in de browser.
+        <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
+      </p>
     `;
   }
 
@@ -354,10 +358,6 @@ export class VoedingslogPanel extends LitElement {
         ${this._scanFailed
           ? html`
             ${this._renderCameraCapture("barcode")}
-            <p class="browser-hint">
-              Barcode scanner werkt alleen in de browser.
-              <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
-            </p>
           `
           : html`
             <div id="barcode-scanner-placeholder" class="scanner-area">

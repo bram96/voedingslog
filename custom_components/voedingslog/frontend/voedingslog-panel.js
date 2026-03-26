@@ -148,6 +148,10 @@ var so=Object.create;var Fr=Object.defineProperty;var Di=Object.getOwnPropertyDe
         <ha-icon icon="mdi:image"></ha-icon>
         ${c==="barcode"?"Foto van barcode":"Foto van etiket"}
       </button>
+      <p class="browser-hint">
+        Camera werkt alleen in de browser.
+        <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
+      </p>
     `}_renderBarcodeDialog(){return ie`
       <div class="dialog-header">
         <h2>Scan barcode</h2>
@@ -158,10 +162,6 @@ var so=Object.create;var Fr=Object.defineProperty;var Di=Object.getOwnPropertyDe
       <div class="dialog-body">
         ${this._scanFailed?ie`
             ${this._renderCameraCapture("barcode")}
-            <p class="browser-hint">
-              Barcode scanner werkt alleen in de browser.
-              <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
-            </p>
           `:ie`
             <div id="barcode-scanner-placeholder" class="scanner-area">
               ${this._scanning?fe:ie`<p class="scanner-hint">Camera wordt gestart...</p>`}
