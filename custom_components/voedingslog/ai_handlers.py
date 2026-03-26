@@ -34,27 +34,28 @@ def get_ai_entity(hass: HomeAssistant) -> str:
     return ""
 
 
-async def save_temp_image(hass: HomeAssistant, photo_b64: str) -> dict:
-    """Save base64 image to media dir, return attachment dict."""
-    media_dir = Path(hass.config.path("media"))
+async def save_temp_image(hass: HomeAssistant, photo_b64: str) -> tuple[dict, Path]:
+    """Save base64 image to media dir, return (attachment dict, file path)."""
+    # Try standard media directories: /media, then config/media
+    media_dir = Path("/media")
+    if not media_dir.is_dir():
+        media_dir = Path(hass.config.path("media"))
     media_dir.mkdir(exist_ok=True)
     filename = f"voedingslog_temp_{uuid.uuid4().hex[:8]}.jpg"
-    (media_dir / filename).write_bytes(base64.b64decode(photo_b64))
-    return {
+    file_path = media_dir / filename
+    file_path.write_bytes(base64.b64decode(photo_b64))
+    attachment = {
         "media_content_id": f"media-source://media_source/local/{filename}",
         "media_content_type": "image/jpeg",
     }
+    return attachment, file_path
 
 
-def cleanup_temp_image(attachment: dict) -> None:
+def cleanup_temp_image(file_path: Path | None) -> None:
     """Delete temp image file after use."""
     try:
-        content_id = attachment.get("media_content_id", "")
-        filename = content_id.rsplit("/", 1)[-1] if "/" in content_id else ""
-        if filename.startswith("voedingslog_temp_"):
-            path = Path("/media") / filename
-            if path.exists():
-                path.unlink()
+        if file_path and file_path.exists():
+            file_path.unlink()
     except Exception:
         pass
 
@@ -184,7 +185,7 @@ async def ws_analyze_photo(hass, connection, msg):
         },
     }
 
-    attachment = await save_temp_image(hass, msg["photo_b64"])
+    attachment, temp_path = await save_temp_image(hass, msg["photo_b64"])
     try:
         result = await hass.services.async_call(
             "ai_task",
@@ -222,7 +223,7 @@ async def ws_analyze_photo(hass, connection, msg):
         _LOGGER.error("AI photo analysis failed: %s", e)
         connection.send_error(msg["id"], "ai_error", str(e))
     finally:
-        cleanup_temp_image(attachment)
+        cleanup_temp_image(temp_path)
 
 
 # ── Text & handwriting parsing ───────────────────────────────────
@@ -292,7 +293,7 @@ def _create_parse_handler(get_coordinator):
             )
             return
 
-        attachment = await save_temp_image(hass, msg["photo_b64"])
+        attachment, temp_path = await save_temp_image(hass, msg["photo_b64"])
         try:
             result = await hass.services.async_call(
                 "ai_task",
@@ -322,7 +323,7 @@ def _create_parse_handler(get_coordinator):
             _LOGGER.error("AI handwriting parsing failed: %s", e)
             connection.send_error(msg["id"], "ai_error", str(e))
         finally:
-            cleanup_temp_image(attachment)
+            cleanup_temp_image(temp_path)
 
     return ws_parse_text, ws_parse_handwriting
 
