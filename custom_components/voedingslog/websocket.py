@@ -383,6 +383,48 @@ async def ws_delete_meal(hass, connection, msg):
 
 # ── Companion app barcode scanner ─────────────────────────────────
 
+# Pending scan state: {person, timestamp}
+_pending_scan: dict | None = None
+_scan_listener_unsub = None
+
+
+def setup_tag_listener(hass: HomeAssistant) -> None:
+    """Set up a persistent listener for tag_scanned events."""
+    global _scan_listener_unsub
+
+    if _scan_listener_unsub is not None:
+        return  # Already listening
+
+    async def on_tag_scanned(event: Event) -> None:
+        global _pending_scan
+        if not _pending_scan:
+            return
+
+        # Only process if scan was requested within last 120 seconds
+        if time.time() - _pending_scan["time"] > 120:
+            _pending_scan = None
+            return
+
+        tag_id = event.data.get("tag_id", "")
+        if not tag_id:
+            return
+
+        person = _pending_scan["person"]
+        _pending_scan = None
+
+        coordinator = _get_coordinator(hass)
+        if not coordinator:
+            return
+
+        ok = await coordinator.log_barcode(person, tag_id)
+        if ok:
+            _LOGGER.info("App scan: logged barcode %s for %s", tag_id, person)
+        else:
+            _LOGGER.warning("App scan: barcode %s not found for %s", tag_id, person)
+
+    _scan_listener_unsub = hass.bus.async_listen("tag_scanned", on_tag_scanned)
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): WS_TRIGGER_APP_SCAN,
@@ -391,67 +433,10 @@ async def ws_delete_meal(hass, connection, msg):
 )
 @websocket_api.async_response
 async def ws_trigger_app_scan(hass, connection, msg):
-    """Trigger the companion app barcode scanner and wait for result."""
-    entry = _get_config_entry(hass)
-    device = entry.options.get("mobile_app_device", "") if entry else ""
+    """Register a pending scan and return immediately. User navigates to tag scanner."""
+    global _pending_scan
 
-    if not device:
-        connection.send_error(
-            msg["id"], "no_device",
-            "Geen mobiel apparaat geconfigureerd. Ga naar instellingen en vul 'mobile_app_device' in (bijv. mobile_app_iphone_jan)."
-        )
-        return
+    setup_tag_listener(hass)
+    _pending_scan = {"person": msg["person"], "time": time.time()}
 
-    person = msg["person"]
-
-    # Send the barcode scanner command to the companion app
-    try:
-        await hass.services.async_call(
-            "notify", device,
-            {"message": "command_barcode_scanner"},
-            blocking=True,
-        )
-    except Exception as e:
-        connection.send_error(msg["id"], "notify_failed", f"Kon scanner niet starten: {e}")
-        return
-
-    # Wait for a tag_scanned event (companion app fires this with the barcode)
-    barcode_future: asyncio.Future[str] = asyncio.Future()
-
-    def on_tag_scanned(event: Event) -> None:
-        tag_id = event.data.get("tag_id", "")
-        if tag_id and not barcode_future.done():
-            barcode_future.set_result(tag_id)
-
-    remove_listener = hass.bus.async_listen("tag_scanned", on_tag_scanned)
-
-    try:
-        barcode = await asyncio.wait_for(barcode_future, timeout=60)
-    except asyncio.TimeoutError:
-        remove_listener()
-        connection.send_error(msg["id"], "timeout", "Geen barcode ontvangen binnen 60 seconden.")
-        return
-
-    remove_listener()
-
-    # Look up and log the barcode
-    coordinator = _get_coordinator(hass)
-    if not coordinator:
-        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
-        return
-
-    ok = await coordinator.log_barcode(person, barcode)
-    if ok:
-        items = coordinator.get_log_today(person)
-        last = items[-1] if items else None
-        connection.send_result(msg["id"], {
-            "success": True,
-            "barcode": barcode,
-            "product": last["name"] if last else barcode,
-        })
-    else:
-        connection.send_result(msg["id"], {
-            "success": False,
-            "barcode": barcode,
-            "error": f"Barcode {barcode} niet gevonden in Open Food Facts",
-        })
+    connection.send_result(msg["id"], {"success": True})

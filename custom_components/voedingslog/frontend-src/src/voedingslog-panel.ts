@@ -343,7 +343,6 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _renderBarcodeDialog(): TemplateResult {
-    const hasAppScan = !!this._config?.mobile_app_device;
     return html`
       <div class="dialog-header">
         <h2>Scan barcode</h2>
@@ -352,17 +351,12 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        ${hasAppScan
-          ? html`
-            <button class="btn-primary photo-btn" style="margin-bottom:12px" @click=${() => this._triggerAppScan()}>
-              <ha-icon icon="mdi:barcode-scan"></ha-icon>
-              Scan via HA app
-            </button>
-          `
-          : nothing}
+        <button class="btn-primary photo-btn" style="margin-bottom:12px" @click=${() => this._triggerAppScan()}>
+          <ha-icon icon="mdi:barcode-scan"></ha-icon>
+          Scan barcode
+        </button>
         ${this._scanFailed
           ? html`
-            ${!hasAppScan ? html`<p class="scanner-hint-text">Live scanner niet beschikbaar.</p>` : nothing}
             ${this._renderCameraCapture("barcode")}
           `
           : html`
@@ -996,20 +990,18 @@ export class VoedingslogPanel extends LitElement {
   private async _triggerAppScan(): Promise<void> {
     if (!this._selectedPerson) return;
     try {
-      const res = await this.hass.callWS<{ success: boolean; barcode: string; product?: string; error?: string }>({
+      // Register pending scan on the backend
+      await this.hass.callWS({
         type: "voedingslog/trigger_app_scan",
         person: this._selectedPerson,
       });
-      if (res.success) {
-        this._closeDialog();
-        await this._loadLog();
-        alert(`${res.product} gelogd!`);
-      } else {
-        alert(res.error || `Barcode ${res.barcode} niet gevonden.`);
-      }
+      // Navigate to HA's built-in tag scanner
+      // When a barcode is scanned, tag_scanned event fires and backend logs it
+      // Use history.pushState so user can navigate back
+      window.location.href = "/config/tags";
     } catch (e) {
       const err = e as Error & { message?: string };
-      alert(err.message || "Fout bij scannen via app.");
+      alert(err.message || "Fout bij starten scanner.");
     }
   }
 
