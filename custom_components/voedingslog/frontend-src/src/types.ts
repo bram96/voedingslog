@@ -92,5 +92,5 @@ export interface NutrientDisplayConfig {
   decimals: number;
 }
 
-type DialogMode = "barcode" | "search" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | null;
+type DialogMode = "barcode" | "search" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | "manual" | null;
 export type { DialogMode };

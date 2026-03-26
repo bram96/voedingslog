@@ -141,18 +141,23 @@ async def ws_lookup_barcode(hass, connection, msg):
     {
         vol.Required("type"): WS_SEARCH_PRODUCTS,
         vol.Required("query"): str,
+        vol.Optional("online", default=False): bool,
     }
 )
 @websocket_api.async_response
 async def ws_search_products(hass, connection, msg):
-    """Search products by name."""
+    """Search products: local cache first, optionally online."""
     coordinator = _get_coordinator(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
 
-    products = await coordinator.search_products(msg["query"])
-    connection.send_result(msg["id"], {"products": products})
+    if msg.get("online"):
+        products = await coordinator.search_products_online(msg["query"])
+        connection.send_result(msg["id"], {"products": products, "source": "online"})
+    else:
+        local = coordinator.search_products_local(msg["query"])
+        connection.send_result(msg["id"], {"products": local, "source": "local"})
 
 
 @websocket_api.websocket_command(

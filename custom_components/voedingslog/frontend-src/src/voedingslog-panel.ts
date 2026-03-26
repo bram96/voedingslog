@@ -49,6 +49,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _scanFailed = false;
   @state() private _analyzing = false;
   @state() private _searching = false;
+  @state() private _searchSource: "local" | "online" = "local";
   @state() private _editingItem: IndexedLogItem | null = null;
   @state() private _meals: CustomMeal[] = [];
   @state() private _editingMeal: CustomMeal | null = null;
@@ -230,6 +231,10 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon="mdi:pot-steam"></ha-icon>
           <span>Maaltijden</span>
         </button>
+        <button class="action-btn" @click=${() => { this._dialogMode = "manual"; }}>
+          <ha-icon icon="mdi:pencil-plus"></ha-icon>
+          <span>Handmatig</span>
+        </button>
       </div>
     `;
   }
@@ -322,6 +327,7 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "edit" ? this._renderEditDialog() : nothing}
           ${this._dialogMode === "meals" ? this._renderMealsDialog() : nothing}
           ${this._dialogMode === "meal-edit" ? this._renderMealEditDialog() : nothing}
+          ${this._dialogMode === "manual" ? this._renderManualEntryDialog() : nothing}
         </div>
       </div>
     `;
@@ -435,6 +441,11 @@ export class VoedingslogPanel extends LitElement {
             `
           )}
         </div>
+        ${this._searchSource === "local" && this._searchResults.length >= 0 && this._searchQuery.trim()
+          ? html`<button class="btn-secondary search-online-btn" @click=${() => this._doSearch(true)}>
+              <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
+            </button>`
+          : nothing}
       </div>
     `;
   }
@@ -623,6 +634,74 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
     `;
+  }
+
+  // ── Manual entry dialog ──────────────────────────────────────────
+
+  private _renderManualEntryDialog(): TemplateResult {
+    const fields = [
+      { id: "manual-kcal", label: "Calorieën (kcal)", key: "energy-kcal_100g" },
+      { id: "manual-fat", label: "Vetten (g)", key: "fat_100g" },
+      { id: "manual-satfat", label: "Verzadigd vet (g)", key: "saturated-fat_100g" },
+      { id: "manual-carbs", label: "Koolhydraten (g)", key: "carbohydrates_100g" },
+      { id: "manual-sugars", label: "Waarvan suikers (g)", key: "sugars_100g" },
+      { id: "manual-fiber", label: "Vezels (g)", key: "fiber_100g" },
+      { id: "manual-protein", label: "Eiwitten (g)", key: "proteins_100g" },
+      { id: "manual-sodium", label: "Natrium/zout (g)", key: "sodium_100g" },
+    ];
+
+    return html`
+      <div class="dialog-header">
+        <h2>Handmatig toevoegen</h2>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="weight-section">
+          <label>Productnaam</label>
+          <input type="text" id="manual-name" placeholder="Bijv. Zelfgemaakte soep" />
+        </div>
+        <p class="manual-hint">Voedingswaarden per 100g:</p>
+        <div class="manual-fields">
+          ${fields.map(
+            (f) => html`
+              <div class="manual-field-row">
+                <label>${f.label}</label>
+                <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal" value="0" />
+              </div>
+            `
+          )}
+        </div>
+        <button class="btn-primary btn-confirm" @click=${() => this._confirmManualEntry(fields)}>
+          <ha-icon icon="mdi:arrow-right"></ha-icon>
+          Verder
+        </button>
+      </div>
+    `;
+  }
+
+  private _confirmManualEntry(fields: { id: string; key: string }[]): void {
+    const nameInput = this.shadowRoot?.getElementById("manual-name") as HTMLInputElement | null;
+    const name = nameInput?.value?.trim();
+    if (!name) {
+      alert("Vul een productnaam in.");
+      return;
+    }
+
+    const nutrients: Record<string, number> = {};
+    for (const f of fields) {
+      const input = this.shadowRoot?.getElementById(f.id) as HTMLInputElement | null;
+      nutrients[f.key] = parseFloat(input?.value || "0") || 0;
+    }
+
+    const product: Product = {
+      name,
+      serving_grams: 100,
+      nutrients,
+    };
+    this._pendingProduct = product;
+    this._dialogMode = "weight";
   }
 
   // ── Meals dialogs ────────────────────────────────────────────────
@@ -826,6 +905,7 @@ export class VoedingslogPanel extends LitElement {
     this._dialogMode = "search";
     this._searchResults = [];
     this._searchQuery = "";
+    this._searchSource = "local";
   }
 
   private _openEditDialog(item: IndexedLogItem): void {
@@ -1064,17 +1144,19 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private async _doSearch(): Promise<void> {
+  private async _doSearch(online = false): Promise<void> {
     const input = this.shadowRoot?.getElementById("search-input") as HTMLInputElement | null;
     const query = (input?.value || this._searchQuery).trim();
     if (!query) return;
     this._searching = true;
     try {
-      const res = await this.hass.callWS<SearchProductsResponse>({
+      const res = await this.hass.callWS<SearchProductsResponse & { source?: string }>({
         type: "voedingslog/search_products",
         query,
+        online,
       });
       this._searchResults = res.products || [];
+      this._searchSource = (res.source as "local" | "online") || "local";
     } catch (e) {
       console.error("Search failed:", e);
       alert("Fout bij zoeken. Controleer de verbinding.");
@@ -1875,6 +1957,10 @@ export class VoedingslogPanel extends LitElement {
       font-size: 13px;
       color: var(--secondary-text-color);
     }
+    .search-online-btn {
+      width: 100%;
+      margin-top: 8px;
+    }
     .search-loading {
       display: flex;
       align-items: center;
@@ -1882,6 +1968,36 @@ export class VoedingslogPanel extends LitElement {
       padding: 12px 0;
       font-size: 13px;
       color: var(--secondary-text-color);
+    }
+    .manual-hint {
+      font-size: 13px;
+      color: var(--secondary-text-color);
+      margin-bottom: 8px;
+    }
+    .manual-fields {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .manual-field-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .manual-field-row label {
+      font-size: 14px;
+      flex: 1;
+    }
+    .manual-field-row input {
+      width: 80px;
+      padding: 6px 8px;
+      border: 1px solid var(--divider-color);
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: right;
+      background: var(--primary-background-color);
+      color: var(--primary-text-color);
     }
     .add-ingredient {
       margin-top: 12px;

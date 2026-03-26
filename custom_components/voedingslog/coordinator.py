@@ -17,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_KEY = f"{DOMAIN}.logs"
 STORAGE_KEY_MEALS = f"{DOMAIN}.meals"
+STORAGE_KEY_PRODUCTS = f"{DOMAIN}.products"
 STORAGE_VERSION = 1
 
 
@@ -47,8 +48,10 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         self._session: aiohttp.ClientSession | None = None
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._meals_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_MEALS)
-        # Custom meals (recipes): list of {id, name, ingredients, nutrients_per_100g, total_grams}
+        self._products_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PRODUCTS)
         self._meals: list[dict] = []
+        # Product cache: list of {name, serving_grams, nutrients, portions?}
+        self._product_cache: list[dict] = []
 
     async def async_load_from_store(self) -> None:
         """Load persisted logs and meals from disk."""
@@ -63,6 +66,11 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         if meals_data and isinstance(meals_data, list):
             self._meals = meals_data
             _LOGGER.info("Loaded %d custom meals", len(self._meals))
+
+        products_data = await self._products_store.async_load()
+        if products_data and isinstance(products_data, list):
+            self._product_cache = products_data
+            _LOGGER.info("Loaded %d cached products", len(self._product_cache))
 
     async def _async_save(self) -> None:
         """Persist current logs to disk."""
@@ -156,10 +164,38 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         session = await self._get_session()
         return await lookup_by_barcode(session, barcode)
 
-    async def search_products(self, query: str) -> list[dict]:
-        """Search products by name."""
+    def search_products_local(self, query: str) -> list[dict]:
+        """Search the local product cache."""
+        q = query.lower()
+        return [p for p in self._product_cache if q in p.get("name", "").lower()][:10]
+
+    async def search_products_online(self, query: str) -> list[dict]:
+        """Search products via Open Food Facts API."""
         session = await self._get_session()
-        return await search_by_name(session, query)
+        results = await search_by_name(session, query)
+        # Cache any new results
+        for product in results:
+            self._cache_product(product)
+        return results
+
+    def _cache_product(self, product: dict) -> None:
+        """Add a product to the local cache if not already present."""
+        name = product.get("name", "")
+        if not name:
+            return
+        # Check for duplicate by name
+        if any(p.get("name") == name for p in self._product_cache):
+            return
+        self._product_cache.append({
+            "name": product["name"],
+            "serving_grams": product.get("serving_grams", 100),
+            "nutrients": product.get("nutrients", {}),
+            "portions": product.get("portions", []),
+        })
+
+    async def _async_save_products(self) -> None:
+        """Persist product cache to disk."""
+        await self._products_store.async_save(self._product_cache)
 
     async def delete_item(self, person: str, index: int, day: str | None = None):
         """Delete an item by index from a person's log."""
@@ -282,8 +318,10 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             }
         )
         _LOGGER.info("Logged: %s (%.0fg) for %s [%s] on %s", product["name"], grams, person, cat, target_day)
+        self._cache_product(product)
         await self.async_refresh()
         await self._async_save()
+        await self._async_save_products()
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
