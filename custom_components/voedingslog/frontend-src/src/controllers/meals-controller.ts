@@ -1,0 +1,297 @@
+/**
+ * Meals controller — custom meal/recipe management.
+ */
+import { html, nothing, type TemplateResult } from "lit";
+import type {
+  MealIngredient,
+  Product,
+  Portion,
+  CustomMeal,
+  VoedingslogConfig,
+  GetMealsResponse,
+  SearchProductsResponse,
+  SaveMealResponse,
+  DialogMode,
+} from "../types.js";
+
+export interface MealsControllerHost {
+  hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
+  shadowRoot: ShadowRoot | null;
+  _config: VoedingslogConfig | null;
+  _dialogMode: DialogMode;
+  _searching: boolean;
+  requestUpdate(): void;
+  _closeDialog(): void;
+  _setDialogMode(mode: string): void;
+  _selectProduct(product: Product): void;
+}
+
+export class MealsController {
+  host: MealsControllerHost;
+  meals: CustomMeal[] = [];
+  editingMeal: CustomMeal | null = null;
+  ingredientSearch = "";
+  ingredientResults: Product[] = [];
+
+  constructor(host: MealsControllerHost) {
+    this.host = host;
+  }
+
+  reset(): void {
+    this.editingMeal = null;
+    this.ingredientSearch = "";
+    this.ingredientResults = [];
+  }
+
+  renderMealsDialog(): TemplateResult {
+    const h = this.host;
+    return html`
+      <div class="dialog-header">
+        <h2>Maaltijden</h2>
+        <button class="close-btn" @click=${() => h._closeDialog()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        ${this.meals.length === 0
+          ? html`<p class="empty-hint">Nog geen maaltijden. Maak een maaltijd aan om snel te kunnen loggen.</p>`
+          : this.meals.map(
+              (meal) => html`
+                <div class="meal-item">
+                  <div class="meal-info" @click=${() => this.logMeal(meal)}>
+                    <span class="meal-name">${meal.name}</span>
+                    <span class="meal-meta">
+                      ${meal.ingredients.length} ingrediënten · ${Math.round(meal.total_grams)}g totaal ·
+                      ${Math.round((meal.nutrients_per_100g?.["energy-kcal_100g"] || 0) * meal.total_grams / 100)} kcal
+                    </span>
+                  </div>
+                  <button class="item-edit" @click=${() => this.openEditor(meal)}>
+                    <ha-icon icon="mdi:pencil"></ha-icon>
+                  </button>
+                  <button class="item-delete" @click=${() => this.deleteMeal(meal.id)}>
+                    <ha-icon icon="mdi:close"></ha-icon>
+                  </button>
+                </div>
+              `
+            )}
+        <button class="btn-primary btn-confirm" style="margin-top:12px" @click=${() => this.openEditor(null)}>
+          <ha-icon icon="mdi:plus"></ha-icon>
+          Nieuwe maaltijd
+        </button>
+      </div>
+    `;
+  }
+
+  renderEditDialog(): TemplateResult {
+    const h = this.host;
+    const meal = this.editingMeal;
+    const ingredients = meal?.ingredients || [];
+    return html`
+      <div class="dialog-header">
+        <h2>${meal?.id ? "Maaltijd bewerken" : "Nieuwe maaltijd"}</h2>
+        <button class="close-btn" @click=${() => { h._setDialogMode("meals"); this.editingMeal = null; h.requestUpdate(); }}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-field">
+          <label>Naam</label>
+          <input type="text" id="meal-name-input" .value=${meal?.name || ""} placeholder="Bijv. Macaroni" />
+        </div>
+
+        <div class="form-field">
+          <label>Standaard portie (gram)</label>
+          <input type="number" id="meal-portion-input" .value=${String(meal?.preferred_portion || "")}
+            placeholder="Bijv. 400" min="1" step="1" inputmode="numeric" />
+        </div>
+
+        <div class="meal-ingredients-section">
+          <label class="section-label">Ingrediënten</label>
+          ${ingredients.map(
+            (ing, idx) => html`
+              <div class="ingredient-row">
+                <span class="ingredient-name">${ing.name}</span>
+                <input type="number" class="ingredient-grams-input" .value=${String(ing.grams)}
+                  min="1" step="1" inputmode="numeric"
+                  @change=${(e: Event) => this.updateIngredientGrams(idx, parseFloat((e.target as HTMLInputElement).value))} />
+                <span class="ingredient-unit">g</span>
+                <button class="item-delete" @click=${() => this.removeIngredient(idx)}>
+                  <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+              </div>
+            `
+          )}
+
+          <div class="add-ingredient">
+            <div class="input-row">
+              <input type="text" id="ingredient-search" placeholder="Zoek ingrediënt..."
+                .value=${this.ingredientSearch}
+                @input=${(e: Event) => { this.ingredientSearch = (e.target as HTMLInputElement).value; h.requestUpdate(); }}
+                @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this.searchIngredient(); }} />
+              <button class="btn-primary" @click=${() => this.searchIngredient()}>Zoek</button>
+            </div>
+            ${h._searching
+              ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
+              : nothing}
+            <div class="search-results">
+              ${this.ingredientResults.map(
+                (p) => html`
+                  <div class="search-result" @click=${() => this.addIngredient(p)}>
+                    <span class="result-name">${p.name}</span>
+                    <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
+                  </div>
+                `
+              )}
+            </div>
+          </div>
+        </div>
+
+        ${!!h._config?.ai_task_entity ? html`
+          <button class="btn-secondary btn-confirm" @click=${() => { h._setDialogMode("meal-ai-text"); }}>
+            <ha-icon icon="mdi:text-box-outline"></ha-icon>
+            AI ingrediënten invoer
+          </button>
+        ` : nothing}
+
+        <button class="btn-primary btn-confirm" @click=${() => this.save()}>
+          <ha-icon icon="mdi:check"></ha-icon>
+          Opslaan
+        </button>
+      </div>
+    `;
+  }
+
+  // ── Actions ──────────────────────────────────────────────────
+
+  async loadMeals(): Promise<void> {
+    try {
+      const res = await this.host.hass.callWS<GetMealsResponse>({ type: "voedingslog/get_meals" });
+      this.meals = res.meals || [];
+    } catch (e) {
+      console.error("Failed to load meals:", e);
+    }
+    this.host._setDialogMode("meals");
+  }
+
+  openEditor(meal: CustomMeal | null): void {
+    this.editingMeal = meal
+      ? { ...meal, ingredients: [...meal.ingredients] }
+      : { id: "", name: "", ingredients: [], total_grams: 0, nutrients_per_100g: {} };
+    this.ingredientSearch = "";
+    this.ingredientResults = [];
+    this.host._setDialogMode("meal-edit");
+  }
+
+  logMeal(meal: CustomMeal): void {
+    const defaultGrams = meal.preferred_portion || meal.total_grams;
+    const portions: Portion[] = [];
+    if (meal.preferred_portion) {
+      portions.push({ label: `Portie (${Math.round(meal.preferred_portion)}g)`, grams: meal.preferred_portion });
+    }
+    portions.push({ label: `Heel recept (${Math.round(meal.total_grams)}g)`, grams: meal.total_grams });
+    if (defaultGrams !== 100 && meal.total_grams !== 100) {
+      portions.push({ label: "100g", grams: 100 });
+    }
+    const product: Product = {
+      name: meal.name,
+      serving_grams: defaultGrams,
+      portions,
+      nutrients: meal.nutrients_per_100g,
+    };
+    this.host._selectProduct(product);
+  }
+
+  async searchIngredient(): Promise<void> {
+    const h = this.host;
+    const query = this.ingredientSearch.trim();
+    if (!query) return;
+    h._searching = true;
+    h.requestUpdate();
+    try {
+      const res = await h.hass.callWS<SearchProductsResponse>({ type: "voedingslog/search_products", query });
+      this.ingredientResults = res.products || [];
+    } catch (e) {
+      console.error("Ingredient search failed:", e);
+    }
+    h._searching = false;
+    h.requestUpdate();
+  }
+
+  addIngredient(product: Product): void {
+    if (!this.editingMeal) return;
+    const grams = parseFloat(prompt(`Hoeveel gram ${product.name}?`, String(product.serving_grams || 100)) || "");
+    if (!grams || grams <= 0) return;
+    const ingredient: MealIngredient = { name: product.name, grams, nutrients: product.nutrients };
+    this.editingMeal = {
+      ...this.editingMeal,
+      ingredients: [...this.editingMeal.ingredients, ingredient],
+    };
+    this.ingredientResults = [];
+    this.ingredientSearch = "";
+    this.host.requestUpdate();
+  }
+
+  addIngredientFromAi(ingredient: MealIngredient): void {
+    if (!this.editingMeal) return;
+    this.editingMeal = {
+      ...this.editingMeal,
+      ingredients: [...this.editingMeal.ingredients, ingredient],
+    };
+    this.host.requestUpdate();
+  }
+
+  updateIngredientGrams(index: number, grams: number): void {
+    if (!this.editingMeal || !grams || grams <= 0) return;
+    const ingredients = [...this.editingMeal.ingredients];
+    ingredients[index] = { ...ingredients[index], grams };
+    this.editingMeal = { ...this.editingMeal, ingredients };
+    this.host.requestUpdate();
+  }
+
+  removeIngredient(index: number): void {
+    if (!this.editingMeal) return;
+    const ingredients = [...this.editingMeal.ingredients];
+    ingredients.splice(index, 1);
+    this.editingMeal = { ...this.editingMeal, ingredients };
+    this.host.requestUpdate();
+  }
+
+  async save(): Promise<void> {
+    const h = this.host;
+    if (!this.editingMeal) return;
+    const nameInput = h.shadowRoot?.getElementById("meal-name-input") as HTMLInputElement | null;
+    const name = nameInput?.value?.trim();
+    if (!name) { alert("Vul een naam in."); return; }
+    if (this.editingMeal.ingredients.length === 0) { alert("Voeg minimaal één ingrediënt toe."); return; }
+
+    const portionInput = h.shadowRoot?.getElementById("meal-portion-input") as HTMLInputElement | null;
+    const preferredPortion = parseFloat(portionInput?.value || "") || undefined;
+
+    try {
+      await h.hass.callWS<SaveMealResponse>({
+        type: "voedingslog/save_meal",
+        meal: {
+          id: this.editingMeal.id || undefined,
+          name,
+          ingredients: this.editingMeal.ingredients,
+          preferred_portion: preferredPortion,
+        },
+      });
+      await this.loadMeals();
+    } catch (e) {
+      console.error("Failed to save meal:", e);
+      alert("Fout bij opslaan.");
+    }
+  }
+
+  async deleteMeal(mealId: string): Promise<void> {
+    if (!confirm("Maaltijd verwijderen?")) return;
+    try {
+      await this.host.hass.callWS({ type: "voedingslog/delete_meal", meal_id: mealId });
+      this.meals = this.meals.filter((m) => m.id !== mealId);
+      this.host.requestUpdate();
+    } catch (e) {
+      console.error("Failed to delete meal:", e);
+    }
+  }
+}

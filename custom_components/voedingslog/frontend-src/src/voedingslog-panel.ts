@@ -8,15 +8,11 @@ import type {
   IndexedLogItem,
   Product,
   Portion,
-  CustomMeal,
-  MealIngredient,
   VoedingslogConfig,
   GetLogResponse,
-  GetMealsResponse,
   GetFavoritesResponse,
   LookupBarcodeResponse,
   SearchProductsResponse,
-  SaveMealResponse,
   AnalyzePhotoResponse,
   DialogMode,
 } from "./types.js";
@@ -27,12 +23,12 @@ import {
   defaultCategory,
   groupByCategory,
   calcItemNutrients,
-  itemKcal,
   sumNutrients,
-  NUTRIENTS_META,
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
 import { AiController } from "./mixins/ai-mixin.js";
+import { MealsController } from "./controllers/meals-controller.js";
+import { ExportController } from "./controllers/export-controller.js";
 import { renderPhotoPicker, captureVideoFrame, readFileAsBase64 } from "./photo-capture.js";
 
 @customElement("voedingslog-panel")
@@ -43,8 +39,8 @@ export class VoedingslogPanel extends LitElement {
 
   @state() _config: VoedingslogConfig | null = null;
   @state() _selectedPerson: string | null = null;
-  @state() private _selectedDate: string = new Date().toISOString().split("T")[0];
-  @state() private _items: LogItem[] = [];
+  @state() _selectedDate: string = new Date().toISOString().split("T")[0];
+  @state() _items: LogItem[] = [];
   @state() private _loading = true;
 
   @state() _dialogMode: DialogMode = null;
@@ -56,17 +52,14 @@ export class VoedingslogPanel extends LitElement {
   @state() _photoCameraActive = false;
   @state() private _prefillProduct: Product | null = null;
   @state() _analyzing = false;
-  @state() private _searching = false;
+  @state() _searching = false;
   @state() private _searchSource: "local" | "online" = "local";
   @state() private _editingItem: IndexedLogItem | null = null;
-  @state() private _meals: CustomMeal[] = [];
-  @state() private _editingMeal: CustomMeal | null = null;
-  @state() private _mealIngredientSearch = "";
-  @state() private _mealIngredientResults: Product[] = [];
   @state() private _favorites: Product[] = [];
-  @state() private _exportImageUrl: string | null = null;
 
   private _ai = new AiController(this);
+  private _meals = new MealsController(this);
+  private _export = new ExportController(this);
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
@@ -103,12 +96,12 @@ export class VoedingslogPanel extends LitElement {
     this._selectedPerson = this._config.persons[0];
   }
 
-  private _getCaloriesGoal(): number {
+  _getCaloriesGoal(): number {
     const pg = this._config?.person_goals?.[this._selectedPerson || ""];
     return pg?.calories_goal ?? this._config?.calories_goal ?? 2000;
   }
 
-  private _getMacroGoals(): { carbs: number; protein: number; fat: number; fiber: number } {
+  _getMacroGoals(): { carbs: number; protein: number; fat: number; fiber: number } {
     const pg = this._config?.person_goals?.[this._selectedPerson || ""];
     return pg?.macro_goals ?? this._config?.macro_goals ?? { carbs: 0, protein: 0, fat: 0, fiber: 0 };
   }
@@ -187,7 +180,7 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private _formatDateLabel(dateStr: string): string {
+  _formatDateLabel(dateStr: string): string {
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
     if (dateStr === today) return "Vandaag";
@@ -257,7 +250,7 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon="mdi:plus"></ha-icon>
           <span>Toevoegen</span>
         </button>
-        <button class="action-btn" @click=${() => this._openMeals()}>
+        <button class="action-btn" @click=${() => this._meals.loadMeals()}>
           <ha-icon icon="mdi:pot-steam"></ha-icon>
           <span>Maaltijden</span>
         </button>
@@ -345,10 +338,10 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "photo" ? this._renderPhotoDialog() : nothing}
           ${this._dialogMode === "weight" ? this._renderWeightDialog() : nothing}
           ${this._dialogMode === "edit" ? this._renderEditDialog() : nothing}
-          ${this._dialogMode === "meals" ? this._renderMealsDialog() : nothing}
-          ${this._dialogMode === "meal-edit" ? this._renderMealEditDialog() : nothing}
+          ${this._dialogMode === "meals" ? this._meals.renderMealsDialog() : nothing}
+          ${this._dialogMode === "meal-edit" ? this._meals.renderEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._renderManualEntryDialog() : nothing}
-          ${this._dialogMode === "day-detail" ? this._renderDayDetailDialog() : nothing}
+          ${this._dialogMode === "day-detail" ? this._export.renderDayDetailDialog() : nothing}
           ${this._dialogMode === "ai-text" ? this._ai.renderTextDialog() : nothing}
           ${this._dialogMode === "ai-handwriting" ? this._ai.renderHandwritingDialog() : nothing}
           ${this._dialogMode === "ai-validate" ? this._ai.renderValidateDialog() : nothing}
@@ -400,313 +393,6 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
-  private _renderDayDetailDialog(): TemplateResult {
-    const totals = sumNutrients(this._items);
-    const mg = this._getMacroGoals();
-    const goal = this._getCaloriesGoal();
-    const kcal = totals["energy-kcal_100g"] || 0;
-    const protein = totals["proteins_100g"] || 0;
-    const carbs = totals["carbohydrates_100g"] || 0;
-    const fat = totals["fat_100g"] || 0;
-    const fiber = totals["fiber_100g"] || 0;
-    const macroTotal = protein + carbs + fat + fiber;
-
-    const pctProtein = macroTotal > 0 ? Math.round(protein / macroTotal * 100) : 0;
-    const pctCarbs = macroTotal > 0 ? Math.round(carbs / macroTotal * 100) : 0;
-    const pctFat = macroTotal > 0 ? Math.round(fat / macroTotal * 100) : 0;
-    const pctFiber = macroTotal > 0 ? 100 - pctProtein - pctCarbs - pctFat : 0;
-
-    let gradientStops = "";
-    let angle = 0;
-    const slices = [
-      { pct: pctCarbs, color: "var(--primary-color, #03a9f4)", label: "Koolhydraten", grams: carbs, goal: mg.carbs },
-      { pct: pctProtein, color: "#4caf50", label: "Eiwitten", grams: protein, goal: mg.protein },
-      { pct: pctFat, color: "#ff9800", label: "Vetten", grams: fat, goal: mg.fat },
-      { pct: pctFiber, color: "#8bc34a", label: "Vezels", grams: fiber, goal: mg.fiber },
-    ];
-    for (const s of slices) {
-      const end = angle + s.pct;
-      gradientStops += `${s.color} ${angle}% ${end}%, `;
-      angle = end;
-    }
-    gradientStops = gradientStops.replace(/, $/, "");
-
-    return html`
-      <div class="dialog-header">
-        <h2>Dagdetails — ${this._formatDateLabel(this._selectedDate)}</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="pie-section">
-          <div class="pie-chart"
-            style="background: conic-gradient(${gradientStops || "#eee 0% 100%"})">
-            <div class="pie-center">
-              <span class="pie-kcal">${Math.round(kcal)}</span>
-              <span class="pie-unit">/ ${goal} kcal</span>
-            </div>
-          </div>
-          <div class="pie-legend">
-            ${slices.map(
-              (s) => {
-                const goalPct = s.goal > 0 ? Math.min(100, Math.round(s.grams / s.goal * 100)) : -1;
-                return html`
-                  <div class="legend-item">
-                    <span class="legend-dot" style="background:${s.color}"></span>
-                    <div class="legend-info">
-                      <div class="legend-top">
-                        <span class="legend-label">${s.label}</span>
-                        <span class="legend-value">
-                          ${s.grams.toFixed(1)}g${s.goal > 0 ? html` / ${s.goal}g` : nothing} (${s.pct}%)
-                        </span>
-                      </div>
-                      ${goalPct >= 0 ? html`
-                        <div class="macro-bar">
-                          <div class="macro-bar-fill" style="width:${goalPct}%; background:${s.color}"></div>
-                        </div>
-                      ` : nothing}
-                    </div>
-                  </div>
-                `;
-              }
-            )}
-          </div>
-        </div>
-
-        <div class="detail-table">
-          <div class="detail-table-header">Alle voedingswaarden</div>
-          ${Object.entries(this._config?.nutrients || {}).map(
-            ([key, meta]) => {
-              const raw = totals[key] || 0;
-              const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
-              const value = raw * factor;
-              return html`
-                <div class="detail-row">
-                  <span>${meta.label}</span>
-                  <span>${value.toFixed(1)} ${meta.unit}</span>
-                </div>
-              `;
-            }
-          )}
-        </div>
-
-        <div style="margin-top:12px">
-          <div class="detail-table-header">Gelogde items (${this._items.length})</div>
-          ${this._items.map(
-            (item) => {
-              const kcalVal = itemKcal(item);
-              return html`
-                <div class="detail-row">
-                  <span>${item.name}</span>
-                  <span>${item.grams}g · ${Math.round(kcalVal)} kcal</span>
-                </div>
-              `;
-            }
-          )}
-        </div>
-
-        ${this._exportImageUrl
-          ? html`
-            <div class="export-preview">
-              <img src=${this._exportImageUrl} alt="Voedingslog export"
-                style="width:100%;border-radius:8px;border:1px solid var(--divider-color);margin-top:8px;" />
-              <div class="export-actions">
-                <button class="btn-primary btn-confirm" @click=${() => this._downloadExportImage()}>
-                  <ha-icon icon="mdi:download"></ha-icon>
-                  Download
-                </button>
-                ${(navigator as any).share ? html`
-                  <button class="btn-secondary btn-confirm" @click=${() => this._shareExportImage()}>
-                    <ha-icon icon="mdi:share-variant"></ha-icon>
-                    Delen
-                  </button>
-                ` : nothing}
-              </div>
-            </div>
-          `
-          : html`
-            <button class="btn-secondary btn-confirm" @click=${() => this._exportDayImage(slices)}>
-              <ha-icon icon="mdi:download"></ha-icon>
-              Exporteer als afbeelding
-            </button>
-          `}
-      </div>
-    `;
-  }
-
-  private _exportDayImage(slices: { pct: number; color: string; label: string; grams: number; goal: number }[]): void {
-    const totals = sumNutrients(this._items);
-    const goal = this._getCaloriesGoal();
-    const kcal = totals["energy-kcal_100g"] || 0;
-    const person = this._selectedPerson || "";
-    const dateLabel = this._formatDateLabel(this._selectedDate);
-
-    const dpr = window.devicePixelRatio || 1;
-    const W = 600;
-    const canvas = document.createElement("canvas");
-    const items = this._items;
-    const rowH = 28;
-    const nutrientEntries = Object.entries(this._config?.nutrients || {});
-    const canvasH = 420 + nutrientEntries.length * rowH + items.length * rowH + 80;
-    canvas.width = W * dpr;
-    canvas.height = canvasH * dpr;
-    canvas.style.width = W + "px";
-    canvas.style.height = canvasH + "px";
-    const ctx = canvas.getContext("2d")!;
-    ctx.scale(dpr, dpr);
-
-    // Background
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, W, canvasH);
-
-    // Header
-    ctx.fillStyle = "#1976d2";
-    ctx.fillRect(0, 0, W, 60);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 20px sans-serif";
-    ctx.fillText(`Voedingslog — ${person}`, 20, 28);
-    ctx.font = "14px sans-serif";
-    ctx.fillText(dateLabel + "  ·  " + Math.round(kcal) + " / " + goal + " kcal", 20, 48);
-
-    // Pie chart
-    const cx = 100, cy = 150, r = 70;
-    let startAngle = -Math.PI / 2;
-    const pieColors = slices.map((s) => s.color.replace(/var\(--primary-color,?\s?/g, "").replace(")", "") || "#03a9f4");
-    for (let i = 0; i < slices.length; i++) {
-      const slice = slices[i];
-      const sliceAngle = (slice.pct / 100) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r, startAngle, startAngle + sliceAngle);
-      ctx.closePath();
-      ctx.fillStyle = pieColors[i];
-      ctx.fill();
-      startAngle += sliceAngle;
-    }
-    // Center circle
-    ctx.beginPath();
-    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 18px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(String(Math.round(kcal)), cx, cy + 2);
-    ctx.font = "11px sans-serif";
-    ctx.fillStyle = "#888";
-    ctx.fillText("kcal", cx, cy + 16);
-    ctx.textAlign = "left";
-
-    // Legend
-    let ly = 95;
-    for (let i = 0; i < slices.length; i++) {
-      const s = slices[i];
-      ctx.fillStyle = pieColors[i];
-      ctx.beginPath();
-      ctx.arc(210, ly + 6, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#333";
-      ctx.font = "14px sans-serif";
-      ctx.fillText(s.label, 224, ly + 10);
-      ctx.fillStyle = "#888";
-      ctx.font = "13px sans-serif";
-      const goalText = s.goal > 0 ? ` / ${s.goal}g` : "";
-      ctx.fillText(`${s.grams.toFixed(1)}g${goalText} (${s.pct}%)`, 224, ly + 26);
-      // Progress bar
-      if (s.goal > 0) {
-        const barX = 224, barY = ly + 32, barW = 340, barH = 4;
-        ctx.fillStyle = "#eee";
-        ctx.fillRect(barX, barY, barW, barH);
-        ctx.fillStyle = pieColors[i];
-        ctx.fillRect(barX, barY, Math.min(barW, barW * s.grams / s.goal), barH);
-        ly += 44;
-      } else {
-        ly += 34;
-      }
-    }
-
-    // Nutrient table
-    let y = Math.max(ly + 20, 240);
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 14px sans-serif";
-    ctx.fillText("Alle voedingswaarden", 20, y);
-    y += 8;
-    ctx.font = "13px sans-serif";
-    for (const [key, meta] of nutrientEntries) {
-      const raw = totals[key] || 0;
-      const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
-      const value = raw * factor;
-      y += rowH;
-      ctx.fillStyle = "#333";
-      ctx.fillText(meta.label, 20, y);
-      ctx.fillStyle = "#888";
-      ctx.textAlign = "right";
-      ctx.fillText(`${value.toFixed(1)} ${meta.unit}`, W - 20, y);
-      ctx.textAlign = "left";
-      // Divider
-      ctx.strokeStyle = "#eee";
-      ctx.beginPath();
-      ctx.moveTo(20, y + 8);
-      ctx.lineTo(W - 20, y + 8);
-      ctx.stroke();
-    }
-
-    // Items
-    y += 30;
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 14px sans-serif";
-    ctx.fillText(`Gelogde items (${items.length})`, 20, y);
-    y += 8;
-    ctx.font = "13px sans-serif";
-    for (const item of items) {
-      const kcalVal = itemKcal(item);
-      y += rowH;
-      ctx.fillStyle = "#333";
-      const name = item.name.length > 40 ? item.name.substring(0, 37) + "..." : item.name;
-      ctx.fillText(name, 20, y);
-      ctx.fillStyle = "#888";
-      ctx.textAlign = "right";
-      ctx.fillText(`${item.grams}g · ${Math.round(kcalVal)} kcal`, W - 20, y);
-      ctx.textAlign = "left";
-      ctx.strokeStyle = "#eee";
-      ctx.beginPath();
-      ctx.moveTo(20, y + 8);
-      ctx.lineTo(W - 20, y + 8);
-      ctx.stroke();
-    }
-
-    // Show inline for long-press save / share
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      const dataUrl = canvas.toDataURL("image/png");
-      this._exportImageUrl = dataUrl;
-      this.requestUpdate();
-    }, "image/png");
-  }
-
-  private _downloadExportImage(): void {
-    if (!this._exportImageUrl) return;
-    const a = document.createElement("a");
-    a.href = this._exportImageUrl;
-    a.download = `voedingslog-${this._selectedPerson}-${this._selectedDate}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  private async _shareExportImage(): Promise<void> {
-    if (!this._exportImageUrl) return;
-    try {
-      const res = await fetch(this._exportImageUrl);
-      const blob = await res.blob();
-      const file = new File([blob], `voedingslog-${this._selectedPerson}-${this._selectedDate}.png`, { type: "image/png" });
-      await navigator.share({ files: [file] });
-    } catch (e) {
-      // User cancelled or share not supported — fall back to download
-      this._downloadExportImage();
-    }
-  }
 
   private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {
     const fileChangeHandler = purpose === "barcode"
@@ -1101,147 +787,6 @@ export class VoedingslogPanel extends LitElement {
 
   // ── Meals dialogs ────────────────────────────────────────────────
 
-  private _renderMealsDialog(): TemplateResult {
-    return html`
-      <div class="dialog-header">
-        <h2>Maaltijden</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${this._meals.length === 0
-          ? html`<p class="empty-hint">Nog geen maaltijden. Maak een maaltijd aan om snel te kunnen loggen.</p>`
-          : this._meals.map(
-              (meal) => html`
-                <div class="meal-item">
-                  <div class="meal-info" @click=${() => this._logMeal(meal)}>
-                    <span class="meal-name">${meal.name}</span>
-                    <span class="meal-meta">
-                      ${meal.ingredients.length} ingrediënten · ${Math.round(meal.total_grams)}g totaal ·
-                      ${Math.round((meal.nutrients_per_100g?.["energy-kcal_100g"] || 0) * meal.total_grams / 100)} kcal
-                    </span>
-                  </div>
-                  <button class="item-edit" @click=${() => this._openMealEditor(meal)}>
-                    <ha-icon icon="mdi:pencil"></ha-icon>
-                  </button>
-                  <button class="item-delete" @click=${() => this._deleteMeal(meal.id)}>
-                    <ha-icon icon="mdi:close"></ha-icon>
-                  </button>
-                </div>
-              `
-            )}
-        <button class="btn-primary btn-confirm" style="margin-top:12px" @click=${() => this._openMealEditor(null)}>
-          <ha-icon icon="mdi:plus"></ha-icon>
-          Nieuwe maaltijd
-        </button>
-      </div>
-    `;
-  }
-
-  private _renderMealEditDialog(): TemplateResult {
-    const meal = this._editingMeal;
-    const ingredients = meal?.ingredients || [];
-    return html`
-      <div class="dialog-header">
-        <h2>${meal?.id ? "Maaltijd bewerken" : "Nieuwe maaltijd"}</h2>
-        <button class="close-btn" @click=${() => { this._dialogMode = "meals"; this._editingMeal = null; }}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="form-field">
-          <label>Naam</label>
-          <input
-            type="text"
-            id="meal-name-input"
-            .value=${meal?.name || ""}
-            placeholder="Bijv. Macaroni"
-          />
-        </div>
-
-        <div class="form-field">
-          <label>Standaard portie (gram)</label>
-          <input
-            type="number"
-            id="meal-portion-input"
-            .value=${String(meal?.preferred_portion || "")}
-            placeholder="Bijv. 400"
-            min="1"
-            step="1"
-            inputmode="numeric"
-          />
-        </div>
-
-        <div class="meal-ingredients-section">
-          <label class="section-label">Ingrediënten</label>
-          ${ingredients.map(
-            (ing, idx) => html`
-              <div class="ingredient-row">
-                <span class="ingredient-name">${ing.name}</span>
-                <input
-                  type="number"
-                  class="ingredient-grams-input"
-                  .value=${String(ing.grams)}
-                  min="1"
-                  step="1"
-                  inputmode="numeric"
-                  @change=${(e: Event) => this._updateIngredientGrams(idx, parseFloat((e.target as HTMLInputElement).value))}
-                />
-                <span class="ingredient-unit">g</span>
-                <button class="item-delete" @click=${() => this._removeMealIngredient(idx)}>
-                  <ha-icon icon="mdi:close"></ha-icon>
-                </button>
-              </div>
-            `
-          )}
-
-          <div class="add-ingredient">
-            <div class="input-row">
-              <input
-                type="text"
-                id="ingredient-search"
-                placeholder="Zoek ingrediënt..."
-                .value=${this._mealIngredientSearch}
-                @input=${(e: Event) => {
-                  this._mealIngredientSearch = (e.target as HTMLInputElement).value;
-                }}
-                @keydown=${(e: KeyboardEvent) => {
-                  if (e.key === "Enter") this._searchMealIngredient();
-                }}
-              />
-              <button class="btn-primary" @click=${() => this._searchMealIngredient()}>Zoek</button>
-            </div>
-            ${this._searching
-              ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Zoeken...</div>`
-              : nothing}
-            <div class="search-results">
-              ${this._mealIngredientResults.map(
-                (p) => html`
-                  <div class="search-result" @click=${() => this._addMealIngredient(p)}>
-                    <span class="result-name">${p.name}</span>
-                    <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
-                  </div>
-                `
-              )}
-            </div>
-          </div>
-        </div>
-
-        ${!!this._config?.ai_task_entity ? html`
-          <button class="btn-secondary btn-confirm" @click=${() => { this._dialogMode = "meal-ai-text" as DialogMode; }}>
-            <ha-icon icon="mdi:text-box-outline"></ha-icon>
-            AI ingrediënten invoer
-          </button>
-        ` : nothing}
-
-        <button class="btn-primary btn-confirm" @click=${() => this._saveMeal()}>
-          <ha-icon icon="mdi:check"></ha-icon>
-          Opslaan
-        </button>
-      </div>
-    `;
-  }
 
   // ── Actions ──────────────────────────────────────────────────────
 
@@ -1431,143 +976,15 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private async _openMeals(): Promise<void> {
-    try {
-      const res = await this.hass.callWS<GetMealsResponse>({ type: "voedingslog/get_meals" });
-      this._meals = res.meals || [];
-    } catch (e) {
-      console.error("Failed to load meals:", e);
-    }
-    this._dialogMode = "meals";
+
+  _addMealIngredientFromAi(ingredient: import("./types.js").MealIngredient): void {
+    this._meals.addIngredientFromAi(ingredient);
   }
 
-  private _openMealEditor(meal: CustomMeal | null): void {
-    this._editingMeal = meal
-      ? { ...meal, ingredients: [...meal.ingredients] }
-      : { id: "", name: "", ingredients: [], total_grams: 0, nutrients_per_100g: {} };
-    this._mealIngredientSearch = "";
-    this._mealIngredientResults = [];
-    this._dialogMode = "meal-edit";
-  }
-
-  private _logMeal(meal: CustomMeal): void {
-    const defaultGrams = meal.preferred_portion || meal.total_grams;
-    const portions: Portion[] = [];
-    if (meal.preferred_portion) {
-      portions.push({ label: `Portie (${Math.round(meal.preferred_portion)}g)`, grams: meal.preferred_portion });
-    }
-    portions.push({ label: `Heel recept (${Math.round(meal.total_grams)}g)`, grams: meal.total_grams });
-    if (defaultGrams !== 100 && meal.total_grams !== 100) {
-      portions.push({ label: "100g", grams: 100 });
-    }
-
-    const product: Product = {
-      name: meal.name,
-      serving_grams: defaultGrams,
-      portions,
-      nutrients: meal.nutrients_per_100g,
-    };
+  _selectProduct(product: Product): void {
     this._pendingProduct = product;
+    this._stopCamera();
     this._dialogMode = "weight";
-  }
-
-  private async _searchMealIngredient(): Promise<void> {
-    const query = this._mealIngredientSearch.trim();
-    if (!query) return;
-    this._searching = true;
-    try {
-      const res = await this.hass.callWS<SearchProductsResponse>({
-        type: "voedingslog/search_products",
-        query,
-      });
-      this._mealIngredientResults = res.products || [];
-    } catch (e) {
-      console.error("Ingredient search failed:", e);
-    }
-    this._searching = false;
-  }
-
-  private _addMealIngredient(product: Product): void {
-    if (!this._editingMeal) return;
-    const grams = parseFloat(prompt(`Hoeveel gram ${product.name}?`, String(product.serving_grams || 100)) || "");
-    if (!grams || grams <= 0) return;
-
-    const ingredient: MealIngredient = {
-      name: product.name,
-      grams,
-      nutrients: product.nutrients,
-    };
-    this._editingMeal = {
-      ...this._editingMeal,
-      ingredients: [...this._editingMeal.ingredients, ingredient],
-    };
-    this._mealIngredientResults = [];
-    this._mealIngredientSearch = "";
-  }
-
-  private _updateIngredientGrams(index: number, grams: number): void {
-    if (!this._editingMeal || !grams || grams <= 0) return;
-    const ingredients = [...this._editingMeal.ingredients];
-    ingredients[index] = { ...ingredients[index], grams };
-    this._editingMeal = { ...this._editingMeal, ingredients };
-  }
-
-  _addMealIngredientFromAi(ingredient: MealIngredient): void {
-    if (!this._editingMeal) return;
-    this._editingMeal = {
-      ...this._editingMeal,
-      ingredients: [...this._editingMeal.ingredients, ingredient],
-    };
-  }
-
-  private _removeMealIngredient(index: number): void {
-    if (!this._editingMeal) return;
-    const ingredients = [...this._editingMeal.ingredients];
-    ingredients.splice(index, 1);
-    this._editingMeal = { ...this._editingMeal, ingredients };
-  }
-
-  private async _saveMeal(): Promise<void> {
-    if (!this._editingMeal) return;
-    const nameInput = this.shadowRoot?.getElementById("meal-name-input") as HTMLInputElement | null;
-    const name = nameInput?.value?.trim();
-    if (!name) {
-      alert("Vul een naam in.");
-      return;
-    }
-    if (this._editingMeal.ingredients.length === 0) {
-      alert("Voeg minimaal één ingrediënt toe.");
-      return;
-    }
-
-    const portionInput = this.shadowRoot?.getElementById("meal-portion-input") as HTMLInputElement | null;
-    const preferredPortion = parseFloat(portionInput?.value || "") || undefined;
-
-    try {
-      await this.hass.callWS<SaveMealResponse>({
-        type: "voedingslog/save_meal",
-        meal: {
-          id: this._editingMeal.id || undefined,
-          name,
-          ingredients: this._editingMeal.ingredients,
-          preferred_portion: preferredPortion,
-        },
-      });
-      await this._openMeals(); // Refresh list and go back
-    } catch (e) {
-      console.error("Failed to save meal:", e);
-      alert("Fout bij opslaan.");
-    }
-  }
-
-  private async _deleteMeal(mealId: string): Promise<void> {
-    if (!confirm("Maaltijd verwijderen?")) return;
-    try {
-      await this.hass.callWS({ type: "voedingslog/delete_meal", meal_id: mealId });
-      this._meals = this._meals.filter((m) => m.id !== mealId);
-    } catch (e) {
-      console.error("Failed to delete meal:", e);
-    }
   }
 
   _closeDialog(): void {
@@ -1580,11 +997,9 @@ export class VoedingslogPanel extends LitElement {
     this._analyzing = false;
     this._scanning = false;
     this._scanFailed = false;
-    this._editingMeal = null;
-    this._mealIngredientSearch = "";
-    this._mealIngredientResults = [];
     this._prefillProduct = null;
-    this._exportImageUrl = null;
+    this._meals.reset();
+    this._export.reset();
     this._ai.reset();
   }
 
@@ -1718,11 +1133,6 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private _selectProduct(product: Product): void {
-    this._pendingProduct = product;
-    this._stopCamera();
-    this._dialogMode = "weight";
-  }
 
   private async _handlePhotoCapture(e: Event): Promise<void> {
     const b64 = await readFileAsBase64(e);
