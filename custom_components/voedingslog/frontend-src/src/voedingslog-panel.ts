@@ -748,6 +748,14 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _startLiveScanner(): Promise<void> {
+    // On mobile, skip html5-qrcode (needs light DOM positioning which is unreliable)
+    // and go straight to camera capture mode
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (isMobile) {
+      this._scanFailed = true;
+      return;
+    }
+
     try {
       this._cleanupScannerContainer();
 
