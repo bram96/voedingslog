@@ -118,6 +118,12 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  private _toggleMenu(): void {
+    this.dispatchEvent(
+      new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true })
+    );
+  }
+
   private _changeDate(delta: number): void {
     const d = new Date(this._selectedDate);
     d.setDate(d.getDate() + delta);
@@ -146,6 +152,11 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="header">
         <div class="header-top">
+          ${this.narrow
+            ? html`<button class="menu-btn" @click=${() => this._toggleMenu()}>
+                <ha-icon icon="mdi:menu"></ha-icon>
+              </button>`
+            : nothing}
           <h1>Voedingslog</h1>
         </div>
         <div class="date-nav">
@@ -965,6 +976,19 @@ export class VoedingslogPanel extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+    .menu-btn {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 4px;
+      margin-right: 8px;
+      display: flex;
+      align-items: center;
+    }
+    .menu-btn ha-icon {
+      --mdc-icon-size: 24px;
     }
     .header h1 {
       margin: 0;
