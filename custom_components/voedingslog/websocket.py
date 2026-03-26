@@ -27,7 +27,6 @@ from .const import (
     WS_GET_MEALS,
     WS_SAVE_MEAL,
     WS_DELETE_MEAL,
-    WS_EXPORT_IMAGE,
     WS_GET_FAVORITES,
     WS_TOGGLE_FAVORITE,
 )
