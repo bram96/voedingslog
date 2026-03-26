@@ -113,10 +113,11 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         grams: float,
         nutrients: dict[str, float],
         category: str | None = None,
+        day: str | None = None,
     ):
         """Log a product with manually provided values."""
         product = {"name": name, "serving_grams": grams, "nutrients": nutrients}
-        await self._add_item(person, product, grams, category)
+        await self._add_item(person, product, grams, category, day)
 
     async def edit_item(
         self,
@@ -192,18 +193,18 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
     # ------------------------------------------------------------------
 
     async def _add_item(
-        self, person: str, product: dict, grams: float, category: str | None = None
+        self, person: str, product: dict, grams: float, category: str | None = None, day: str | None = None
     ):
         if person not in self._logs:
             _LOGGER.error("Unknown person: %s", person)
             return
-        today = str(date.today())
-        if today not in self._logs[person]:
-            self._logs[person][today] = []
+        target_day = day or str(date.today())
+        if target_day not in self._logs[person]:
+            self._logs[person][target_day] = []
 
         cat = category if category in MEAL_CATEGORIES else _default_category()
 
-        self._logs[person][today].append(
+        self._logs[person][target_day].append(
             {
                 "name": product["name"],
                 "grams": grams,
@@ -212,7 +213,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 "category": cat,
             }
         )
-        _LOGGER.info("Logged: %s (%.0fg) for %s [%s]", product["name"], grams, person, cat)
+        _LOGGER.info("Logged: %s (%.0fg) for %s [%s] on %s", product["name"], grams, person, cat, target_day)
         await self.async_refresh()
         await self._async_save()
 

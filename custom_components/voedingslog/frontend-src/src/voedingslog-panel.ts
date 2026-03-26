@@ -124,6 +124,13 @@ export class VoedingslogPanel extends LitElement {
     this._loadLog();
   }
 
+  private _openDatePicker(): void {
+    const input = this.shadowRoot?.getElementById("header-date-picker") as HTMLInputElement | null;
+    if (input) {
+      input.showPicker();
+    }
+  }
+
   private _formatDateLabel(dateStr: string): string {
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
@@ -144,17 +151,19 @@ export class VoedingslogPanel extends LitElement {
           <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
             <ha-icon icon="mdi:chevron-left"></ha-icon>
           </button>
-          <label class="date-label">
+          <button class="date-picker-btn" @click=${() => this._openDatePicker()}>
             <span class="date-text">${this._formatDateLabel(this._selectedDate)}</span>
-            <input
-              type="date"
-              .value=${this._selectedDate}
-              @change=${(e: Event) => {
-                this._selectedDate = (e.target as HTMLInputElement).value;
-                this._loadLog();
-              }}
-            />
-          </label>
+          </button>
+          <input
+            type="date"
+            id="header-date-picker"
+            .value=${this._selectedDate}
+            @change=${(e: Event) => {
+              this._selectedDate = (e.target as HTMLInputElement).value;
+              this._loadLog();
+            }}
+            style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;"
+          />
           <button class="date-nav-btn" @click=${() => this._changeDate(1)}>
             <ha-icon icon="mdi:chevron-right"></ha-icon>
           </button>
@@ -476,6 +485,15 @@ export class VoedingslogPanel extends LitElement {
           </select>
         </div>
 
+        <div class="date-section-dialog">
+          <label>Datum</label>
+          <input
+            type="date"
+            id="log-date-input"
+            .value=${this._selectedDate}
+          />
+        </div>
+
         <button class="btn-primary btn-confirm" @click=${() => this._confirmLog()}>
           <ha-icon icon="mdi:plus"></ha-icon>
           Toevoegen
@@ -534,6 +552,15 @@ export class VoedingslogPanel extends LitElement {
               `
             )}
           </select>
+        </div>
+
+        <div class="date-section-dialog">
+          <label>Datum</label>
+          <input
+            type="date"
+            id="edit-date-input"
+            .value=${this._selectedDate}
+          />
         </div>
 
         <button class="btn-primary btn-confirm" @click=${() => this._confirmEdit()}>
@@ -757,8 +784,12 @@ export class VoedingslogPanel extends LitElement {
     const catSelect = this.shadowRoot?.getElementById(
       "category-select"
     ) as HTMLSelectElement | null;
+    const dateInput = this.shadowRoot?.getElementById(
+      "log-date-input"
+    ) as HTMLInputElement | null;
     const grams = parseFloat(gramsInput?.value || "") || 100;
     const category = (catSelect?.value as MealCategory) || defaultCategory();
+    const logDate = dateInput?.value || this._selectedDate;
 
     try {
       await this.hass.callWS({ type: "voedingslog/log_product",
@@ -767,7 +798,10 @@ export class VoedingslogPanel extends LitElement {
         grams,
         nutrients: p.nutrients || {},
         category,
+        date: logDate,
       });
+      // Switch to the date we logged to
+      this._selectedDate = logDate;
       this._closeDialog();
       await this._loadLog();
     } catch (e) {
@@ -786,18 +820,41 @@ export class VoedingslogPanel extends LitElement {
     const catSelect = this.shadowRoot?.getElementById(
       "edit-category-select"
     ) as HTMLSelectElement | null;
+    const dateInput = this.shadowRoot?.getElementById(
+      "edit-date-input"
+    ) as HTMLInputElement | null;
     const grams = parseFloat(gramsInput?.value || "") || item.grams;
     const category = (catSelect?.value as MealCategory) || item.category;
+    const newDate = dateInput?.value || this._selectedDate;
 
     try {
-      await this.hass.callWS({
-        type: "voedingslog/edit_item",
-        person: this._selectedPerson,
-        index: item._index,
-        grams,
-        category,
-        date: this._selectedDate,
-      });
+      if (newDate !== this._selectedDate) {
+        // Moving to a different date: delete from old date, add to new date
+        await this.hass.callWS({
+          type: "voedingslog/delete_item",
+          person: this._selectedPerson,
+          index: item._index,
+          date: this._selectedDate,
+        });
+        await this.hass.callWS({
+          type: "voedingslog/log_product",
+          person: this._selectedPerson,
+          name: item.name,
+          grams,
+          nutrients: item.nutrients || {},
+          category,
+          date: newDate,
+        });
+      } else {
+        await this.hass.callWS({
+          type: "voedingslog/edit_item",
+          person: this._selectedPerson,
+          index: item._index,
+          grams,
+          category,
+          date: this._selectedDate,
+        });
+      }
       this._closeDialog();
       await this._loadLog();
     } catch (e) {
@@ -884,31 +941,23 @@ export class VoedingslogPanel extends LitElement {
     .date-nav-btn ha-icon {
       --mdc-icon-size: 22px;
     }
-    .date-label {
+    .date-picker-btn {
       flex: 1;
-      position: relative;
       text-align: center;
       cursor: pointer;
       background: rgba(255, 255, 255, 0.15);
+      border: none;
+      color: inherit;
       border-radius: 8px;
       padding: 8px 12px;
       transition: background 0.2s;
     }
-    .date-label:hover {
+    .date-picker-btn:hover {
       background: rgba(255, 255, 255, 0.25);
     }
     .date-text {
       font-size: 15px;
       font-weight: 500;
-    }
-    .date-label input[type="date"] {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-      -webkit-appearance: none;
     }
     .person-tabs {
       display: flex;
@@ -1279,11 +1328,13 @@ export class VoedingslogPanel extends LitElement {
       padding: 2px 0;
     }
     .weight-section,
-    .category-section-dialog {
+    .category-section-dialog,
+    .date-section-dialog {
       margin-bottom: 16px;
     }
     .weight-section label,
-    .category-section-dialog label {
+    .category-section-dialog label,
+    .date-section-dialog label {
       display: block;
       font-size: 13px;
       color: var(--secondary-text-color);
@@ -1311,7 +1362,8 @@ export class VoedingslogPanel extends LitElement {
       border-color: var(--primary-color);
     }
     .weight-section input,
-    .category-section-dialog select {
+    .category-section-dialog select,
+    .date-section-dialog input {
       width: 100%;
       padding: 10px 12px;
       border: 1px solid var(--divider-color);

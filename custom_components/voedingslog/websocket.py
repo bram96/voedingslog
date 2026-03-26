@@ -152,6 +152,7 @@ async def ws_search_products(hass, connection, msg):
         vol.Required("grams"): vol.Coerce(float),
         vol.Required("nutrients"): dict,
         vol.Required("category"): vol.In(MEAL_CATEGORIES),
+        vol.Optional("date"): str,
     }
 )
 @websocket_api.async_response
@@ -168,6 +169,7 @@ async def ws_log_product(hass, connection, msg):
         grams=msg["grams"],
         nutrients=msg["nutrients"],
         category=msg["category"],
+        day=msg.get("date"),
     )
     connection.send_result(msg["id"], {"success": True})
 
