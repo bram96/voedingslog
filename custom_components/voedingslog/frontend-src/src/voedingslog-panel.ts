@@ -52,7 +52,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _searchQuery = "";
   @state() private _scanning = false;
   @state() private _scanFailed = false;
-  @state() private _photoCameraActive = false;
+  @state() _photoCameraActive = false;
   @state() private _prefillProduct: Product | null = null;
   @state() _analyzing = false;
   @state() private _searching = false;
@@ -1373,7 +1373,7 @@ export class VoedingslogPanel extends LitElement {
     this._photoPosFrame = requestAnimationFrame(() => this._trackPhotoCameraPosition());
   }
 
-  private async _startPhotoCamera(): Promise<void> {
+  async _startPhotoCamera(): Promise<void> {
     try {
       this._cleanupPhotoCameraContainer();
       // Set active first so the placeholder renders
@@ -1446,7 +1446,7 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private _stopPhotoCamera(): void {
+  _stopPhotoCamera(): void {
     this._photoCameraActive = false;
     if (this._photoHtml5Qrcode) {
       this._photoHtml5Qrcode.stop().catch(() => {}).finally(() => {

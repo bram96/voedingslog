@@ -20,12 +20,15 @@ export interface AiControllerHost {
   _config: VoedingslogConfig | null;
   _selectedPerson: string | null;
   _analyzing: boolean;
+  _photoCameraActive: boolean;
   requestUpdate(): void;
   _closeDialog(): void;
   _loadLog(): Promise<void>;
   _openFileInput(id: string): void;
   _setDialogMode(mode: string): void;
   _addMealIngredientFromAi(ingredient: MealIngredient): void;
+  _startPhotoCamera(): Promise<void>;
+  _stopPhotoCamera(): void;
 }
 
 /** Whether the AI validation flow is adding to a log or building a meal. */
@@ -124,17 +127,33 @@ export class AiController {
         <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
           Maak een foto van je handgeschreven lijst. AI leest de tekst en zoekt producten op.
         </p>
-        <input type="file" accept="image/*"
-          id="file-input-handwriting"
-          @change=${(e: Event) => this.handleHandwritingPhoto(e)} style="display:none" />
         ${h._analyzing
-          ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
-          : html`
-            <button class="btn-primary photo-btn" @click=${() => h._openFileInput("file-input-handwriting")}>
-              <ha-icon icon="mdi:camera"></ha-icon>
-              Foto maken of kiezen
-            </button>
-          `}
+          ? html`<div class="analyzing">
+              <ha-circular-progress indeterminate></ha-circular-progress>
+              <p>Analyseren...</p>
+            </div>`
+          : h._photoCameraActive
+            ? html`
+              <div id="photo-camera-placeholder" class="scanner-area"></div>
+              <button class="btn-primary camera-capture-btn" style="margin-top:8px" @click=${() => this._captureForHandwriting()}>
+                <ha-icon icon="mdi:camera"></ha-icon> Maak foto
+              </button>
+            `
+            : html`
+              <p class="photo-hint">Maak een foto of kies een afbeelding van je handgeschreven lijst.</p>
+              <div class="photo-buttons">
+                <button class="btn-primary photo-btn" @click=${() => h._startPhotoCamera()}>
+                  <ha-icon icon="mdi:camera"></ha-icon> Open camera
+                </button>
+                <button class="btn-secondary photo-btn" @click=${() => h._openFileInput("file-input-handwriting")}>
+                  <ha-icon icon="mdi:image"></ha-icon> Kies afbeelding
+                </button>
+              </div>
+              <input type="file" accept="image/*"
+                id="file-input-handwriting"
+                @change=${(e: Event) => this.handleHandwritingPhoto(e)}
+                style="display:none" />
+            `}
       </div>
     `;
   }
@@ -296,22 +315,45 @@ export class AiController {
     }
   }
 
-  async handleHandwritingPhoto(e: Event): Promise<void> {
+  async _captureForHandwriting(): Promise<void> {
     const h = this.host;
+    // Find the video element created by html5-qrcode in the light DOM
+    const containerId = "vl-photo-camera";
+    const container = document.getElementById(containerId);
+    const video = container?.querySelector("video");
+    if (!video) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+
+    h._stopPhotoCamera();
+    const b64 = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+    await this._processHandwritingB64(b64);
+  }
+
+  async handleHandwritingPhoto(e: Event): Promise<void> {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
 
+    const b64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    await this._processHandwritingB64(b64);
+  }
+
+  private async _processHandwritingB64(b64: string): Promise<void> {
+    const h = this.host;
     h._analyzing = true;
     h.requestUpdate();
     try {
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
       const res = await h.hass.callWS<ParseFoodResponse>({ type: "voedingslog/parse_handwriting", photo_b64: b64 });
       h._analyzing = false;
       if (res.products?.length) {
@@ -319,6 +361,7 @@ export class AiController {
         this.validateIndex = 0;
         this.validateSearch = "";
         this.validateSearchResults = [];
+        this._validateMode = "log";
         h._setDialogMode("ai-validate");
       } else {
         alert("Geen producten herkend. Probeer een duidelijkere foto.");
