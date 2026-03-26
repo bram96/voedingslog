@@ -117,20 +117,47 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  private _changeDate(delta: number): void {
+    const d = new Date(this._selectedDate);
+    d.setDate(d.getDate() + delta);
+    this._selectedDate = d.toISOString().split("T")[0];
+    this._loadLog();
+  }
+
+  private _formatDateLabel(dateStr: string): string {
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    if (dateStr === today) return "Vandaag";
+    if (dateStr === yesterday) return "Gisteren";
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+  }
+
   private _renderHeader(): TemplateResult {
     const persons = this._config?.persons || [];
     return html`
       <div class="header">
         <div class="header-top">
           <h1>Voedingslog</h1>
-          <input
-            type="date"
-            .value=${this._selectedDate}
-            @change=${(e: Event) => {
-              this._selectedDate = (e.target as HTMLInputElement).value;
-              this._loadLog();
-            }}
-          />
+        </div>
+        <div class="date-nav">
+          <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
+            <ha-icon icon="mdi:chevron-left"></ha-icon>
+          </button>
+          <label class="date-label">
+            <span class="date-text">${this._formatDateLabel(this._selectedDate)}</span>
+            <input
+              type="date"
+              .value=${this._selectedDate}
+              @change=${(e: Event) => {
+                this._selectedDate = (e.target as HTMLInputElement).value;
+                this._loadLog();
+              }}
+            />
+          </label>
+          <button class="date-nav-btn" @click=${() => this._changeDate(1)}>
+            <ha-icon icon="mdi:chevron-right"></ha-icon>
+          </button>
         </div>
         ${persons.length > 1
           ? html`<div class="person-tabs">
@@ -831,14 +858,55 @@ export class VoedingslogPanel extends LitElement {
       font-size: 20px;
       font-weight: 500;
     }
-    .header input[type="date"] {
-      background: rgba(255, 255, 255, 0.2);
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .date-nav-btn {
+      background: rgba(255, 255, 255, 0.15);
       border: none;
       color: inherit;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-size: 14px;
+      padding: 6px;
+      border-radius: 50%;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .date-nav-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .date-nav-btn ha-icon {
+      --mdc-icon-size: 22px;
+    }
+    .date-label {
+      flex: 1;
+      position: relative;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 8px 12px;
+      transition: background 0.2s;
+    }
+    .date-label:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .date-text {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .date-label input[type="date"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      -webkit-appearance: none;
     }
     .person-tabs {
       display: flex;

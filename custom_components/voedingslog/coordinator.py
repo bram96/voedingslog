@@ -7,6 +7,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN, NUTRIENTS, MEAL_CATEGORIES
@@ -14,7 +15,8 @@ from .open_food_facts import lookup_by_barcode, search_by_name
 
 _LOGGER = logging.getLogger(__name__)
 
-EMPTY_TOTALS = {k: 0.0 for k in NUTRIENTS}
+STORAGE_KEY = f"{DOMAIN}.logs"
+STORAGE_VERSION = 1
 
 
 def _default_category() -> str:
@@ -30,7 +32,7 @@ def _default_category() -> str:
 
 
 class VoedingslogCoordinator(DataUpdateCoordinator):
-    """Keeps daily nutrition logs for all persons."""
+    """Keeps daily nutrition logs for all persons, persisted to disk."""
 
     def __init__(self, hass: HomeAssistant, persons: list[str]):
         super().__init__(
@@ -42,6 +44,20 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         # { "Jan": { "2024-01-15": [ {name, grams, nutrients, time, category}, ... ] } }
         self._logs: dict[str, dict[str, list]] = {p: {} for p in persons}
         self._session: aiohttp.ClientSession | None = None
+        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+
+    async def async_load_from_store(self) -> None:
+        """Load persisted logs from disk."""
+        data = await self._store.async_load()
+        if data and isinstance(data, dict):
+            for person in self.persons:
+                if person in data:
+                    self._logs[person] = data[person]
+            _LOGGER.info("Loaded persisted logs for %d persons", len(self.persons))
+
+    async def _async_save(self) -> None:
+        """Persist current logs to disk."""
+        await self._store.async_save(self._logs)
 
     async def _async_update_data(self) -> dict:
         """Calculate totals for today for all persons."""
@@ -122,6 +138,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             item["category"] = category
         _LOGGER.info("Edited: %s for %s (%.0fg, %s)", item["name"], person, item["grams"], item["category"])
         await self.async_refresh()
+        await self._async_save()
         return True
 
     async def lookup_barcode(self, barcode: str) -> dict | None:
@@ -142,6 +159,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             removed = log.pop(index)
             _LOGGER.info("Deleted: %s for %s", removed["name"], person)
             await self.async_refresh()
+            await self._async_save()
 
     async def delete_last(self, person: str):
         """Delete the last item from today's log."""
@@ -151,12 +169,14 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             removed = log.pop()
             _LOGGER.info("Deleted: %s for %s", removed["name"], person)
             await self.async_refresh()
+            await self._async_save()
 
     async def reset_day(self, person: str, day: str | None = None):
         """Clear the log for a day (default: today)."""
         day = day or str(date.today())
         self._logs[person][day] = []
         await self.async_refresh()
+        await self._async_save()
 
     def get_log_for_date(self, person: str, day: str | None = None) -> list[dict]:
         """Return the log for a specific date."""
@@ -194,14 +214,16 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         )
         _LOGGER.info("Logged: %s (%.0fg) for %s [%s]", product["name"], grams, person, cat)
         await self.async_refresh()
+        await self._async_save()
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
-                headers={"User-Agent": "HomeAssistant-Voedingslog/1.0"}
+                headers={"User-Agent": "HomeAssistant-Voedingslog/2.0"}
             )
         return self._session
 
     async def async_shutdown(self):
+        await self._async_save()
         if self._session and not self._session.closed:
             await self._session.close()
