@@ -24,9 +24,6 @@ NUTRIENTS = {
     "vitamin-d_100g":       {"label": "Vitamine D",        "unit": "µg",   "icon": "mdi:white-balance-sunny", "factor": 1000000},
 }
 
-# Backwards compat alias used by sensor.py (until migrated)
-NUTRIENTEN = NUTRIENTS
-
 # Meal categories
 MEAL_CATEGORIES = ["breakfast", "lunch", "dinner", "snack"]
 MEAL_CATEGORY_LABELS = {
@@ -42,10 +39,6 @@ SERVICE_LOG_BARCODE = "log_barcode"
 SERVICE_RESET_DAY = "reset_dag"
 SERVICE_DELETE_LAST = "verwijder_laatste"
 
-# Backwards compat aliases
-SERVICE_RESET_DAG = SERVICE_RESET_DAY
-SERVICE_VERWIJDER_LOG = SERVICE_DELETE_LAST
-
 # WebSocket command types
 WS_GET_CONFIG = f"{DOMAIN}/get_config"
 WS_GET_LOG = f"{DOMAIN}/get_log"
@@ -56,8 +49,6 @@ WS_DELETE_ITEM = f"{DOMAIN}/delete_item"
 WS_RESET_DAY = f"{DOMAIN}/reset_day"
 WS_EDIT_ITEM = f"{DOMAIN}/edit_item"
 WS_ANALYZE_PHOTO = f"{DOMAIN}/analyze_photo"
-
-# Custom meals (recipes)
 WS_GET_MEALS = f"{DOMAIN}/get_meals"
 WS_SAVE_MEAL = f"{DOMAIN}/save_meal"
 WS_DELETE_MEAL = f"{DOMAIN}/delete_meal"

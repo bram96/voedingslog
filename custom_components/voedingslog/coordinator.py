@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, date
-from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -243,8 +243,6 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
 
     async def save_meal(self, meal: dict) -> dict:
         """Create or update a custom meal. Computes nutrients_per_100g from ingredients."""
-        import uuid
-
         ingredients = meal.get("ingredients", [])
         total_grams = sum(i.get("grams", 0) for i in ingredients)
 

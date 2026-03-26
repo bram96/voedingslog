@@ -54,10 +54,6 @@ async def search_by_name(session: aiohttp.ClientSession, name: str) -> list[dict
         return []
 
 
-# Backwards compat aliases
-zoek_op_barcode = lookup_by_barcode
-zoek_op_naam = search_by_name
-
 
 def _process_product(product: dict) -> dict:
     """Convert raw OFF data to our internal format."""
