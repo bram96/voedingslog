@@ -776,15 +776,15 @@ var VoedingslogPanel = class extends i4 {
     const hasAI = !!this._config?.ai_task_entity;
     return b2`
       <div class="actions">
-        <button class="action-btn" @click=${this._openBarcodeScanner}>
+        <button class="action-btn" @click=${() => this._openBarcodeScanner()}>
           <ha-icon icon="mdi:barcode-scan"></ha-icon>
           <span>Scan barcode</span>
         </button>
-        <button class="action-btn" @click=${this._openSearch}>
+        <button class="action-btn" @click=${() => this._openSearch()}>
           <ha-icon icon="mdi:magnify"></ha-icon>
           <span>Zoek product</span>
         </button>
-        <button class="action-btn" @click=${this._openPhotoCapture} ?disabled=${!hasAI}>
+        <button class="action-btn" @click=${() => this._openPhotoCapture()} ?disabled=${!hasAI}>
           <ha-icon icon="mdi:camera"></ha-icon>
           <span>Foto etiket</span>
         </button>
@@ -855,7 +855,7 @@ var VoedingslogPanel = class extends i4 {
   _renderDialog() {
     if (!this._dialogMode) return A;
     return b2`
-      <div class="dialog-overlay" @click=${this._closeDialog}>
+      <div class="dialog-overlay" @click=${() => this._closeDialog()}>
         <div class="dialog" @click=${(e5) => e5.stopPropagation()}>
           ${this._dialogMode === "barcode" ? this._renderBarcodeDialog() : A}
           ${this._dialogMode === "search" ? this._renderSearchDialog() : A}
@@ -869,7 +869,7 @@ var VoedingslogPanel = class extends i4 {
     return b2`
       <div class="dialog-header">
         <h2>Scan barcode</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -888,7 +888,7 @@ var VoedingslogPanel = class extends i4 {
       if (e5.key === "Enter") this._lookupManualBarcode();
     }}
             />
-            <button class="btn-primary" @click=${this._lookupManualBarcode}>Zoek</button>
+            <button class="btn-primary" @click=${() => this._lookupManualBarcode()}>Zoek</button>
           </div>
         </div>
       </div>
@@ -898,7 +898,7 @@ var VoedingslogPanel = class extends i4 {
     return b2`
       <div class="dialog-header">
         <h2>Zoek product</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -906,6 +906,7 @@ var VoedingslogPanel = class extends i4 {
         <div class="input-row">
           <input
             type="text"
+            id="search-input"
             placeholder="Productnaam..."
             .value=${this._searchQuery}
             @input=${(e5) => {
@@ -915,7 +916,7 @@ var VoedingslogPanel = class extends i4 {
       if (e5.key === "Enter") this._doSearch();
     }}
           />
-          <button class="btn-primary" @click=${this._doSearch}>Zoek</button>
+          <button class="btn-primary" @click=${() => this._doSearch()}>Zoek</button>
         </div>
         <div class="search-results">
           ${this._searchResults.map(
@@ -934,7 +935,7 @@ var VoedingslogPanel = class extends i4 {
     return b2`
       <div class="dialog-header">
         <h2>Foto van etiket</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -949,7 +950,7 @@ var VoedingslogPanel = class extends i4 {
                 accept="image/*"
                 capture="environment"
                 id="photo-input"
-                @change=${this._handlePhotoCapture}
+                @change=${(e5) => this._handlePhotoCapture(e5)}
                 style="display:none"
               />
               <button
@@ -969,7 +970,7 @@ var VoedingslogPanel = class extends i4 {
     return b2`
       <div class="dialog-header">
         <h2>${p3.name}</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -1014,7 +1015,7 @@ var VoedingslogPanel = class extends i4 {
           </select>
         </div>
 
-        <button class="btn-primary btn-confirm" @click=${this._confirmLog}>
+        <button class="btn-primary btn-confirm" @click=${() => this._confirmLog()}>
           <ha-icon icon="mdi:plus"></ha-icon>
           Toevoegen
         </button>
@@ -1118,15 +1119,21 @@ var VoedingslogPanel = class extends i4 {
     }
   }
   async _doSearch() {
-    if (!this._searchQuery.trim()) return;
+    const input = this.shadowRoot?.getElementById("search-input");
+    const query = (input?.value || this._searchQuery).trim();
+    if (!query) return;
     try {
       const res = await this.hass.callWS({
         type: "voedingslog/search_products",
-        query: this._searchQuery.trim()
+        query
       });
       this._searchResults = res.products || [];
+      if (this._searchResults.length === 0) {
+        this._searchResults = [];
+      }
     } catch (e5) {
       console.error("Search failed:", e5);
+      alert("Fout bij zoeken. Controleer de verbinding.");
     }
   }
   _selectProduct(product) {

@@ -163,15 +163,15 @@ export class VoedingslogPanel extends LitElement {
     const hasAI = !!this._config?.ai_task_entity;
     return html`
       <div class="actions">
-        <button class="action-btn" @click=${this._openBarcodeScanner}>
+        <button class="action-btn" @click=${() => this._openBarcodeScanner()}>
           <ha-icon icon="mdi:barcode-scan"></ha-icon>
           <span>Scan barcode</span>
         </button>
-        <button class="action-btn" @click=${this._openSearch}>
+        <button class="action-btn" @click=${() => this._openSearch()}>
           <ha-icon icon="mdi:magnify"></ha-icon>
           <span>Zoek product</span>
         </button>
-        <button class="action-btn" @click=${this._openPhotoCapture} ?disabled=${!hasAI}>
+        <button class="action-btn" @click=${() => this._openPhotoCapture()} ?disabled=${!hasAI}>
           <ha-icon icon="mdi:camera"></ha-icon>
           <span>Foto etiket</span>
         </button>
@@ -258,7 +258,7 @@ export class VoedingslogPanel extends LitElement {
   private _renderDialog(): TemplateResult | typeof nothing {
     if (!this._dialogMode) return nothing;
     return html`
-      <div class="dialog-overlay" @click=${this._closeDialog}>
+      <div class="dialog-overlay" @click=${() => this._closeDialog()}>
         <div class="dialog" @click=${(e: Event) => e.stopPropagation()}>
           ${this._dialogMode === "barcode" ? this._renderBarcodeDialog() : nothing}
           ${this._dialogMode === "search" ? this._renderSearchDialog() : nothing}
@@ -273,7 +273,7 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-header">
         <h2>Scan barcode</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -294,7 +294,7 @@ export class VoedingslogPanel extends LitElement {
                 if (e.key === "Enter") this._lookupManualBarcode();
               }}
             />
-            <button class="btn-primary" @click=${this._lookupManualBarcode}>Zoek</button>
+            <button class="btn-primary" @click=${() => this._lookupManualBarcode()}>Zoek</button>
           </div>
         </div>
       </div>
@@ -305,7 +305,7 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-header">
         <h2>Zoek product</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -313,6 +313,7 @@ export class VoedingslogPanel extends LitElement {
         <div class="input-row">
           <input
             type="text"
+            id="search-input"
             placeholder="Productnaam..."
             .value=${this._searchQuery}
             @input=${(e: Event) => {
@@ -322,7 +323,7 @@ export class VoedingslogPanel extends LitElement {
               if (e.key === "Enter") this._doSearch();
             }}
           />
-          <button class="btn-primary" @click=${this._doSearch}>Zoek</button>
+          <button class="btn-primary" @click=${() => this._doSearch()}>Zoek</button>
         </div>
         <div class="search-results">
           ${this._searchResults.map(
@@ -342,7 +343,7 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-header">
         <h2>Foto van etiket</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -359,7 +360,7 @@ export class VoedingslogPanel extends LitElement {
                 accept="image/*"
                 capture="environment"
                 id="photo-input"
-                @change=${this._handlePhotoCapture}
+                @change=${(e: Event) => this._handlePhotoCapture(e)}
                 style="display:none"
               />
               <button
@@ -382,7 +383,7 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-header">
         <h2>${p.name}</h2>
-        <button class="close-btn" @click=${this._closeDialog}>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -427,7 +428,7 @@ export class VoedingslogPanel extends LitElement {
           </select>
         </div>
 
-        <button class="btn-primary btn-confirm" @click=${this._confirmLog}>
+        <button class="btn-primary btn-confirm" @click=${() => this._confirmLog()}>
           <ha-icon icon="mdi:plus"></ha-icon>
           Toevoegen
         </button>
@@ -543,15 +544,22 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _doSearch(): Promise<void> {
-    if (!this._searchQuery.trim()) return;
+    // Read directly from DOM as primary source to avoid stale reactive state
+    const input = this.shadowRoot?.getElementById("search-input") as HTMLInputElement | null;
+    const query = (input?.value || this._searchQuery).trim();
+    if (!query) return;
     try {
       const res = await this.hass.callWS<SearchProductsResponse>({
         type: "voedingslog/search_products",
-        query: this._searchQuery.trim(),
+        query,
       });
       this._searchResults = res.products || [];
+      if (this._searchResults.length === 0) {
+        this._searchResults = [];
+      }
     } catch (e) {
       console.error("Search failed:", e);
+      alert("Fout bij zoeken. Controleer de verbinding.");
     }
   }
 
