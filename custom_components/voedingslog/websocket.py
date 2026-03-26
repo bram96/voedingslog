@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import logging
 from pathlib import Path
 
@@ -317,24 +316,69 @@ async def ws_analyze_photo(hass, connection, msg):
         return
 
     instructions = (
-        "Analyze this nutrition label photo. Extract the nutritional values PER 100 GRAMS. "
-        "Return ONLY valid JSON in this exact format, no other text:\n"
-        '{"name": "product name", "nutrients": {'
-        '"energy-kcal_100g": 0, "fat_100g": 0, "saturated-fat_100g": 0, '
-        '"carbohydrates_100g": 0, "sugars_100g": 0, "fiber_100g": 0, '
-        '"proteins_100g": 0, "sodium_100g": 0}}\n'
-        "All values must be numbers (per 100g). "
+        "Analyze this nutrition label photo. Extract the product name and "
+        "nutritional values PER 100 GRAMS. "
         "For sodium: convert from salt if needed (salt / 2.5 = sodium in grams). "
         "If a value is not visible, use 0."
     )
+
+    structure = {
+        "name": {
+            "description": "Product name as shown on the label",
+            "required": True,
+            "selector": {"text": {}},
+        },
+        "energy_kcal": {
+            "description": "Energy in kcal per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "fat": {
+            "description": "Fat in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "saturated_fat": {
+            "description": "Saturated fat in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "carbohydrates": {
+            "description": "Carbohydrates in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "sugars": {
+            "description": "Sugars in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "fiber": {
+            "description": "Fiber in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "proteins": {
+            "description": "Proteins in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "sodium": {
+            "description": "Sodium in grams per 100g (convert from salt: salt / 2.5)",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.001}},
+        },
+    }
 
     try:
         result = await hass.services.async_call(
             "ai_task",
             "generate_data",
             {
+                "task_name": "nutrition_label_extraction",
                 "entity_id": ai_entity,
                 "instructions": instructions,
+                "structure": structure,
                 "attachments": [
                     {
                         "type": "image",
@@ -347,23 +391,23 @@ async def ws_analyze_photo(hass, connection, msg):
             return_response=True,
         )
 
-        # Parse the AI response
-        response_text = result.get("data", {}).get("text", "") if result else ""
-
-        # Try to extract JSON from the response
-        json_start = response_text.find("{")
-        json_end = response_text.rfind("}") + 1
-        if json_start >= 0 and json_end > json_start:
-            parsed = json.loads(response_text[json_start:json_end])
-            connection.send_result(msg["id"], {
-                "product": {
-                    "name": parsed.get("name", "Onbekend product"),
-                    "serving_grams": 100,
-                    "nutrients": parsed.get("nutrients", {}),
-                }
-            })
-        else:
-            connection.send_error(msg["id"], "parse_error", "Could not parse AI response")
+        data = result.get("data", {}) if result else {}
+        connection.send_result(msg["id"], {
+            "product": {
+                "name": data.get("name", "Onbekend product"),
+                "serving_grams": 100,
+                "nutrients": {
+                    "energy-kcal_100g": float(data.get("energy_kcal", 0)),
+                    "fat_100g": float(data.get("fat", 0)),
+                    "saturated-fat_100g": float(data.get("saturated_fat", 0)),
+                    "carbohydrates_100g": float(data.get("carbohydrates", 0)),
+                    "sugars_100g": float(data.get("sugars", 0)),
+                    "fiber_100g": float(data.get("fiber", 0)),
+                    "proteins_100g": float(data.get("proteins", 0)),
+                    "sodium_100g": float(data.get("sodium", 0)),
+                },
+            }
+        })
 
     except Exception as e:
         _LOGGER.error("AI photo analysis failed: %s", e)
