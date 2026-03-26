@@ -467,7 +467,7 @@ export class VoedingslogPanel extends LitElement {
           )}
         </div>
 
-        <div class="detail-table" style="margin-top:12px">
+        <div style="margin-top:12px">
           <div class="detail-table-header">Gelogde items (${this._items.length})</div>
           ${this._items.map(
             (item) => {
@@ -481,8 +481,166 @@ export class VoedingslogPanel extends LitElement {
             }
           )}
         </div>
+
+        <button class="btn-secondary btn-confirm" @click=${() => this._exportDayImage(slices)}>
+          <ha-icon icon="mdi:download"></ha-icon>
+          Exporteer als afbeelding
+        </button>
       </div>
     `;
+  }
+
+  private _exportDayImage(slices: { pct: number; color: string; label: string; grams: number; goal: number }[]): void {
+    const totals = sumNutrients(this._items);
+    const goal = this._config?.calories_goal || 2000;
+    const kcal = totals["energy-kcal_100g"] || 0;
+    const person = this._selectedPerson || "";
+    const dateLabel = this._formatDateLabel(this._selectedDate);
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = 600;
+    const canvas = document.createElement("canvas");
+    const items = this._items;
+    const rowH = 28;
+    const nutrientEntries = Object.entries(this._config?.nutrients || {});
+    const canvasH = 420 + nutrientEntries.length * rowH + items.length * rowH + 80;
+    canvas.width = W * dpr;
+    canvas.height = canvasH * dpr;
+    canvas.style.width = W + "px";
+    canvas.style.height = canvasH + "px";
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr, dpr);
+
+    // Background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, canvasH);
+
+    // Header
+    ctx.fillStyle = "#1976d2";
+    ctx.fillRect(0, 0, W, 60);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 20px sans-serif";
+    ctx.fillText(`Voedingslog — ${person}`, 20, 28);
+    ctx.font = "14px sans-serif";
+    ctx.fillText(dateLabel + "  ·  " + Math.round(kcal) + " / " + goal + " kcal", 20, 48);
+
+    // Pie chart
+    const cx = 100, cy = 150, r = 70;
+    let startAngle = -Math.PI / 2;
+    const pieColors = slices.map((s) => s.color.replace(/var\(--primary-color,?\s?/g, "").replace(")", "") || "#03a9f4");
+    for (let i = 0; i < slices.length; i++) {
+      const slice = slices[i];
+      const sliceAngle = (slice.pct / 100) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, startAngle, startAngle + sliceAngle);
+      ctx.closePath();
+      ctx.fillStyle = pieColors[i];
+      ctx.fill();
+      startAngle += sliceAngle;
+    }
+    // Center circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(String(Math.round(kcal)), cx, cy + 2);
+    ctx.font = "11px sans-serif";
+    ctx.fillStyle = "#888";
+    ctx.fillText("kcal", cx, cy + 16);
+    ctx.textAlign = "left";
+
+    // Legend
+    let ly = 95;
+    for (let i = 0; i < slices.length; i++) {
+      const s = slices[i];
+      ctx.fillStyle = pieColors[i];
+      ctx.beginPath();
+      ctx.arc(210, ly + 6, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#333";
+      ctx.font = "14px sans-serif";
+      ctx.fillText(s.label, 224, ly + 10);
+      ctx.fillStyle = "#888";
+      ctx.font = "13px sans-serif";
+      const goalText = s.goal > 0 ? ` / ${s.goal}g` : "";
+      ctx.fillText(`${s.grams.toFixed(1)}g${goalText} (${s.pct}%)`, 224, ly + 26);
+      // Progress bar
+      if (s.goal > 0) {
+        const barX = 224, barY = ly + 32, barW = 340, barH = 4;
+        ctx.fillStyle = "#eee";
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = pieColors[i];
+        ctx.fillRect(barX, barY, Math.min(barW, barW * s.grams / s.goal), barH);
+        ly += 44;
+      } else {
+        ly += 34;
+      }
+    }
+
+    // Nutrient table
+    let y = Math.max(ly + 20, 240);
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("Alle voedingswaarden", 20, y);
+    y += 8;
+    ctx.font = "13px sans-serif";
+    for (const [key, meta] of nutrientEntries) {
+      const raw = totals[key] || 0;
+      const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+      const value = raw * factor;
+      y += rowH;
+      ctx.fillStyle = "#333";
+      ctx.fillText(meta.label, 20, y);
+      ctx.fillStyle = "#888";
+      ctx.textAlign = "right";
+      ctx.fillText(`${value.toFixed(1)} ${meta.unit}`, W - 20, y);
+      ctx.textAlign = "left";
+      // Divider
+      ctx.strokeStyle = "#eee";
+      ctx.beginPath();
+      ctx.moveTo(20, y + 8);
+      ctx.lineTo(W - 20, y + 8);
+      ctx.stroke();
+    }
+
+    // Items
+    y += 30;
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText(`Gelogde items (${items.length})`, 20, y);
+    y += 8;
+    ctx.font = "13px sans-serif";
+    for (const item of items) {
+      const itemKcal = (item.nutrients?.["energy-kcal_100g"] || 0) * item.grams / 100;
+      y += rowH;
+      ctx.fillStyle = "#333";
+      const name = item.name.length > 40 ? item.name.substring(0, 37) + "..." : item.name;
+      ctx.fillText(name, 20, y);
+      ctx.fillStyle = "#888";
+      ctx.textAlign = "right";
+      ctx.fillText(`${item.grams}g · ${Math.round(itemKcal)} kcal`, W - 20, y);
+      ctx.textAlign = "left";
+      ctx.strokeStyle = "#eee";
+      ctx.beginPath();
+      ctx.moveTo(20, y + 8);
+      ctx.lineTo(W - 20, y + 8);
+      ctx.stroke();
+    }
+
+    // Download
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `voedingslog-${person}-${this._selectedDate}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, "image/png");
   }
 
   private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {
