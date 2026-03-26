@@ -143,6 +143,23 @@ export const panelStyles = css`
   .export-actions { display: flex; gap: 8px; margin-top: 12px; }
   .export-actions .btn-confirm { flex: 1; }
 
+  /* AI validate */
+  .ai-textarea {
+    width: 100%; min-height: 120px; padding: 12px; border: 1px solid var(--divider-color);
+    border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;
+    background: var(--primary-background-color); color: var(--primary-text-color);
+  }
+  .ai-validate-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; color: var(--secondary-text-color); }
+  .ai-validate-bar { flex: 1; height: 4px; background: var(--divider-color); border-radius: 2px; overflow: hidden; }
+  .ai-validate-fill { height: 100%; background: var(--primary-color); transition: width 0.3s; }
+  .ai-validate-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .ai-validate-actions button { flex: 1; }
+  .ai-context { font-size: 13px; color: var(--secondary-text-color); margin-bottom: 8px; }
+  .ai-warning { background: rgba(255, 152, 0, 0.1); border: 1px solid rgba(255, 152, 0, 0.3); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+  .ai-validate-search { margin-bottom: 12px; }
+  .ai-validate-search input { width: 100%; padding: 8px 12px; border: 1px solid var(--divider-color); border-radius: 8px; font-size: 14px; box-sizing: border-box; background: var(--primary-background-color); color: var(--primary-text-color); }
+  .ai-validate-search .search-results { max-height: 150px; }
+
   /* Search */
   .search-results { margin-top: 12px; max-height: 300px; overflow-y: auto; }
   .search-result { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid var(--divider-color); border-radius: 8px; gap: 4px; }

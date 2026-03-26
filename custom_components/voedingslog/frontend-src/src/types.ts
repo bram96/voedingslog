@@ -109,5 +109,14 @@ export interface NutrientDisplayConfig {
   decimals: number;
 }
 
-type DialogMode = "add-chooser" | "barcode" | "search" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | "manual" | "day-detail" | null;
+export interface ParsedProduct extends Product {
+  ai_name?: string;
+  matched?: boolean;
+}
+
+export interface ParseFoodResponse {
+  products: ParsedProduct[];
+}
+
+type DialogMode = "add-chooser" | "barcode" | "search" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | "manual" | "day-detail" | "ai-text" | "ai-handwriting" | "ai-validate" | null;
 export type { DialogMode };
