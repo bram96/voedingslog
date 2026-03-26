@@ -80,14 +80,30 @@ export class VoedingslogPanel extends LitElement {
     this._cleanupScannerContainer();
   }
 
+  private _autoSelectPerson(): void {
+    if (!this._config?.persons?.length) return;
+    if (this._selectedPerson && this._config.persons.includes(this._selectedPerson)) return;
+
+    // Try to match HA user name to a configured person
+    const haUser = this.hass?.user?.name?.toLowerCase() || "";
+    if (haUser) {
+      const match = this._config.persons.find(
+        (p) => p.toLowerCase() === haUser || haUser.includes(p.toLowerCase()) || p.toLowerCase().includes(haUser)
+      );
+      if (match) {
+        this._selectedPerson = match;
+        return;
+      }
+    }
+    this._selectedPerson = this._config.persons[0];
+  }
+
   private async _loadConfig(): Promise<void> {
     try {
       this._config = await this.hass.callWS<VoedingslogConfig>({
         type: "voedingslog/get_config",
       });
-      if (this._config?.persons?.length && !this._selectedPerson) {
-        this._selectedPerson = this._config.persons[0];
-      }
+      this._autoSelectPerson();
       await this._loadLog();
     } catch (e) {
       console.error("Failed to load voedingslog config:", e);
@@ -176,7 +192,27 @@ export class VoedingslogPanel extends LitElement {
               </button>`
             : nothing}
           <h1>Voedingslog</h1>
+          ${persons.length === 1
+            ? html`<span class="header-person">${this._selectedPerson}</span>`
+            : nothing}
         </div>
+        ${persons.length > 1
+          ? html`<div class="person-tabs">
+              ${persons.map(
+                (p) => html`
+                  <button
+                    class="person-tab ${p === this._selectedPerson ? "active" : ""}"
+                    @click=${() => {
+                      this._selectedPerson = p;
+                      this._loadLog();
+                    }}
+                  >
+                    ${p}
+                  </button>
+                `
+              )}
+            </div>`
+          : nothing}
         <div class="date-nav">
           <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
             <ha-icon icon="mdi:chevron-left"></ha-icon>
@@ -198,23 +234,6 @@ export class VoedingslogPanel extends LitElement {
             <ha-icon icon="mdi:chevron-right"></ha-icon>
           </button>
         </div>
-        ${persons.length > 1
-          ? html`<div class="person-tabs">
-              ${persons.map(
-                (p) => html`
-                  <button
-                    class="person-tab ${p === this._selectedPerson ? "active" : ""}"
-                    @click=${() => {
-                      this._selectedPerson = p;
-                      this._loadLog();
-                    }}
-                  >
-                    ${p}
-                  </button>
-                `
-              )}
-            </div>`
-          : nothing}
       </div>
     `;
   }
@@ -336,7 +355,7 @@ export class VoedingslogPanel extends LitElement {
     const hasAI = !!this._config?.ai_task_entity;
     return html`
       <div class="dialog-header">
-        <h2>Toevoegen</h2>
+        <h2>Toevoegen voor ${this._selectedPerson}</h2>
         <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>

@@ -25,7 +25,8 @@ export const panelStyles = css`
     padding: 4px; margin-right: 8px; display: flex; align-items: center;
   }
   .menu-btn ha-icon { --mdc-icon-size: 24px; }
-  .header h1 { margin: 0; font-size: 20px; font-weight: 500; }
+  .header h1 { margin: 0; font-size: 20px; font-weight: 500; flex: 1; }
+  .header-person { font-size: 14px; opacity: 0.8; }
   .date-nav { display: flex; align-items: center; gap: 4px; margin-top: 10px; }
   .date-nav-btn {
     background: rgba(255,255,255,0.15); border: none; color: inherit;
