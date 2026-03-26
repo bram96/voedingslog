@@ -485,8 +485,14 @@ export class VoedingslogPanel extends LitElement {
         ${this._exportImageUrl
           ? html`
             <div class="export-preview">
-              <p class="manual-hint">Hou de afbeelding ingedrukt om op te slaan.</p>
-              <img src=${this._exportImageUrl} alt="Voedingslog export" style="width:100%;border-radius:8px;border:1px solid var(--divider-color);" />
+              <a href=${this._exportImageUrl}
+                download="voedingslog-${this._selectedPerson}-${this._selectedDate}.png"
+                class="btn-primary btn-confirm" style="text-decoration:none;margin-top:12px">
+                <ha-icon icon="mdi:download"></ha-icon>
+                Download afbeelding
+              </a>
+              <img src=${this._exportImageUrl} alt="Voedingslog export"
+                style="width:100%;border-radius:8px;border:1px solid var(--divider-color);margin-top:8px;" />
             </div>
           `
           : html`
