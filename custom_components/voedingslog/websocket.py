@@ -250,6 +250,8 @@ async def ws_delete_item(hass, connection, msg):
         vol.Required("index"): int,
         vol.Optional("grams"): vol.Coerce(float),
         vol.Optional("category"): vol.In(MEAL_CATEGORIES),
+        vol.Optional("nutrients"): dict,
+        vol.Optional("name"): str,
         vol.Optional("date"): str,
     }
 )
@@ -266,6 +268,8 @@ async def ws_edit_item(hass, connection, msg):
         index=msg["index"],
         grams=msg.get("grams"),
         category=msg.get("category"),
+        nutrients=msg.get("nutrients"),
+        name=msg.get("name"),
         day=msg.get("date"),
     )
     if ok:

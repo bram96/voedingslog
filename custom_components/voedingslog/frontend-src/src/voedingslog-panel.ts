@@ -958,18 +958,9 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        <div class="nutrient-preview">
-          <div class="preview-title">Voedingswaarden per 100g</div>
-          <div class="nutrient-grid">
-            ${KEY_NUTRIENTS_DISPLAY.map(
-              (n) => html`
-                <div class="nutrient-row">
-                  <span>${n.label}</span>
-                  <span>${(item.nutrients?.[n.key] || 0).toFixed(n.decimals)} ${n.unit}</span>
-                </div>
-              `
-            )}
-          </div>
+        <div class="form-field">
+          <label>Naam</label>
+          <input type="text" id="edit-name-input" .value=${item.name} />
         </div>
 
         <div class="form-field">
@@ -1005,6 +996,25 @@ export class VoedingslogPanel extends LitElement {
             id="edit-date-input"
             .value=${this._selectedDate}
           />
+        </div>
+
+        <div class="nutrient-edit-section">
+          <div class="preview-title">Voedingswaarden per 100g</div>
+          ${Object.entries(this._config?.nutrients || {}).map(
+            ([key, meta]) => html`
+              <div class="form-field form-field-inline">
+                <label>${meta.label} (${meta.unit})</label>
+                <input
+                  type="number"
+                  id="edit-nutrient-${key}"
+                  .value=${String((item.nutrients?.[key] || 0).toFixed(2))}
+                  min="0"
+                  step="0.01"
+                  inputmode="decimal"
+                />
+              </div>
+            `
+          )}
         </div>
 
         <button class="btn-primary btn-confirm" @click=${() => this._confirmEdit()}>
@@ -1779,18 +1789,24 @@ export class VoedingslogPanel extends LitElement {
     const item = this._editingItem;
     if (!item) return;
 
-    const gramsInput = this.shadowRoot?.getElementById(
-      "edit-weight-input"
-    ) as HTMLInputElement | null;
-    const catSelect = this.shadowRoot?.getElementById(
-      "edit-category-select"
-    ) as HTMLSelectElement | null;
-    const dateInput = this.shadowRoot?.getElementById(
-      "edit-date-input"
-    ) as HTMLInputElement | null;
+    const nameInput = this.shadowRoot?.getElementById("edit-name-input") as HTMLInputElement | null;
+    const gramsInput = this.shadowRoot?.getElementById("edit-weight-input") as HTMLInputElement | null;
+    const catSelect = this.shadowRoot?.getElementById("edit-category-select") as HTMLSelectElement | null;
+    const dateInput = this.shadowRoot?.getElementById("edit-date-input") as HTMLInputElement | null;
+
+    const name = nameInput?.value || item.name;
     const grams = parseFloat(gramsInput?.value || "") || item.grams;
     const category = (catSelect?.value as MealCategory) || item.category;
     const newDate = dateInput?.value || this._selectedDate;
+
+    // Read nutrient inputs
+    const nutrients: Record<string, number> = { ...item.nutrients };
+    for (const key of Object.keys(this._config?.nutrients || {})) {
+      const input = this.shadowRoot?.getElementById(`edit-nutrient-${key}`) as HTMLInputElement | null;
+      if (input) {
+        nutrients[key] = parseFloat(input.value) || 0;
+      }
+    }
 
     try {
       if (newDate !== this._selectedDate) {
@@ -1804,9 +1820,9 @@ export class VoedingslogPanel extends LitElement {
         await this.hass.callWS({
           type: "voedingslog/log_product",
           person: this._selectedPerson,
-          name: item.name,
+          name,
           grams,
-          nutrients: item.nutrients || {},
+          nutrients,
           category,
           date: newDate,
         });
@@ -1815,7 +1831,9 @@ export class VoedingslogPanel extends LitElement {
           type: "voedingslog/edit_item",
           person: this._selectedPerson,
           index: item._index,
+          name,
           grams,
+          nutrients,
           category,
           date: this._selectedDate,
         });

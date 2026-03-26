@@ -25,6 +25,7 @@ export const KEY_NUTRIENTS_DISPLAY: NutrientDisplayConfig[] = [
   { key: "proteins_100g", label: "Eiwit", unit: "g", decimals: 1 },
   { key: "carbohydrates_100g", label: "Koolh.", unit: "g", decimals: 1 },
   { key: "fat_100g", label: "Vet", unit: "g", decimals: 1 },
+  { key: "fiber_100g", label: "Vezels", unit: "g", decimals: 1 },
 ];
 
 /** Factor to convert raw nutrient values to display units (e.g. sodium g → mg) */

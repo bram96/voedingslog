@@ -142,9 +142,11 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         index: int,
         grams: float | None = None,
         category: str | None = None,
+        nutrients: dict | None = None,
+        name: str | None = None,
         day: str | None = None,
     ) -> bool:
-        """Edit the grams and/or category of an existing log item."""
+        """Edit an existing log item (grams, category, nutrients, name)."""
         day = day or str(date.today())
         log = self._logs[person].get(day, [])
         if not (0 <= index < len(log)):
@@ -154,6 +156,10 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             item["grams"] = grams
         if category and category in MEAL_CATEGORIES:
             item["category"] = category
+        if nutrients is not None:
+            item["nutrients"] = nutrients
+        if name is not None:
+            item["name"] = name
         _LOGGER.info("Edited: %s for %s (%.0fg, %s)", item["name"], person, item["grams"], item["category"])
         await self.async_refresh()
         await self._async_save()

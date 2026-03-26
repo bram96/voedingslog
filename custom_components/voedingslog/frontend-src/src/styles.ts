@@ -168,6 +168,10 @@ export const panelStyles = css`
   .nutrient-grid { display: grid; gap: 4px; }
   .nutrient-row { display: flex; justify-content: space-between; font-size: 14px; padding: 2px 0; }
   .form-field { margin-bottom: 16px; }
+  .form-field-inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .form-field-inline label { flex: 1; white-space: nowrap; }
+  .form-field-inline input { width: 100px; flex: 0 0 100px; text-align: right; }
+  .nutrient-edit-section { margin-top: 8px; margin-bottom: 16px; border-top: 1px solid var(--divider-color); padding-top: 12px; }
   .form-field label { display: block; font-size: 13px; color: var(--secondary-text-color); margin-bottom: 6px; }
   .form-field input, .form-field select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--divider-color); border-radius: 8px;
