@@ -27,6 +27,7 @@ import {
   defaultCategory,
   groupByCategory,
   calcItemNutrients,
+  itemKcal,
   sumNutrients,
   NUTRIENTS_META,
 } from "./helpers.js";
@@ -478,11 +479,11 @@ export class VoedingslogPanel extends LitElement {
           <div class="detail-table-header">Gelogde items (${this._items.length})</div>
           ${this._items.map(
             (item) => {
-              const itemKcal = (item.nutrients?.["energy-kcal_100g"] || 0) * item.grams / 100;
+              const kcalVal = itemKcal(item);
               return html`
                 <div class="detail-row">
                   <span>${item.name}</span>
-                  <span>${item.grams}g · ${Math.round(itemKcal)} kcal</span>
+                  <span>${item.grams}g · ${Math.round(kcalVal)} kcal</span>
                 </div>
               `;
             }
@@ -494,7 +495,18 @@ export class VoedingslogPanel extends LitElement {
             <div class="export-preview">
               <img src=${this._exportImageUrl} alt="Voedingslog export"
                 style="width:100%;border-radius:8px;border:1px solid var(--divider-color);margin-top:8px;" />
-              <span class="export-hint">Houd ingedrukt om op te slaan of te delen</span>
+              <div class="export-actions">
+                <button class="btn-primary btn-confirm" @click=${() => this._downloadExportImage()}>
+                  <ha-icon icon="mdi:download"></ha-icon>
+                  Download
+                </button>
+                ${(navigator as any).share ? html`
+                  <button class="btn-secondary btn-confirm" @click=${() => this._shareExportImage()}>
+                    <ha-icon icon="mdi:share-variant"></ha-icon>
+                    Delen
+                  </button>
+                ` : nothing}
+              </div>
             </div>
           `
           : html`
@@ -632,14 +644,14 @@ export class VoedingslogPanel extends LitElement {
     y += 8;
     ctx.font = "13px sans-serif";
     for (const item of items) {
-      const itemKcal = (item.nutrients?.["energy-kcal_100g"] || 0) * item.grams / 100;
+      const kcalVal = itemKcal(item);
       y += rowH;
       ctx.fillStyle = "#333";
       const name = item.name.length > 40 ? item.name.substring(0, 37) + "..." : item.name;
       ctx.fillText(name, 20, y);
       ctx.fillStyle = "#888";
       ctx.textAlign = "right";
-      ctx.fillText(`${item.grams}g · ${Math.round(itemKcal)} kcal`, W - 20, y);
+      ctx.fillText(`${item.grams}g · ${Math.round(kcalVal)} kcal`, W - 20, y);
       ctx.textAlign = "left";
       ctx.strokeStyle = "#eee";
       ctx.beginPath();
@@ -655,6 +667,29 @@ export class VoedingslogPanel extends LitElement {
       this._exportImageUrl = dataUrl;
       this.requestUpdate();
     }, "image/png");
+  }
+
+  private _downloadExportImage(): void {
+    if (!this._exportImageUrl) return;
+    const a = document.createElement("a");
+    a.href = this._exportImageUrl;
+    a.download = `voedingslog-${this._selectedPerson}-${this._selectedDate}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  private async _shareExportImage(): Promise<void> {
+    if (!this._exportImageUrl) return;
+    try {
+      const res = await fetch(this._exportImageUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `voedingslog-${this._selectedPerson}-${this._selectedDate}.png`, { type: "image/png" });
+      await navigator.share({ files: [file] });
+    } catch (e) {
+      // User cancelled or share not supported — fall back to download
+      this._downloadExportImage();
+    }
   }
 
   private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {

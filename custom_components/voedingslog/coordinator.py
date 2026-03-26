@@ -106,7 +106,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         session = await self._get_session()
         product = await lookup_by_barcode(session, barcode)
         if not product:
-            _LOGGER.warning("Barcode %s not found", barcode)
+            _LOGGER.debug("Barcode %s not found", barcode)
             return False
         await self._add_item(person, product, grams or product["serving_grams"], category)
         return True

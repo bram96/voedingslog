@@ -78,6 +78,10 @@ export function calcItemNutrients(item: LogItem): NutrientMap {
   return result;
 }
 
+export function itemKcal(item: LogItem): number {
+  return (item.nutrients?.["energy-kcal_100g"] || 0) * (item.grams || 0) / 100;
+}
+
 export function sumNutrients(items: LogItem[]): NutrientMap {
   const totals: NutrientMap = {};
   for (const n of KEY_NUTRIENTS_DISPLAY) totals[n.key] = 0;

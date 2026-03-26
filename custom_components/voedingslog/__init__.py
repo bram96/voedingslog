@@ -101,7 +101,7 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
         category = call.data.get("category")
         ok = await coordinator.log_barcode(person, barcode, grams, category)
         if not ok:
-            _LOGGER.warning("Barcode %s not found for %s", barcode, person)
+            _LOGGER.info("Barcode %s not found for %s", barcode, person)
             await _send_notification(
                 hass, person,
                 f"⚠️ Barcode {barcode} niet gevonden in Open Food Facts",
