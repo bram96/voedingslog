@@ -68,7 +68,7 @@ export class SearchController {
     return html`
       <div class="dialog-header">
         <h2>Zoek product</h2>
-        <button class="close-btn" @click=${() => this._close()}>
+        <button class="close-btn" @click=${() => this.closeSearch()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -223,7 +223,7 @@ export class SearchController {
 
   // ── Actions ──────────────────────────────────────────────────
 
-  private _close(): void {
+  closeSearch(): void {
     if (this._returnMode) {
       this.host._setDialogMode(this._returnMode as string);
       this._returnMode = null;

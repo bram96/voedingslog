@@ -60,15 +60,48 @@ export class VoedingslogPanel extends LitElement {
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
+  private _popStateHandler = () => this._handleBackButton();
+  private _dialogHistoryDepth = 0;
+
   async connectedCallback(): Promise<void> {
     super.connectedCallback();
+    window.addEventListener("popstate", this._popStateHandler);
     await this._loadConfig();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener("popstate", this._popStateHandler);
     this._barcodeCamera.stop();
     this._photoCamera.stop();
+  }
+
+  private _pushDialogHistory(): void {
+    this._dialogHistoryDepth++;
+    history.pushState({ voedingslogDialog: true }, "");
+  }
+
+  private _handleBackButton(): void {
+    if (this._dialogHistoryDepth > 0 && this._dialogMode) {
+      this._dialogHistoryDepth--;
+      this._navigateBack();
+    }
+  }
+
+  private _navigateBack(): void {
+    // Mirror the X button logic for each dialog
+    switch (this._dialogMode) {
+      case "barcode": this._setDialogMode("search"); break;
+      case "photo": this._setDialogMode("manual"); break;
+      case "manual": this._setDialogMode("search"); break;
+      case "search": this._searchCtrl.closeSearch(); break;
+      case "meal-edit": this._setDialogMode("meals"); break;
+      case "batch-add":
+        if (this._ai.currentMode === "meal") this._setDialogMode("meal-edit");
+        else this._closeDialog();
+        break;
+      default: this._closeDialog(); break;
+    }
   }
 
   private _autoSelectPerson(): void {
@@ -239,7 +272,7 @@ export class VoedingslogPanel extends LitElement {
   private _renderActions(): TemplateResult {
     return html`
       <div class="actions">
-        <button class="action-btn action-btn-primary" @click=${() => { this._dialogMode = "add-chooser"; }}>
+        <button class="action-btn action-btn-primary" @click=${() => this._setDialogMode("add-chooser")}>
           <ha-icon icon="mdi:plus"></ha-icon>
           <span>Toevoegen</span>
         </button>
@@ -258,7 +291,7 @@ export class VoedingslogPanel extends LitElement {
     const pct = Math.min(100, Math.round((kcal / goal) * 100));
 
     return html`
-      <div class="day-totals card" @click=${() => { this._dialogMode = "day-detail"; }} style="cursor:pointer">
+      <div class="day-totals card" @click=${() => this._setDialogMode("day-detail")} style="cursor:pointer">
         <div class="totals-header">
           <span class="totals-title">Dagtotaal</span>
           <span class="totals-cal">${Math.round(kcal)} / ${goal} kcal</span>
@@ -323,7 +356,7 @@ export class VoedingslogPanel extends LitElement {
   private _renderDialog(): TemplateResult | typeof nothing {
     if (!this._dialogMode) return nothing;
     return html`
-      <div class="dialog-overlay" @click=${() => this._closeDialog()}>
+      <div class="dialog-overlay" @click=${() => this._navigateBack()}>
         <div class="dialog" @click=${(e: Event) => e.stopPropagation()}>
           ${this._dialogMode === "add-chooser" ? this._renderAddChooser() : nothing}
           ${this._dialogMode === "search" ? this._searchCtrl.renderSearchDialog() : nothing}
@@ -373,7 +406,7 @@ export class VoedingslogPanel extends LitElement {
 
   _openManualWithPrefill(product: Product): void {
     this._prefillProduct = product;
-    this._dialogMode = "manual";
+    this._setDialogMode("manual");
   }
 
 
@@ -395,7 +428,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   _openBarcodeScanner(): void {
-    this._dialogMode = "barcode";
+    this._setDialogMode("barcode");
     this._scanning = false;
     this._scanFailed = false;
     this.updateComplete.then(() => {
@@ -413,7 +446,7 @@ export class VoedingslogPanel extends LitElement {
   _openBatchAdd(mode: "log" | "meal"): void {
     this._ai.currentMode = mode;
     this._ai.batchMode = "text";
-    this._dialogMode = "batch-add";
+    this._setDialogMode("batch-add");
   }
 
   private async _openSearch(): Promise<void> {
@@ -426,7 +459,7 @@ export class VoedingslogPanel extends LitElement {
 
   _openEditDialog(item: IndexedLogItem): void {
     this._editingItem = item;
-    this._dialogMode = "edit";
+    this._setDialogMode("edit");
   }
 
 
@@ -464,12 +497,18 @@ export class VoedingslogPanel extends LitElement {
   _selectProduct(product: Product): void {
     this._pendingProduct = product;
     this._barcodeCamera.stop();
-    this._dialogMode = "weight";
+    this._setDialogMode("weight");
   }
 
   _closeDialog(): void {
     this._barcodeCamera.stop();
     this._stopPhotoCamera();
+    // Remove any history entries we pushed for dialogs
+    if (this._dialogHistoryDepth > 0) {
+      const depth = this._dialogHistoryDepth;
+      this._dialogHistoryDepth = 0;
+      history.go(-depth);
+    }
     this._dialogMode = null;
     this._pendingProduct = null;
     this._editingItem = null;
@@ -484,6 +523,9 @@ export class VoedingslogPanel extends LitElement {
   }
 
   _setDialogMode(mode: string): void {
+    if (mode) {
+      this._pushDialogHistory();
+    }
     this._dialogMode = mode as DialogMode;
   }
 
