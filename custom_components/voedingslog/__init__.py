@@ -1,6 +1,7 @@
 """Voedingslog — Home Assistant custom component."""
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -10,7 +11,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.loader import async_get_integration
 
 from .const import (
     DOMAIN,
@@ -50,13 +50,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             f"/{DOMAIN}_frontend", str(frontend_path), cache_headers=should_cache
         )
 
-    # Register the sidebar panel
-    integration = await async_get_integration(hass, DOMAIN)
+    # Register the sidebar panel with content hash for cache busting
+    js_path = frontend_path / "voedingslog-panel.js"
+    file_hash = hashlib.md5(js_path.read_bytes()).hexdigest()[:8]
     await panel_custom.async_register_panel(
         hass=hass,
         frontend_url_path=DOMAIN,
         webcomponent_name="voedingslog-panel",
-        module_url=f"/{DOMAIN}_frontend/voedingslog-panel.js?v={integration.version}",
+        module_url=f"/{DOMAIN}_frontend/voedingslog-panel.js?v={file_hash}",
         sidebar_title="Voedingslog",
         sidebar_icon="mdi:food-apple",
         embed_iframe=False,
