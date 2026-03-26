@@ -3,6 +3,13 @@
 Houd calorieën, macronutriënten, zout en vitamines bij per persoon.
 Data komt van **Open Food Facts** — gratis, open database met miljoenen producten inclusief Nederlandse supermarktproducten.
 
+### Features
+- **Eigen pagina in de sidebar** met dagoverzicht per maaltijd (ontbijt, lunch, avondeten, tussendoor)
+- **Barcode scanner** — scan producten direct met je camera
+- **Foto-analyse** — maak een foto van het voedingsetiket en laat AI de waarden uitlezen (via HA AI Task)
+- **Meerdere personen** — schakel eenvoudig tussen personen via tabs
+- **HA Sensoren** — alle voedingswaarden beschikbaar als sensoren voor automations en dashboards
+
 ---
 
 ## Installatie via HACS (aanbevolen)
@@ -26,6 +33,26 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 2. Herstart Home Assistant
 3. Ga naar **Instellingen → Apparaten & Diensten → Integratie toevoegen**
 4. Zoek op **Voedingslog** en volg de stappen
+
+---
+
+## Sidebar Panel
+
+Na installatie verschijnt **Voedingslog** automatisch in de sidebar. Het panel biedt:
+
+- **Dagoverzicht** gegroepeerd per maaltijd (ontbijt, lunch, avondeten, tussendoor)
+- **Barcode scanner** — tik op "Scan barcode" om een product te scannen met je camera
+- **Product zoeken** — zoek op naam in de Open Food Facts database
+- **Foto van etiket** — maak een foto van het voedingsetiket, AI leest de waarden uit
+- **Gewicht invoeren** — na scannen/zoeken voer je het gewicht in gram in
+- **Maaltijd kiezen** — wordt automatisch ingesteld op basis van het tijdstip
+
+### AI Foto-analyse instellen
+
+1. Zorg dat je een AI integratie hebt met AI Task support (bijv. OpenAI, Google AI, Claude)
+2. Ga naar **Instellingen → Apparaten & Diensten → Voedingslog → Opties**
+3. Vul het `ai_task_entity` veld in met je AI Task entity ID (bijv. `ai_task.openai`)
+4. De "Foto etiket" knop wordt nu actief in het panel
 
 ---
 

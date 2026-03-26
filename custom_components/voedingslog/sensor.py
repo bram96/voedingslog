@@ -1,4 +1,4 @@
-"""Sensor platform voor Voedingslog — één sensor per nutrient per persoon."""
+"""Sensor platform for Voedingslog — one sensor per nutrient per person."""
 from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, NUTRIENTEN
+from .const import DOMAIN, NUTRIENTS
 from .coordinator import VoedingslogCoordinator
 
 
@@ -17,99 +17,98 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: VoedingslogCoordinator = hass.data[DOMAIN][entry.entry_id]
-    personen = entry.data["personen"]
-    doelen = {
+    persons = entry.data["personen"]
+    goals = {
         "energy-kcal_100g": entry.data.get("doel_calorieen", 2000),
         "sodium_100g": entry.data.get("doel_natrium_mg", 2000) / 1000,
     }
 
-    sensoren = []
-    for persoon in personen:
-        for nutrient_key, meta in NUTRIENTEN.items():
-            sensoren.append(
-                VoedingsSensor(coordinator, persoon, nutrient_key, meta, doelen)
+    entities = []
+    for person in persons:
+        for nutrient_key, meta in NUTRIENTS.items():
+            entities.append(
+                NutrientSensor(coordinator, person, nutrient_key, meta, goals)
             )
-        # Extra: log-overzicht sensor
-        sensoren.append(LogOverzichtSensor(coordinator, persoon))
+        entities.append(LogOverviewSensor(coordinator, person))
 
-    async_add_entities(sensoren, True)
+    async_add_entities(entities, True)
 
 
-class VoedingsSensor(CoordinatorEntity, SensorEntity):
-    """Eén nutriëntsensor voor één persoon."""
+class NutrientSensor(CoordinatorEntity, SensorEntity):
+    """A single nutrient sensor for one person."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, persoon, nutrient_key, meta, doelen):
+    def __init__(self, coordinator, person, nutrient_key, meta, goals):
         super().__init__(coordinator)
-        self._persoon = persoon
+        self._person = person
         self._nutrient_key = nutrient_key
         self._meta = meta
-        self._doelen = doelen
-        persoon_slug = persoon.lower().replace(" ", "_")
+        self._goals = goals
+        person_slug = person.lower().replace(" ", "_")
         nutrient_slug = nutrient_key.replace("-", "_").replace("_100g", "")
-        self._attr_unique_id = f"voedingslog_{persoon_slug}_{nutrient_slug}"
+        self._attr_unique_id = f"voedingslog_{person_slug}_{nutrient_slug}"
         self._attr_icon = meta["icon"]
 
     @property
     def name(self):
-        return f"{self._persoon} – {self._meta['naam']}"
+        return f"{self._person} – {self._meta['label']}"
 
     @property
     def native_unit_of_measurement(self):
-        return self._meta["eenheid"]
+        return self._meta["unit"]
 
     @property
     def native_value(self):
         if not self.coordinator.data:
             return 0
-        totalen = self.coordinator.data.get(self._persoon, {}).get("totalen", {})
-        waarde = totalen.get(self._nutrient_key, 0.0)
+        totals = self.coordinator.data.get(self._person, {}).get("totals", {})
+        value = totals.get(self._nutrient_key, 0.0)
         factor = self._meta.get("factor", 1)
-        return round(waarde * factor, 1)
+        return round(value * factor, 1)
 
     @property
     def extra_state_attributes(self):
         attrs = {}
-        if self._nutrient_key in self._doelen:
-            doel = self._doelen[self._nutrient_key]
+        if self._nutrient_key in self._goals:
+            goal = self._goals[self._nutrient_key]
             factor = self._meta.get("factor", 1)
-            huidig = (self.coordinator.data or {}).get(self._persoon, {}).get(
-                "totalen", {}
+            current = (self.coordinator.data or {}).get(self._person, {}).get(
+                "totals", {}
             ).get(self._nutrient_key, 0.0)
-            huidig_display = round(huidig * factor, 1)
-            doel_display = round(doel * factor, 1)
-            attrs["doel"] = doel_display
-            attrs["resterend"] = round(max(0, doel_display - huidig_display), 1)
-            attrs["percentage"] = round(min(100, huidig_display / doel_display * 100), 1) if doel_display else 0
+            current_display = round(current * factor, 1)
+            goal_display = round(goal * factor, 1)
+            attrs["doel"] = goal_display
+            attrs["resterend"] = round(max(0, goal_display - current_display), 1)
+            attrs["percentage"] = round(min(100, current_display / goal_display * 100), 1) if goal_display else 0
         return attrs
 
     @property
     def device_info(self):
         return {
-            "identifiers": {(DOMAIN, self._persoon)},
-            "name": f"Voedingslog – {self._persoon}",
+            "identifiers": {(DOMAIN, self._person)},
+            "name": f"Voedingslog – {self._person}",
             "manufacturer": "Open Food Facts",
             "model": "Voedingslog Custom Component",
         }
 
 
-class LogOverzichtSensor(CoordinatorEntity, SensorEntity):
-    """Toont het aantal gelogde items vandaag + details als attributen."""
+class LogOverviewSensor(CoordinatorEntity, SensorEntity):
+    """Shows the number of logged items today + details as attributes."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:clipboard-list"
 
-    def __init__(self, coordinator, persoon):
+    def __init__(self, coordinator, person):
         super().__init__(coordinator)
-        self._persoon = persoon
-        persoon_slug = persoon.lower().replace(" ", "_")
-        self._attr_unique_id = f"voedingslog_{persoon_slug}_log_overzicht"
+        self._person = person
+        person_slug = person.lower().replace(" ", "_")
+        self._attr_unique_id = f"voedingslog_{person_slug}_log_overzicht"
 
     @property
     def name(self):
-        return f"{self._persoon} – Log vandaag"
+        return f"{self._person} – Log vandaag"
 
     @property
     def native_unit_of_measurement(self):
@@ -117,19 +116,20 @@ class LogOverzichtSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        log = self.coordinator.get_log_vandaag(self._persoon)
+        log = self.coordinator.get_log_today(self._person)
         return len(log)
 
     @property
     def extra_state_attributes(self):
-        log = self.coordinator.get_log_vandaag(self._persoon)
+        log = self.coordinator.get_log_today(self._person)
         return {
             "items": [
                 {
-                    "naam": item["naam"],
-                    "gram": item["gram"],
-                    "tijdstip": item["tijdstip"],
-                    "kcal": round(item["nutrienten"].get("energy-kcal_100g", 0) * item["gram"] / 100, 1),
+                    "naam": item["name"],
+                    "gram": item["grams"],
+                    "tijdstip": item["time"],
+                    "categorie": item.get("category", "snack"),
+                    "kcal": round(item["nutrients"].get("energy-kcal_100g", 0) * item["grams"] / 100, 1),
                 }
                 for item in log
             ]
@@ -138,8 +138,8 @@ class LogOverzichtSensor(CoordinatorEntity, SensorEntity):
     @property
     def device_info(self):
         return {
-            "identifiers": {(DOMAIN, self._persoon)},
-            "name": f"Voedingslog – {self._persoon}",
+            "identifiers": {(DOMAIN, self._person)},
+            "name": f"Voedingslog – {self._person}",
             "manufacturer": "Open Food Facts",
             "model": "Voedingslog Custom Component",
         }

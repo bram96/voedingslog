@@ -2,152 +2,199 @@
 from __future__ import annotations
 
 import logging
-import voluptuous as vol
+from pathlib import Path
 
+import voluptuous as vol
+from homeassistant.components import panel_custom
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 
 from .const import (
     DOMAIN,
     SERVICE_LOG_PRODUCT,
     SERVICE_LOG_BARCODE,
-    SERVICE_RESET_DAG,
-    SERVICE_VERWIJDER_LOG,
+    SERVICE_RESET_DAY,
+    SERVICE_DELETE_LAST,
 )
 from .coordinator import VoedingslogCoordinator
+from .websocket import async_register_commands
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor"]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the panel, static files, and WebSocket commands."""
     hass.data.setdefault(DOMAIN, {})
 
-    personen = entry.data["personen"]
-    coordinator = VoedingslogCoordinator(hass, personen)
+    # Serve the frontend files
+    frontend_path = Path(__file__).parent / "frontend"
+    should_cache = True
+
+    # Use the modern static path registration if available (HA 2024.5+)
+    try:
+        from homeassistant.components.http import StaticPathConfig
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(
+                url_path=f"/{DOMAIN}_frontend",
+                path=str(frontend_path),
+                cache_headers=should_cache,
+            )]
+        )
+    except ImportError:
+        hass.http.register_static_path(
+            f"/{DOMAIN}_frontend", str(frontend_path), cache_headers=should_cache
+        )
+
+    # Register the sidebar panel
+    integration = await async_get_integration(hass, DOMAIN)
+    await panel_custom.async_register_panel(
+        hass=hass,
+        frontend_url_path=DOMAIN,
+        webcomponent_name="voedingslog-panel",
+        module_url=f"/{DOMAIN}_frontend/voedingslog-panel.js?v={integration.version}",
+        sidebar_title="Voedingslog",
+        sidebar_icon="mdi:food-apple",
+        embed_iframe=False,
+        require_admin=False,
+    )
+
+    # Register WebSocket commands
+    async_register_commands(hass)
+
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up a config entry."""
+    persons = entry.data["personen"]
+    coordinator = VoedingslogCoordinator(hass, persons)
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    _registreer_services(hass, coordinator)
+    _register_services(hass, coordinator)
 
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
     coordinator: VoedingslogCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
     await coordinator.async_shutdown()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-def _registreer_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator):
-    """Registreer alle HA services."""
+def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator):
+    """Register all HA services."""
 
-    # --- log_barcode ---
-    # Aanroepen vanuit automation of companion app barcode scanner
     async def handle_log_barcode(call: ServiceCall):
-        persoon = call.data["persoon"]
+        person = call.data["persoon"]
         barcode = call.data["barcode"]
-        gram = call.data.get("gram")
-        ok = await coordinator.log_barcode(persoon, barcode, gram)
+        grams = call.data.get("gram")
+        category = call.data.get("category")
+        ok = await coordinator.log_barcode(person, barcode, grams, category)
         if not ok:
-            _LOGGER.warning("Barcode %s niet gevonden voor %s", barcode, persoon)
-            # Stuur notificatie naar companion app
-            await _stuur_notificatie(
-                hass,
-                persoon,
+            _LOGGER.warning("Barcode %s not found for %s", barcode, person)
+            await _send_notification(
+                hass, person,
                 f"⚠️ Barcode {barcode} niet gevonden in Open Food Facts",
                 "Voedingslog",
             )
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_LOG_BARCODE,
-        handle_log_barcode,
-        schema=vol.Schema(
-            {
-                vol.Required("persoon"): cv.string,
-                vol.Required("barcode"): cv.string,
-                vol.Optional("gram"): vol.Coerce(float),
-            }
-        ),
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_LOG_BARCODE):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_LOG_BARCODE,
+            handle_log_barcode,
+            schema=vol.Schema(
+                {
+                    vol.Required("persoon"): cv.string,
+                    vol.Required("barcode"): cv.string,
+                    vol.Optional("gram"): vol.Coerce(float),
+                    vol.Optional("category"): cv.string,
+                }
+            ),
+        )
 
-    # --- log_product (op naam) ---
     async def handle_log_product(call: ServiceCall):
-        persoon = call.data["persoon"]
-        naam = call.data["naam"]
-        gram = call.data.get("gram", 100)
-        ok = await coordinator.log_product_naam(persoon, naam, gram)
+        person = call.data["persoon"]
+        name = call.data["naam"]
+        grams = call.data.get("gram", 100)
+        category = call.data.get("category")
+        ok = await coordinator.log_product_by_name(person, name, grams, category)
         if ok:
-            log = coordinator.get_log_vandaag(persoon)
-            laatste = log[-1] if log else None
-            if laatste:
+            log = coordinator.get_log_today(person)
+            last = log[-1] if log else None
+            if last:
                 kcal = round(
-                    laatste["nutrienten"].get("energy-kcal_100g", 0) * gram / 100, 0
+                    last["nutrients"].get("energy-kcal_100g", 0) * grams / 100, 0
                 )
-                await _stuur_notificatie(
-                    hass,
-                    persoon,
-                    f"✅ {laatste['naam']} ({gram}g) – {int(kcal)} kcal gelogd",
+                await _send_notification(
+                    hass, person,
+                    f"✅ {last['name']} ({grams}g) – {int(kcal)} kcal gelogd",
                     "Voedingslog",
                 )
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_LOG_PRODUCT,
-        handle_log_product,
-        schema=vol.Schema(
-            {
-                vol.Required("persoon"): cv.string,
-                vol.Required("naam"): cv.string,
-                vol.Optional("gram", default=100): vol.Coerce(float),
-            }
-        ),
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_LOG_PRODUCT):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_LOG_PRODUCT,
+            handle_log_product,
+            schema=vol.Schema(
+                {
+                    vol.Required("persoon"): cv.string,
+                    vol.Required("naam"): cv.string,
+                    vol.Optional("gram", default=100): vol.Coerce(float),
+                    vol.Optional("category"): cv.string,
+                }
+            ),
+        )
 
-    # --- reset_dag ---
-    async def handle_reset_dag(call: ServiceCall):
-        persoon = call.data["persoon"]
-        dag = call.data.get("dag")
-        await coordinator.reset_dag(persoon, dag)
-        _LOGGER.info("Log gereset voor %s (dag: %s)", persoon, dag or "vandaag")
+    async def handle_reset_day(call: ServiceCall):
+        person = call.data["persoon"]
+        day = call.data.get("dag")
+        await coordinator.reset_day(person, day)
+        _LOGGER.info("Log reset for %s (day: %s)", person, day or "today")
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_RESET_DAG,
-        handle_reset_dag,
-        schema=vol.Schema(
-            {
-                vol.Required("persoon"): cv.string,
-                vol.Optional("dag"): cv.string,
-            }
-        ),
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_RESET_DAY):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_RESET_DAY,
+            handle_reset_day,
+            schema=vol.Schema(
+                {
+                    vol.Required("persoon"): cv.string,
+                    vol.Optional("dag"): cv.string,
+                }
+            ),
+        )
 
-    # --- verwijder_laatste ---
-    async def handle_verwijder_laatste(call: ServiceCall):
-        persoon = call.data["persoon"]
-        await coordinator.verwijder_laatste(persoon)
+    async def handle_delete_last(call: ServiceCall):
+        person = call.data["persoon"]
+        await coordinator.delete_last(person)
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_VERWIJDER_LOG,
-        handle_verwijder_laatste,
-        schema=vol.Schema({vol.Required("persoon"): cv.string}),
-    )
+    if not hass.services.has_service(DOMAIN, SERVICE_DELETE_LAST):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_DELETE_LAST,
+            handle_delete_last,
+            schema=vol.Schema({vol.Required("persoon"): cv.string}),
+        )
 
 
-async def _stuur_notificatie(hass: HomeAssistant, persoon: str, bericht: str, titel: str):
-    """Stuur een notificatie via de HA companion app."""
+async def _send_notification(hass: HomeAssistant, person: str, message: str, title: str):
+    """Send a notification via the HA companion app."""
     try:
         await hass.services.async_call(
             "notify",
-            "mobile_app",  # pas aan naar jouw apparaatnaam, bijv. mobile_app_iphone_jan
-            {"title": titel, "message": bericht},
+            "mobile_app",
+            {"title": title, "message": message},
             blocking=False,
         )
     except Exception as e:
-        _LOGGER.debug("Notificatie kon niet worden gestuurd: %s", e)
+        _LOGGER.debug("Notification could not be sent: %s", e)

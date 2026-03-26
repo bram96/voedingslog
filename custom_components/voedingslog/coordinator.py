@@ -1,4 +1,4 @@
-"""DataCoördinator voor Voedingslog — beheert dagelijkse logs per persoon."""
+"""Data coordinator for Voedingslog — manages daily logs per person."""
 from __future__ import annotations
 
 import logging
@@ -9,126 +9,168 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN, NUTRIENTEN
-from .open_food_facts import zoek_op_barcode, zoek_op_naam
+from .const import DOMAIN, NUTRIENTS, MEAL_CATEGORIES
+from .open_food_facts import lookup_by_barcode, search_by_name
 
 _LOGGER = logging.getLogger(__name__)
 
-LEGE_TOTALEN = {k: 0.0 for k in NUTRIENTEN}
+EMPTY_TOTALS = {k: 0.0 for k in NUTRIENTS}
+
+
+def _default_category() -> str:
+    """Return a meal category based on the current time of day."""
+    hour = datetime.now().hour
+    if hour < 10:
+        return "breakfast"
+    if hour < 14:
+        return "lunch"
+    if hour < 17:
+        return "snack"
+    return "dinner"
 
 
 class VoedingslogCoordinator(DataUpdateCoordinator):
-    """Houdt dagelijkse voedingslogs bij voor alle personen."""
+    """Keeps daily nutrition logs for all persons."""
 
-    def __init__(self, hass: HomeAssistant, personen: list[str]):
+    def __init__(self, hass: HomeAssistant, persons: list[str]):
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
         )
-        self.personen = personen
-        # { "Jan": { "2024-01-15": [ {naam, gram, nutrienten}, ... ] } }
-        self._logs: dict[str, dict[str, list]] = {p: {} for p in personen}
+        self.persons = persons
+        # { "Jan": { "2024-01-15": [ {name, grams, nutrients, time, category}, ... ] } }
+        self._logs: dict[str, dict[str, list]] = {p: {} for p in persons}
         self._session: aiohttp.ClientSession | None = None
 
     async def _async_update_data(self) -> dict:
-        """Bereken totalen voor vandaag voor alle personen."""
-        vandaag = str(date.today())
-        resultaat = {}
-        for persoon in self.personen:
-            items = self._logs[persoon].get(vandaag, [])
-            totalen = {k: 0.0 for k in NUTRIENTEN}
+        """Calculate totals for today for all persons."""
+        today = str(date.today())
+        result = {}
+        for person in self.persons:
+            items = self._logs[person].get(today, [])
+            totals = {k: 0.0 for k in NUTRIENTS}
             for item in items:
-                gram_factor = item["gram"] / 100.0
-                for nutrient in NUTRIENTEN:
-                    waarde = item["nutrienten"].get(nutrient, 0.0)
-                    totalen[nutrient] += waarde * gram_factor
-            resultaat[persoon] = {
-                "totalen": totalen,
+                gram_factor = item["grams"] / 100.0
+                for nutrient in NUTRIENTS:
+                    value = item["nutrients"].get(nutrient, 0.0)
+                    totals[nutrient] += value * gram_factor
+            result[person] = {
+                "totals": totals,
                 "log": items,
-                "datum": vandaag,
+                "date": today,
             }
-        return resultaat
+        return result
 
     # ------------------------------------------------------------------
-    # Publieke methoden (aangeroepen vanuit services)
+    # Public methods (called from services and websocket handlers)
     # ------------------------------------------------------------------
 
-    async def log_barcode(self, persoon: str, barcode: str, gram: float | None = None):
-        """Zoek product op barcode en log het."""
+    async def log_barcode(
+        self, person: str, barcode: str, grams: float | None = None, category: str | None = None
+    ) -> bool:
+        """Look up a product by barcode and log it."""
         session = await self._get_session()
-        product = await zoek_op_barcode(session, barcode)
+        product = await lookup_by_barcode(session, barcode)
         if not product:
-            _LOGGER.warning("Barcode %s niet gevonden", barcode)
+            _LOGGER.warning("Barcode %s not found", barcode)
             return False
-        await self._voeg_toe(persoon, product, gram or product["portie_g"])
+        await self._add_item(person, product, grams or product["serving_grams"], category)
         return True
 
-    async def log_product_naam(self, persoon: str, naam: str, gram: float = 100):
-        """Zoek product op naam en log het eerste resultaat."""
+    async def log_product_by_name(
+        self, person: str, name: str, grams: float = 100, category: str | None = None
+    ) -> bool:
+        """Search a product by name and log the first result."""
         session = await self._get_session()
-        resultaten = await zoek_op_naam(session, naam)
-        if not resultaten:
-            _LOGGER.warning("Product '%s' niet gevonden", naam)
+        results = await search_by_name(session, name)
+        if not results:
+            _LOGGER.warning("Product '%s' not found", name)
             return False
-        await self._voeg_toe(persoon, resultaten[0], gram)
+        await self._add_item(person, results[0], grams, category)
         return True
 
-    async def log_handmatig(
+    async def log_manual(
         self,
-        persoon: str,
-        naam: str,
-        gram: float,
-        nutrienten: dict[str, float],
+        person: str,
+        name: str,
+        grams: float,
+        nutrients: dict[str, float],
+        category: str | None = None,
     ):
-        """Log een product met handmatig ingevoerde waarden."""
-        product = {"naam": naam, "portie_g": gram, "nutrienten": nutrienten}
-        await self._voeg_toe(persoon, product, gram)
+        """Log a product with manually provided values."""
+        product = {"name": name, "serving_grams": grams, "nutrients": nutrients}
+        await self._add_item(person, product, grams, category)
 
-    async def verwijder_laatste(self, persoon: str):
-        """Verwijder het laatste item uit de log van vandaag."""
-        vandaag = str(date.today())
-        log = self._logs[persoon].get(vandaag, [])
-        if log:
-            verwijderd = log.pop()
-            _LOGGER.info("Verwijderd: %s voor %s", verwijderd["naam"], persoon)
+    async def lookup_barcode(self, barcode: str) -> dict | None:
+        """Look up a product by barcode without logging it."""
+        session = await self._get_session()
+        return await lookup_by_barcode(session, barcode)
+
+    async def search_products(self, query: str) -> list[dict]:
+        """Search products by name."""
+        session = await self._get_session()
+        return await search_by_name(session, query)
+
+    async def delete_item(self, person: str, index: int, day: str | None = None):
+        """Delete an item by index from a person's log."""
+        day = day or str(date.today())
+        log = self._logs[person].get(day, [])
+        if 0 <= index < len(log):
+            removed = log.pop(index)
+            _LOGGER.info("Deleted: %s for %s", removed["name"], person)
             await self.async_refresh()
 
-    async def reset_dag(self, persoon: str, dag: str | None = None):
-        """Wis de log voor een dag (standaard: vandaag)."""
-        dag = dag or str(date.today())
-        self._logs[persoon][dag] = []
+    async def delete_last(self, person: str):
+        """Delete the last item from today's log."""
+        today = str(date.today())
+        log = self._logs[person].get(today, [])
+        if log:
+            removed = log.pop()
+            _LOGGER.info("Deleted: %s for %s", removed["name"], person)
+            await self.async_refresh()
+
+    async def reset_day(self, person: str, day: str | None = None):
+        """Clear the log for a day (default: today)."""
+        day = day or str(date.today())
+        self._logs[person][day] = []
         await self.async_refresh()
 
-    async def zoek_producten(self, naam: str) -> list[dict]:
-        """Zoek producten op naam, voor gebruik in notificaties/automations."""
-        session = await self._get_session()
-        return await zoek_op_naam(session, naam)
+    def get_log_for_date(self, person: str, day: str | None = None) -> list[dict]:
+        """Return the log for a specific date."""
+        day = day or str(date.today())
+        return self._logs[person].get(day, [])
 
-    def get_log_vandaag(self, persoon: str) -> list[dict]:
-        """Geef de log van vandaag voor een persoon."""
-        return self._logs[persoon].get(str(date.today()), [])
+    def get_log_today(self, person: str) -> list[dict]:
+        """Return today's log for a person."""
+        return self._logs[person].get(str(date.today()), [])
 
     # ------------------------------------------------------------------
-    # Intern
+    # Internal
     # ------------------------------------------------------------------
 
-    async def _voeg_toe(self, persoon: str, product: dict, gram: float):
-        if persoon not in self._logs:
-            _LOGGER.error("Onbekende persoon: %s", persoon)
+    async def _add_item(
+        self, person: str, product: dict, grams: float, category: str | None = None
+    ):
+        if person not in self._logs:
+            _LOGGER.error("Unknown person: %s", person)
             return
-        vandaag = str(date.today())
-        if vandaag not in self._logs[persoon]:
-            self._logs[persoon][vandaag] = []
-        self._logs[persoon][vandaag].append(
+        today = str(date.today())
+        if today not in self._logs[person]:
+            self._logs[person][today] = []
+
+        cat = category if category in MEAL_CATEGORIES else _default_category()
+
+        self._logs[person][today].append(
             {
-                "naam": product["naam"],
-                "gram": gram,
-                "nutrienten": product["nutrienten"],
-                "tijdstip": datetime.now().strftime("%H:%M"),
+                "name": product["name"],
+                "grams": grams,
+                "nutrients": product["nutrients"],
+                "time": datetime.now().strftime("%H:%M"),
+                "category": cat,
             }
         )
-        _LOGGER.info("Gelogd: %s (%.0fg) voor %s", product["naam"], gram, persoon)
+        _LOGGER.info("Logged: %s (%.0fg) for %s [%s]", product["name"], grams, person, cat)
         await self.async_refresh()
 
     async def _get_session(self) -> aiohttp.ClientSession:

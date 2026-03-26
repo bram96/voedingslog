@@ -1,30 +1,57 @@
-"""Constanten voor Voedingslog."""
+"""Constants for the Voedingslog integration."""
 
 DOMAIN = "voedingslog"
 
-DEFAULT_CALORIEEN = 2000
-DEFAULT_NATRIUM_MG = 2000
+DEFAULT_CALORIES_GOAL = 2000
+DEFAULT_SODIUM_GOAL_MG = 2000
 
 OFF_API = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 OFF_SEARCH = "https://world.openfoodfacts.org/cgi/search.pl"
 
-# Alle nutriënten die we bijhouden vanuit Open Food Facts
-NUTRIENTEN = {
-    "energy-kcal_100g":     {"naam": "Calorieën",        "eenheid": "kcal", "icon": "mdi:fire"},
-    "fat_100g":             {"naam": "Vetten",            "eenheid": "g",    "icon": "mdi:oil"},
-    "saturated-fat_100g":   {"naam": "Verzadigd vet",     "eenheid": "g",    "icon": "mdi:oil"},
-    "carbohydrates_100g":   {"naam": "Koolhydraten",      "eenheid": "g",    "icon": "mdi:barley"},
-    "sugars_100g":          {"naam": "Waarvan suikers",   "eenheid": "g",    "icon": "mdi:cube-outline"},
-    "fiber_100g":           {"naam": "Vezels",            "eenheid": "g",    "icon": "mdi:leaf"},
-    "proteins_100g":        {"naam": "Eiwitten",          "eenheid": "g",    "icon": "mdi:food-steak"},
-    "sodium_100g":          {"naam": "Natrium (zout)",    "eenheid": "mg",   "icon": "mdi:shaker-outline", "factor": 1000},
-    "vitamin-c_100g":       {"naam": "Vitamine C",        "eenheid": "mg",   "icon": "mdi:pill",           "factor": 1000},
-    "calcium_100g":         {"naam": "Calcium",           "eenheid": "mg",   "icon": "mdi:bone",           "factor": 1000},
-    "iron_100g":            {"naam": "IJzer",             "eenheid": "mg",   "icon": "mdi:pill",           "factor": 1000},
-    "vitamin-d_100g":       {"naam": "Vitamine D",        "eenheid": "µg",   "icon": "mdi:white-balance-sunny", "factor": 1000000},
+# All nutrients tracked from Open Food Facts (keys match OFF API field names)
+NUTRIENTS = {
+    "energy-kcal_100g":     {"label": "Calorieën",        "unit": "kcal", "icon": "mdi:fire"},
+    "fat_100g":             {"label": "Vetten",            "unit": "g",    "icon": "mdi:oil"},
+    "saturated-fat_100g":   {"label": "Verzadigd vet",     "unit": "g",    "icon": "mdi:oil"},
+    "carbohydrates_100g":   {"label": "Koolhydraten",      "unit": "g",    "icon": "mdi:barley"},
+    "sugars_100g":          {"label": "Waarvan suikers",   "unit": "g",    "icon": "mdi:cube-outline"},
+    "fiber_100g":           {"label": "Vezels",            "unit": "g",    "icon": "mdi:leaf"},
+    "proteins_100g":        {"label": "Eiwitten",          "unit": "g",    "icon": "mdi:food-steak"},
+    "sodium_100g":          {"label": "Natrium (zout)",    "unit": "mg",   "icon": "mdi:shaker-outline", "factor": 1000},
+    "vitamin-c_100g":       {"label": "Vitamine C",        "unit": "mg",   "icon": "mdi:pill",           "factor": 1000},
+    "calcium_100g":         {"label": "Calcium",           "unit": "mg",   "icon": "mdi:bone",           "factor": 1000},
+    "iron_100g":            {"label": "IJzer",             "unit": "mg",   "icon": "mdi:pill",           "factor": 1000},
+    "vitamin-d_100g":       {"label": "Vitamine D",        "unit": "µg",   "icon": "mdi:white-balance-sunny", "factor": 1000000},
 }
 
-SERVICE_LOG_PRODUCT   = "log_product"
-SERVICE_LOG_BARCODE   = "log_barcode"
-SERVICE_RESET_DAG     = "reset_dag"
-SERVICE_VERWIJDER_LOG = "verwijder_laatste"
+# Backwards compat alias used by sensor.py (until migrated)
+NUTRIENTEN = NUTRIENTS
+
+# Meal categories
+MEAL_CATEGORIES = ["breakfast", "lunch", "dinner", "snack"]
+MEAL_CATEGORY_LABELS = {
+    "breakfast": "Ontbijt",
+    "lunch": "Lunch",
+    "dinner": "Avondeten",
+    "snack": "Tussendoor",
+}
+
+# Service names
+SERVICE_LOG_PRODUCT = "log_product"
+SERVICE_LOG_BARCODE = "log_barcode"
+SERVICE_RESET_DAY = "reset_dag"
+SERVICE_DELETE_LAST = "verwijder_laatste"
+
+# Backwards compat aliases
+SERVICE_RESET_DAG = SERVICE_RESET_DAY
+SERVICE_VERWIJDER_LOG = SERVICE_DELETE_LAST
+
+# WebSocket command types
+WS_GET_CONFIG = f"{DOMAIN}/get_config"
+WS_GET_LOG = f"{DOMAIN}/get_log"
+WS_LOOKUP_BARCODE = f"{DOMAIN}/lookup_barcode"
+WS_SEARCH_PRODUCTS = f"{DOMAIN}/search_products"
+WS_LOG_PRODUCT = f"{DOMAIN}/log_product"
+WS_DELETE_ITEM = f"{DOMAIN}/delete_item"
+WS_RESET_DAY = f"{DOMAIN}/reset_day"
+WS_ANALYZE_PHOTO = f"{DOMAIN}/analyze_photo"
