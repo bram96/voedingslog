@@ -351,13 +351,13 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
       <div class="dialog-body">
-        <button class="btn-primary photo-btn" style="margin-bottom:12px" @click=${() => this._triggerAppScan()}>
-          <ha-icon icon="mdi:barcode-scan"></ha-icon>
-          Scan barcode
-        </button>
         ${this._scanFailed
           ? html`
             ${this._renderCameraCapture("barcode")}
+            <p class="browser-hint">
+              Barcode scanner werkt alleen in de browser.
+              <a href="${window.location.href}" target="_blank" rel="noopener">Open in browser</a>
+            </p>
           `
           : html`
             <div id="barcode-scanner-placeholder" class="scanner-area">
@@ -732,14 +732,6 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _startLiveScanner(): Promise<void> {
-    // On mobile, skip html5-qrcode (needs light DOM positioning which is unreliable)
-    // and go straight to camera capture mode
-    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-    if (isMobile) {
-      this._scanFailed = true;
-      return;
-    }
-
     try {
       this._cleanupScannerContainer();
 
@@ -984,24 +976,6 @@ export class VoedingslogPanel extends LitElement {
     const existing = document.getElementById(this._scannerContainerId);
     if (existing) {
       existing.remove();
-    }
-  }
-
-  private async _triggerAppScan(): Promise<void> {
-    if (!this._selectedPerson) return;
-    try {
-      // Register pending scan on the backend
-      await this.hass.callWS({
-        type: "voedingslog/trigger_app_scan",
-        person: this._selectedPerson,
-      });
-      // Navigate to HA's built-in tag scanner
-      // When a barcode is scanned, tag_scanned event fires and backend logs it
-      // Use history.pushState so user can navigate back
-      window.location.href = "/config/tags";
-    } catch (e) {
-      const err = e as Error & { message?: string };
-      alert(err.message || "Fout bij starten scanner.");
     }
   }
 
@@ -1664,6 +1638,15 @@ export class VoedingslogPanel extends LitElement {
       font-size: 14px;
       color: var(--secondary-text-color);
       margin-bottom: 16px;
+    }
+    .browser-hint {
+      font-size: 13px;
+      color: var(--secondary-text-color);
+      margin-top: 12px;
+      text-align: center;
+    }
+    .browser-hint a {
+      color: var(--primary-color);
     }
     .barcode-photo-fallback {
       margin-bottom: 16px;
