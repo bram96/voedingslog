@@ -65,7 +65,6 @@ export class VoedingslogPanel extends LitElement {
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
   private _positionFrame: number | null = null;
-  private _photoCameraStream: MediaStream | null = null;
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
@@ -632,12 +631,22 @@ export class VoedingslogPanel extends LitElement {
     }
 
     // Download
-    canvas.toBlob((blob) => {
+    const filename = `voedingslog-${person}-${this._selectedDate}.png`;
+    canvas.toBlob(async (blob) => {
       if (!blob) return;
+      // Try native share (works in companion app)
+      if (navigator.share) {
+        try {
+          const file = new File([blob], filename, { type: "image/png" });
+          await navigator.share({ files: [file], title: `Voedingslog ${person} — ${dateLabel}` });
+          return;
+        } catch { /* user cancelled or not supported, fall through */ }
+      }
+      // Fallback: direct download
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `voedingslog-${person}-${this._selectedDate}.png`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     }, "image/png");
@@ -1276,6 +1285,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _photoCameraContainerId = "vl-photo-camera";
+  private _photoHtml5Qrcode: Html5Qrcode | null = null;
   private _photoPosFrame: number | null = null;
 
   private _trackPhotoCameraPosition(): void {
@@ -1293,31 +1303,25 @@ export class VoedingslogPanel extends LitElement {
 
   private async _startPhotoCamera(): Promise<void> {
     try {
-      // Clean up any previous
       this._cleanupPhotoCameraContainer();
 
-      this._photoCameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-
-      // Create video in light DOM (same approach as barcode scanner)
       const container = document.createElement("div");
       container.id = this._photoCameraContainerId;
-      const video = document.createElement("video");
-      video.autoplay = true;
-      video.playsInline = true;
-      video.style.cssText = "width:100%; height:100%; object-fit:cover;";
-      video.srcObject = this._photoCameraStream;
-      container.appendChild(video);
       document.body.appendChild(container);
 
-      this._photoCameraActive = true;
-      await this.updateComplete;
-
-      // Track position over placeholder
       const placeholder = this.shadowRoot?.getElementById("photo-camera-placeholder");
       if (placeholder) placeholder.style.minHeight = "250px";
       this._trackPhotoCameraPosition();
+
+      // Use html5-qrcode for camera access (same approach that works for barcode)
+      this._photoHtml5Qrcode = new Html5Qrcode(this._photoCameraContainerId);
+      await this._photoHtml5Qrcode.start(
+        { facingMode: "environment" },
+        { fps: 2, qrbox: { width: 9999, height: 9999 } },
+        () => { /* ignore barcode detections */ },
+        () => {}
+      );
+      this._photoCameraActive = true;
     } catch (e) {
       console.warn("Photo camera failed:", e);
       this._cleanupPhotoCameraContainer();
@@ -1335,6 +1339,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _capturePhotoFrame(): Promise<void> {
+    // Find the video element created by html5-qrcode
     const container = document.getElementById(this._photoCameraContainerId);
     const video = container?.querySelector("video");
     if (!video) return;
@@ -1369,11 +1374,14 @@ export class VoedingslogPanel extends LitElement {
 
   private _stopPhotoCamera(): void {
     this._photoCameraActive = false;
-    if (this._photoCameraStream) {
-      this._photoCameraStream.getTracks().forEach((t) => t.stop());
-      this._photoCameraStream = null;
+    if (this._photoHtml5Qrcode) {
+      this._photoHtml5Qrcode.stop().catch(() => {}).finally(() => {
+        this._photoHtml5Qrcode = null;
+        this._cleanupPhotoCameraContainer();
+      });
+    } else {
+      this._cleanupPhotoCameraContainer();
     }
-    this._cleanupPhotoCameraContainer();
   }
 
   private async _openMeals(): Promise<void> {
