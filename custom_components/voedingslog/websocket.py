@@ -22,6 +22,9 @@ from .const import (
     WS_EDIT_ITEM,
     WS_RESET_DAY,
     WS_ANALYZE_PHOTO,
+    WS_GET_MEALS,
+    WS_SAVE_MEAL,
+    WS_DELETE_MEAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,6 +55,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_edit_item)
     websocket_api.async_register_command(hass, ws_reset_day)
     websocket_api.async_register_command(hass, ws_analyze_photo)
+    websocket_api.async_register_command(hass, ws_get_meals)
+    websocket_api.async_register_command(hass, ws_save_meal)
+    websocket_api.async_register_command(hass, ws_delete_meal)
 
 
 @websocket_api.websocket_command(
@@ -316,3 +322,55 @@ async def ws_analyze_photo(hass, connection, msg):
     except Exception as e:
         _LOGGER.error("AI photo analysis failed: %s", e)
         connection.send_error(msg["id"], "ai_error", str(e))
+
+
+# ── Custom meals (recipes) ────────────────────────────────────────
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_GET_MEALS}
+)
+@websocket_api.async_response
+async def ws_get_meals(hass, connection, msg):
+    """Return all custom meals."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    connection.send_result(msg["id"], {"meals": coordinator.get_meals()})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_SAVE_MEAL,
+        vol.Required("meal"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_save_meal(hass, connection, msg):
+    """Create or update a custom meal."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    saved = await coordinator.save_meal(msg["meal"])
+    connection.send_result(msg["id"], {"meal": saved})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_DELETE_MEAL,
+        vol.Required("meal_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_delete_meal(hass, connection, msg):
+    """Delete a custom meal."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    ok = await coordinator.delete_meal(msg["meal_id"])
+    if ok:
+        connection.send_result(msg["id"], {"success": True})
+    else:
+        connection.send_error(msg["id"], "not_found", "Meal not found")

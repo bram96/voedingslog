@@ -16,6 +16,7 @@ from .open_food_facts import lookup_by_barcode, search_by_name
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_KEY = f"{DOMAIN}.logs"
+STORAGE_KEY_MEALS = f"{DOMAIN}.meals"
 STORAGE_VERSION = 1
 
 
@@ -45,15 +46,23 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         self._logs: dict[str, dict[str, list]] = {p: {} for p in persons}
         self._session: aiohttp.ClientSession | None = None
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._meals_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_MEALS)
+        # Custom meals (recipes): list of {id, name, ingredients, nutrients_per_100g, total_grams}
+        self._meals: list[dict] = []
 
     async def async_load_from_store(self) -> None:
-        """Load persisted logs from disk."""
+        """Load persisted logs and meals from disk."""
         data = await self._store.async_load()
         if data and isinstance(data, dict):
             for person in self.persons:
                 if person in data:
                     self._logs[person] = data[person]
             _LOGGER.info("Loaded persisted logs for %d persons", len(self.persons))
+
+        meals_data = await self._meals_store.async_load()
+        if meals_data and isinstance(meals_data, list):
+            self._meals = meals_data
+            _LOGGER.info("Loaded %d custom meals", len(self._meals))
 
     async def _async_save(self) -> None:
         """Persist current logs to disk."""
@@ -187,6 +196,63 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
     def get_log_today(self, person: str) -> list[dict]:
         """Return today's log for a person."""
         return self._logs[person].get(str(date.today()), [])
+
+    # ------------------------------------------------------------------
+    # Custom meals (recipes)
+    # ------------------------------------------------------------------
+
+    def get_meals(self) -> list[dict]:
+        """Return all custom meals."""
+        return self._meals
+
+    async def save_meal(self, meal: dict) -> dict:
+        """Create or update a custom meal. Computes nutrients_per_100g from ingredients."""
+        import uuid
+
+        ingredients = meal.get("ingredients", [])
+        total_grams = sum(i.get("grams", 0) for i in ingredients)
+
+        # Calculate combined nutrients per 100g
+        nutrients_per_100g: dict[str, float] = {}
+        if total_grams > 0:
+            for key in NUTRIENTS:
+                total_value = sum(
+                    i.get("nutrients", {}).get(key, 0) * i.get("grams", 0) / 100
+                    for i in ingredients
+                )
+                nutrients_per_100g[key] = total_value / total_grams * 100
+        else:
+            nutrients_per_100g = {k: 0.0 for k in NUTRIENTS}
+
+        meal_id = meal.get("id") or str(uuid.uuid4())[:8]
+        saved = {
+            "id": meal_id,
+            "name": meal.get("name", "Naamloze maaltijd"),
+            "ingredients": ingredients,
+            "total_grams": total_grams,
+            "nutrients_per_100g": nutrients_per_100g,
+        }
+
+        # Update existing or append
+        idx = next((i for i, m in enumerate(self._meals) if m["id"] == meal_id), None)
+        if idx is not None:
+            self._meals[idx] = saved
+        else:
+            self._meals.append(saved)
+
+        await self._meals_store.async_save(self._meals)
+        _LOGGER.info("Saved meal: %s (%d ingredients, %.0fg total)", saved["name"], len(ingredients), total_grams)
+        return saved
+
+    async def delete_meal(self, meal_id: str) -> bool:
+        """Delete a custom meal by ID."""
+        idx = next((i for i, m in enumerate(self._meals) if m["id"] == meal_id), None)
+        if idx is not None:
+            removed = self._meals.pop(idx)
+            await self._meals_store.async_save(self._meals)
+            _LOGGER.info("Deleted meal: %s", removed["name"])
+            return True
+        return False
 
     # ------------------------------------------------------------------
     # Internal

@@ -61,6 +61,28 @@ export interface AnalyzePhotoResponse {
   product: Product | null;
 }
 
+export interface MealIngredient {
+  name: string;
+  grams: number;
+  nutrients: NutrientMap;
+}
+
+export interface CustomMeal {
+  id: string;
+  name: string;
+  ingredients: MealIngredient[];
+  total_grams: number;
+  nutrients_per_100g: NutrientMap;
+}
+
+export interface GetMealsResponse {
+  meals: CustomMeal[];
+}
+
+export interface SaveMealResponse {
+  meal: CustomMeal;
+}
+
 export interface NutrientDisplayConfig {
   key: string;
   label: string;
@@ -68,5 +90,5 @@ export interface NutrientDisplayConfig {
   decimals: number;
 }
 
-type DialogMode = "barcode" | "search" | "photo" | "weight" | "edit" | null;
+type DialogMode = "barcode" | "search" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | null;
 export type { DialogMode };

@@ -56,3 +56,8 @@ WS_DELETE_ITEM = f"{DOMAIN}/delete_item"
 WS_RESET_DAY = f"{DOMAIN}/reset_day"
 WS_EDIT_ITEM = f"{DOMAIN}/edit_item"
 WS_ANALYZE_PHOTO = f"{DOMAIN}/analyze_photo"
+
+# Custom meals (recipes)
+WS_GET_MEALS = f"{DOMAIN}/get_meals"
+WS_SAVE_MEAL = f"{DOMAIN}/save_meal"
+WS_DELETE_MEAL = f"{DOMAIN}/delete_meal"

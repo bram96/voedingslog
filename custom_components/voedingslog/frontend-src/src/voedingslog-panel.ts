@@ -8,10 +8,14 @@ import type {
   IndexedLogItem,
   Product,
   Portion,
+  CustomMeal,
+  MealIngredient,
   VoedingslogConfig,
   GetLogResponse,
+  GetMealsResponse,
   LookupBarcodeResponse,
   SearchProductsResponse,
+  SaveMealResponse,
   AnalyzePhotoResponse,
   DialogMode,
 } from "./types.js";
@@ -45,6 +49,10 @@ export class VoedingslogPanel extends LitElement {
   @state() private _cameraFailed = false;
   @state() private _analyzing = false;
   @state() private _editingItem: IndexedLogItem | null = null;
+  @state() private _meals: CustomMeal[] = [];
+  @state() private _editingMeal: CustomMeal | null = null;
+  @state() private _mealIngredientSearch = "";
+  @state() private _mealIngredientResults: Product[] = [];
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
@@ -217,6 +225,10 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon="mdi:camera"></ha-icon>
           <span>Foto etiket</span>
         </button>
+        <button class="action-btn" @click=${() => this._openMeals()}>
+          <ha-icon icon="mdi:pot-steam"></ha-icon>
+          <span>Maaltijden</span>
+        </button>
       </div>
     `;
   }
@@ -307,6 +319,8 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "photo" ? this._renderPhotoDialog() : nothing}
           ${this._dialogMode === "weight" ? this._renderWeightDialog() : nothing}
           ${this._dialogMode === "edit" ? this._renderEditDialog() : nothing}
+          ${this._dialogMode === "meals" ? this._renderMealsDialog() : nothing}
+          ${this._dialogMode === "meal-edit" ? this._renderMealEditDialog() : nothing}
         </div>
       </div>
     `;
@@ -601,6 +615,120 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  // ── Meals dialogs ────────────────────────────────────────────────
+
+  private _renderMealsDialog(): TemplateResult {
+    return html`
+      <div class="dialog-header">
+        <h2>Maaltijden</h2>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        ${this._meals.length === 0
+          ? html`<p class="empty-hint">Nog geen maaltijden. Maak een maaltijd aan om snel te kunnen loggen.</p>`
+          : this._meals.map(
+              (meal) => html`
+                <div class="meal-item">
+                  <div class="meal-info" @click=${() => this._logMeal(meal)}>
+                    <span class="meal-name">${meal.name}</span>
+                    <span class="meal-meta">
+                      ${meal.ingredients.length} ingrediënten · ${Math.round(meal.total_grams)}g ·
+                      ${Math.round(meal.nutrients_per_100g?.["energy-kcal_100g"] || 0)} kcal/100g
+                    </span>
+                  </div>
+                  <button class="item-edit" @click=${() => this._openMealEditor(meal)}>
+                    <ha-icon icon="mdi:pencil"></ha-icon>
+                  </button>
+                  <button class="item-delete" @click=${() => this._deleteMeal(meal.id)}>
+                    <ha-icon icon="mdi:close"></ha-icon>
+                  </button>
+                </div>
+              `
+            )}
+        <button class="btn-primary btn-confirm" style="margin-top:12px" @click=${() => this._openMealEditor(null)}>
+          <ha-icon icon="mdi:plus"></ha-icon>
+          Nieuwe maaltijd
+        </button>
+      </div>
+    `;
+  }
+
+  private _renderMealEditDialog(): TemplateResult {
+    const meal = this._editingMeal;
+    const ingredients = meal?.ingredients || [];
+    return html`
+      <div class="dialog-header">
+        <h2>${meal?.id ? "Maaltijd bewerken" : "Nieuwe maaltijd"}</h2>
+        <button class="close-btn" @click=${() => { this._dialogMode = "meals"; this._editingMeal = null; }}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="weight-section">
+          <label>Naam</label>
+          <input
+            type="text"
+            id="meal-name-input"
+            .value=${meal?.name || ""}
+            placeholder="Bijv. Macaroni"
+          />
+        </div>
+
+        <div class="meal-ingredients-section">
+          <label class="section-label">Ingrediënten</label>
+          ${ingredients.map(
+            (ing, idx) => html`
+              <div class="ingredient-row">
+                <div class="ingredient-info">
+                  <span class="ingredient-name">${ing.name}</span>
+                  <span class="ingredient-grams">${ing.grams}g</span>
+                </div>
+                <button class="item-delete" @click=${() => this._removeMealIngredient(idx)}>
+                  <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+              </div>
+            `
+          )}
+
+          <div class="add-ingredient">
+            <div class="input-row">
+              <input
+                type="text"
+                id="ingredient-search"
+                placeholder="Zoek ingrediënt..."
+                .value=${this._mealIngredientSearch}
+                @input=${(e: Event) => {
+                  this._mealIngredientSearch = (e.target as HTMLInputElement).value;
+                }}
+                @keydown=${(e: KeyboardEvent) => {
+                  if (e.key === "Enter") this._searchMealIngredient();
+                }}
+              />
+              <button class="btn-primary" @click=${() => this._searchMealIngredient()}>Zoek</button>
+            </div>
+            <div class="search-results">
+              ${this._mealIngredientResults.map(
+                (p) => html`
+                  <div class="search-result" @click=${() => this._addMealIngredient(p)}>
+                    <span class="result-name">${p.name}</span>
+                    <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
+                  </div>
+                `
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-primary btn-confirm" @click=${() => this._saveMeal()}>
+          <ha-icon icon="mdi:check"></ha-icon>
+          Opslaan
+        </button>
+      </div>
+    `;
+  }
+
   // ── Actions ──────────────────────────────────────────────────────
 
   private _openBarcodeScanner(): void {
@@ -626,6 +754,118 @@ export class VoedingslogPanel extends LitElement {
     this._analyzing = false;
   }
 
+  private async _openMeals(): Promise<void> {
+    try {
+      const res = await this.hass.callWS<GetMealsResponse>({ type: "voedingslog/get_meals" });
+      this._meals = res.meals || [];
+    } catch (e) {
+      console.error("Failed to load meals:", e);
+    }
+    this._dialogMode = "meals";
+  }
+
+  private _openMealEditor(meal: CustomMeal | null): void {
+    this._editingMeal = meal
+      ? { ...meal, ingredients: [...meal.ingredients] }
+      : { id: "", name: "", ingredients: [], total_grams: 0, nutrients_per_100g: {} };
+    this._mealIngredientSearch = "";
+    this._mealIngredientResults = [];
+    this._dialogMode = "meal-edit";
+  }
+
+  private _logMeal(meal: CustomMeal): void {
+    // Convert meal to a Product and open the weight dialog
+    const product: Product = {
+      name: meal.name,
+      serving_grams: meal.total_grams,
+      portions: [
+        { label: `Heel recept (${Math.round(meal.total_grams)}g)`, grams: meal.total_grams },
+        { label: "100g", grams: 100 },
+      ],
+      nutrients: meal.nutrients_per_100g,
+    };
+    this._pendingProduct = product;
+    this._dialogMode = "weight";
+  }
+
+  private async _searchMealIngredient(): Promise<void> {
+    const query = this._mealIngredientSearch.trim();
+    if (!query) return;
+    try {
+      const res = await this.hass.callWS<SearchProductsResponse>({
+        type: "voedingslog/search_products",
+        query,
+      });
+      this._mealIngredientResults = res.products || [];
+    } catch (e) {
+      console.error("Ingredient search failed:", e);
+    }
+  }
+
+  private _addMealIngredient(product: Product): void {
+    if (!this._editingMeal) return;
+    const grams = parseFloat(prompt(`Hoeveel gram ${product.name}?`, String(product.serving_grams || 100)) || "");
+    if (!grams || grams <= 0) return;
+
+    const ingredient: MealIngredient = {
+      name: product.name,
+      grams,
+      nutrients: product.nutrients,
+    };
+    this._editingMeal = {
+      ...this._editingMeal,
+      ingredients: [...this._editingMeal.ingredients, ingredient],
+    };
+    this._mealIngredientResults = [];
+    this._mealIngredientSearch = "";
+  }
+
+  private _removeMealIngredient(index: number): void {
+    if (!this._editingMeal) return;
+    const ingredients = [...this._editingMeal.ingredients];
+    ingredients.splice(index, 1);
+    this._editingMeal = { ...this._editingMeal, ingredients };
+  }
+
+  private async _saveMeal(): Promise<void> {
+    if (!this._editingMeal) return;
+    const nameInput = this.shadowRoot?.getElementById("meal-name-input") as HTMLInputElement | null;
+    const name = nameInput?.value?.trim();
+    if (!name) {
+      alert("Vul een naam in.");
+      return;
+    }
+    if (this._editingMeal.ingredients.length === 0) {
+      alert("Voeg minimaal één ingrediënt toe.");
+      return;
+    }
+
+    try {
+      await this.hass.callWS<SaveMealResponse>({
+        type: "voedingslog/save_meal",
+        meal: {
+          id: this._editingMeal.id || undefined,
+          name,
+          ingredients: this._editingMeal.ingredients,
+        },
+      });
+      await this._openMeals(); // Refresh list and go back
+    } catch (e) {
+      console.error("Failed to save meal:", e);
+      alert("Fout bij opslaan.");
+    }
+  }
+
+  private async _deleteMeal(mealId: string): Promise<void> {
+    if (!confirm("Maaltijd verwijderen?")) return;
+    try {
+      await this.hass.callWS({ type: "voedingslog/delete_meal", meal_id: mealId });
+      this._meals = this._meals.filter((m) => m.id !== mealId);
+    } catch (e) {
+      console.error("Failed to delete meal:", e);
+    }
+  }
+
   private _closeDialog(): void {
     this._stopCamera();
     this._dialogMode = null;
@@ -634,6 +874,9 @@ export class VoedingslogPanel extends LitElement {
     this._searchResults = [];
     this._analyzing = false;
     this._cameraFailed = false;
+    this._editingMeal = null;
+    this._mealIngredientSearch = "";
+    this._mealIngredientResults = [];
   }
 
   private async _startCamera(): Promise<void> {
@@ -1486,6 +1729,81 @@ export class VoedingslogPanel extends LitElement {
       padding: 14px;
       font-size: 16px;
       margin-top: 8px;
+    }
+
+    /* Meals */
+    .meal-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--divider-color);
+    }
+    .meal-item:last-of-type {
+      border-bottom: none;
+    }
+    .meal-info {
+      flex: 1;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .meal-name {
+      display: block;
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .meal-meta {
+      display: block;
+      font-size: 12px;
+      color: var(--secondary-text-color);
+    }
+    .item-edit {
+      background: none;
+      border: none;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 50%;
+      display: flex;
+    }
+    .item-edit:hover {
+      color: var(--primary-color);
+    }
+    .item-edit ha-icon {
+      --mdc-icon-size: 18px;
+    }
+    .section-label {
+      display: block;
+      font-size: 13px;
+      color: var(--secondary-text-color);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .meal-ingredients-section {
+      margin-bottom: 16px;
+    }
+    .ingredient-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--divider-color);
+    }
+    .ingredient-info {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ingredient-name {
+      font-size: 14px;
+    }
+    .ingredient-grams {
+      font-size: 13px;
+      color: var(--secondary-text-color);
+      margin-right: 8px;
+    }
+    .add-ingredient {
+      margin-top: 12px;
     }
   `;
 }
