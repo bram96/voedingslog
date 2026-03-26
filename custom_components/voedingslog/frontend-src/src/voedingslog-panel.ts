@@ -48,6 +48,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _scanning = false;
   @state() private _scanFailed = false;
   @state() private _photoCameraActive = false;
+  @state() private _prefillProduct: Product | null = null;
   @state() private _analyzing = false;
   @state() private _searching = false;
   @state() private _searchSource: "local" | "online" = "local";
@@ -234,7 +235,7 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon="mdi:pot-steam"></ha-icon>
           <span>Maaltijden</span>
         </button>
-        <button class="action-btn" @click=${() => { this._dialogMode = "manual"; }}>
+        <button class="action-btn" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
           <ha-icon icon="mdi:pencil-plus"></ha-icon>
           <span>Handmatig</span>
         </button>
@@ -648,6 +649,7 @@ export class VoedingslogPanel extends LitElement {
   // ── Manual entry dialog ──────────────────────────────────────────
 
   private _renderManualEntryDialog(): TemplateResult {
+    const pre = this._prefillProduct;
     const fields = [
       { id: "manual-kcal", label: "Calorieën (kcal)", key: "energy-kcal_100g" },
       { id: "manual-fat", label: "Vetten (g)", key: "fat_100g" },
@@ -661,15 +663,18 @@ export class VoedingslogPanel extends LitElement {
 
     return html`
       <div class="dialog-header">
-        <h2>Handmatig toevoegen</h2>
+        <h2>${pre ? "Controleer voedingswaarden" : "Handmatig toevoegen"}</h2>
         <button class="close-btn" @click=${() => this._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
       <div class="dialog-body">
+        ${pre ? html`<p class="manual-hint">Door AI herkend. Controleer en pas aan indien nodig.</p>` : nothing}
         <div class="weight-section">
           <label>Productnaam</label>
-          <input type="text" id="manual-name" placeholder="Bijv. Zelfgemaakte soep" />
+          <input type="text" id="manual-name"
+            placeholder="Bijv. Zelfgemaakte soep"
+            .value=${pre?.name || ""} />
         </div>
         <p class="manual-hint">Voedingswaarden per 100g:</p>
         <div class="manual-fields">
@@ -677,7 +682,8 @@ export class VoedingslogPanel extends LitElement {
             (f) => html`
               <div class="manual-field-row">
                 <label>${f.label}</label>
-                <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal" value="0" />
+                <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
+                  .value=${String(pre?.nutrients?.[f.key] ?? 0)} />
               </div>
             `
           )}
@@ -688,6 +694,11 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
     `;
+  }
+
+  private _openManualWithPrefill(product: Product): void {
+    this._prefillProduct = product;
+    this._dialogMode = "manual";
   }
 
   private _confirmManualEntry(fields: { id: string; key: string }[]): void {
@@ -975,11 +986,10 @@ export class VoedingslogPanel extends LitElement {
         type: "voedingslog/analyze_photo",
         photo_b64: b64,
       });
+      this._analyzing = false;
       if (res.product) {
-        this._analyzing = false;
-        this._selectProduct(res.product);
+        this._openManualWithPrefill(res.product);
       } else {
-        this._analyzing = false;
         alert("Kon voedingswaarden niet herkennen. Probeer een duidelijkere foto.");
       }
     } catch (err) {
@@ -1140,6 +1150,7 @@ export class VoedingslogPanel extends LitElement {
     this._editingMeal = null;
     this._mealIngredientSearch = "";
     this._mealIngredientResults = [];
+    this._prefillProduct = null;
   }
 
   private _openFileInput(id: string): void {
@@ -1273,11 +1284,10 @@ export class VoedingslogPanel extends LitElement {
         photo_b64: b64,
       });
 
+      this._analyzing = false;
       if (res.product) {
-        this._analyzing = false;
-        this._selectProduct(res.product);
+        this._openManualWithPrefill(res.product);
       } else {
-        this._analyzing = false;
         alert("Kon voedingswaarden niet herkennen. Probeer een duidelijkere foto.");
       }
     } catch (err) {
