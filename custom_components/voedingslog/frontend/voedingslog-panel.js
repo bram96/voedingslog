@@ -1029,7 +1029,6 @@ var VoedingslogPanel = class extends i4 {
     this.updateComplete.then(() => this._startCamera());
   }
   _openSearch() {
-    console.log("[voedingslog] _openSearch called");
     this._dialogMode = "search";
     this._searchResults = [];
     this._searchQuery = "";
@@ -1120,31 +1119,17 @@ var VoedingslogPanel = class extends i4 {
     }
   }
   async _doSearch() {
-    console.log("[voedingslog] _doSearch called");
-    console.log("[voedingslog] this:", this);
-    console.log("[voedingslog] this.hass:", this.hass);
-    console.log("[voedingslog] shadowRoot:", this.shadowRoot);
     const input = this.shadowRoot?.getElementById("search-input");
-    console.log("[voedingslog] search input element:", input);
-    console.log("[voedingslog] input.value:", input?.value);
-    console.log("[voedingslog] _searchQuery state:", this._searchQuery);
     const query = (input?.value || this._searchQuery).trim();
-    console.log("[voedingslog] final query:", JSON.stringify(query));
-    if (!query) {
-      console.log("[voedingslog] query is empty, returning early");
-      return;
-    }
-    console.log("[voedingslog] sending WS call voedingslog/search_products with query:", query);
+    if (!query) return;
     try {
       const res = await this.hass.callWS({
         type: "voedingslog/search_products",
         query
       });
-      console.log("[voedingslog] WS response:", JSON.stringify(res));
       this._searchResults = res.products || [];
-      console.log("[voedingslog] searchResults set, count:", this._searchResults.length);
     } catch (e5) {
-      console.error("[voedingslog] Search WS call failed:", e5);
+      console.error("Search failed:", e5);
       alert("Fout bij zoeken. Controleer de verbinding.");
     }
   }

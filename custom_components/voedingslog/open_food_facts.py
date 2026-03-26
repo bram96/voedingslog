@@ -40,15 +40,15 @@ async def search_by_name(session: aiohttp.ClientSession, name: str) -> list[dict
         "fields": "product_name,brands,nutriments,product_name_nl,serving_size,quantity",
     }
     try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(
-                OFF_SEARCH, params=params, timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-                products = data.get("products", [])
-                return [_process_product(p) for p in products if p.get("nutriments")]
+        async with session.get(
+            OFF_SEARCH, params=params, timeout=aiohttp.ClientTimeout(total=10)
+        ) as resp:
+            if resp.status != 200:
+                _LOGGER.warning("OFF search HTTP %s for '%s'", resp.status, name)
+                return []
+            data = await resp.json()
+            products = data.get("products", [])
+            return [_process_product(p) for p in products if p.get("nutriments")]
     except Exception as e:
         _LOGGER.error("Error searching '%s': %s", name, e)
         return []

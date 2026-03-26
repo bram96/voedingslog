@@ -6,7 +6,7 @@ DEFAULT_CALORIES_GOAL = 2000
 DEFAULT_SODIUM_GOAL_MG = 2000
 
 OFF_API = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
-OFF_SEARCH = "https://world.openfoodfacts.org/cgi/search.pl"
+OFF_SEARCH = "https://world.openfoodfacts.net/cgi/search.pl"
 
 # All nutrients tracked from Open Food Facts (keys match OFF API field names)
 NUTRIENTS = {
