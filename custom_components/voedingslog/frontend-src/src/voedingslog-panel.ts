@@ -61,6 +61,7 @@ export class VoedingslogPanel extends LitElement {
   @state() private _mealIngredientSearch = "";
   @state() private _mealIngredientResults: Product[] = [];
   @state() private _favorites: Product[] = [];
+  @state() private _exportImageUrl: string | null = null;
 
   private _html5Qrcode: Html5Qrcode | null = null;
   private _scannerContainerId = "vl-barcode-reader";
@@ -481,10 +482,19 @@ export class VoedingslogPanel extends LitElement {
           )}
         </div>
 
-        <button class="btn-secondary btn-confirm" @click=${() => this._exportDayImage(slices)}>
-          <ha-icon icon="mdi:download"></ha-icon>
-          Exporteer als afbeelding
-        </button>
+        ${this._exportImageUrl
+          ? html`
+            <div class="export-preview">
+              <p class="manual-hint">Hou de afbeelding ingedrukt om op te slaan.</p>
+              <img src=${this._exportImageUrl} alt="Voedingslog export" style="width:100%;border-radius:8px;border:1px solid var(--divider-color);" />
+            </div>
+          `
+          : html`
+            <button class="btn-secondary btn-confirm" @click=${() => this._exportDayImage(slices)}>
+              <ha-icon icon="mdi:download"></ha-icon>
+              Exporteer als afbeelding
+            </button>
+          `}
       </div>
     `;
   }
@@ -631,24 +641,12 @@ export class VoedingslogPanel extends LitElement {
     }
 
     // Download
-    const filename = `voedingslog-${person}-${this._selectedDate}.png`;
     canvas.toBlob(async (blob) => {
       if (!blob) return;
-      // Try native share (works in companion app)
-      if (navigator.share) {
-        try {
-          const file = new File([blob], filename, { type: "image/png" });
-          await navigator.share({ files: [file], title: `Voedingslog ${person} — ${dateLabel}` });
-          return;
-        } catch { /* user cancelled or not supported, fall through */ }
-      }
-      // Fallback: direct download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Show the image inline in a dialog so user can long-press to save
+      const dataUrl = canvas.toDataURL("image/png");
+      this._exportImageUrl = dataUrl;
+      this.requestUpdate();
     }, "image/png");
   }
 
@@ -1304,6 +1302,9 @@ export class VoedingslogPanel extends LitElement {
   private async _startPhotoCamera(): Promise<void> {
     try {
       this._cleanupPhotoCameraContainer();
+      // Set active first so the placeholder renders
+      this._photoCameraActive = true;
+      await this.updateComplete;
 
       const container = document.createElement("div");
       container.id = this._photoCameraContainerId;
@@ -1313,17 +1314,16 @@ export class VoedingslogPanel extends LitElement {
       if (placeholder) placeholder.style.minHeight = "250px";
       this._trackPhotoCameraPosition();
 
-      // Use html5-qrcode for camera access (same approach that works for barcode)
       this._photoHtml5Qrcode = new Html5Qrcode(this._photoCameraContainerId);
       await this._photoHtml5Qrcode.start(
         { facingMode: "environment" },
         { fps: 2, qrbox: { width: 9999, height: 9999 } },
-        () => { /* ignore barcode detections */ },
+        () => {},
         () => {}
       );
-      this._photoCameraActive = true;
     } catch (e) {
       console.warn("Photo camera failed:", e);
+      this._photoCameraActive = false;
       this._cleanupPhotoCameraContainer();
       alert("Camera niet beschikbaar. Gebruik 'Kies afbeelding'.");
     }
@@ -1529,6 +1529,7 @@ export class VoedingslogPanel extends LitElement {
     this._mealIngredientSearch = "";
     this._mealIngredientResults = [];
     this._prefillProduct = null;
+    this._exportImageUrl = null;
   }
 
   private _openFileInput(id: string): void {
