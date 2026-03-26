@@ -807,6 +807,11 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private async _deleteItem(index: number): Promise<void> {
+    const items = this._items;
+    const item = items[index];
+    const name = item?.name || "dit item";
+    if (!confirm(`${name} verwijderen?`)) return;
+
     try {
       await this.hass.callWS({
         type: "voedingslog/delete_item",
