@@ -27,6 +27,7 @@ import {
   groupByCategory,
   calcItemNutrients,
   sumNutrients,
+  NUTRIENTS_META,
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
 
@@ -217,28 +218,15 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _renderActions(): TemplateResult {
-    const hasAI = !!this._config?.ai_task_entity;
     return html`
       <div class="actions">
-        <button class="action-btn" @click=${() => this._openBarcodeScanner()}>
-          <ha-icon icon="mdi:barcode-scan"></ha-icon>
-          <span>Scan barcode</span>
-        </button>
-        <button class="action-btn" @click=${() => this._openSearch()}>
-          <ha-icon icon="mdi:magnify"></ha-icon>
-          <span>Zoek product</span>
-        </button>
-        <button class="action-btn" @click=${() => this._openPhotoCapture()} ?disabled=${!hasAI}>
-          <ha-icon icon="mdi:camera"></ha-icon>
-          <span>Foto etiket</span>
+        <button class="action-btn action-btn-primary" @click=${() => { this._dialogMode = "add-chooser"; }}>
+          <ha-icon icon="mdi:plus"></ha-icon>
+          <span>Toevoegen</span>
         </button>
         <button class="action-btn" @click=${() => this._openMeals()}>
           <ha-icon icon="mdi:pot-steam"></ha-icon>
           <span>Maaltijden</span>
-        </button>
-        <button class="action-btn" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
-          <ha-icon icon="mdi:pencil-plus"></ha-icon>
-          <span>Handmatig</span>
         </button>
       </div>
     `;
@@ -251,7 +239,7 @@ export class VoedingslogPanel extends LitElement {
     const pct = Math.min(100, Math.round((kcal / goal) * 100));
 
     return html`
-      <div class="day-totals card">
+      <div class="day-totals card" @click=${() => { this._dialogMode = "day-detail"; }} style="cursor:pointer">
         <div class="totals-header">
           <span class="totals-title">Dagtotaal</span>
           <span class="totals-cal">${Math.round(kcal)} / ${goal} kcal</span>
@@ -325,6 +313,7 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-overlay" @click=${() => this._closeDialog()}>
         <div class="dialog" @click=${(e: Event) => e.stopPropagation()}>
+          ${this._dialogMode === "add-chooser" ? this._renderAddChooser() : nothing}
           ${this._dialogMode === "barcode" ? this._renderBarcodeDialog() : nothing}
           ${this._dialogMode === "search" ? this._renderSearchDialog() : nothing}
           ${this._dialogMode === "photo" ? this._renderPhotoDialog() : nothing}
@@ -333,12 +322,139 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "meals" ? this._renderMealsDialog() : nothing}
           ${this._dialogMode === "meal-edit" ? this._renderMealEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._renderManualEntryDialog() : nothing}
+          ${this._dialogMode === "day-detail" ? this._renderDayDetailDialog() : nothing}
         </div>
       </div>
     `;
   }
 
 
+
+  private _renderAddChooser(): TemplateResult {
+    const hasAI = !!this._config?.ai_task_entity;
+    return html`
+      <div class="dialog-header">
+        <h2>Toevoegen</h2>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="chooser-grid">
+          <button class="chooser-item" @click=${() => this._openBarcodeScanner()}>
+            <ha-icon icon="mdi:barcode-scan"></ha-icon>
+            <span>Scan barcode</span>
+          </button>
+          <button class="chooser-item" @click=${() => this._openSearch()}>
+            <ha-icon icon="mdi:magnify"></ha-icon>
+            <span>Zoek product</span>
+          </button>
+          <button class="chooser-item" @click=${() => this._openPhotoCapture()} ?disabled=${!hasAI}>
+            <ha-icon icon="mdi:camera"></ha-icon>
+            <span>Foto etiket</span>
+          </button>
+          <button class="chooser-item" @click=${() => { this._prefillProduct = null; this._dialogMode = "manual"; }}>
+            <ha-icon icon="mdi:pencil-plus"></ha-icon>
+            <span>Handmatig</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderDayDetailDialog(): TemplateResult {
+    const totals = sumNutrients(this._items);
+    const kcal = totals["energy-kcal_100g"] || 0;
+    const protein = totals["proteins_100g"] || 0;
+    const carbs = totals["carbohydrates_100g"] || 0;
+    const fat = totals["fat_100g"] || 0;
+    const fiber = totals["fiber_100g"] || 0;
+    const macroTotal = protein + carbs + fat + fiber;
+
+    const pctProtein = macroTotal > 0 ? Math.round(protein / macroTotal * 100) : 0;
+    const pctCarbs = macroTotal > 0 ? Math.round(carbs / macroTotal * 100) : 0;
+    const pctFat = macroTotal > 0 ? Math.round(fat / macroTotal * 100) : 0;
+    const pctFiber = macroTotal > 0 ? 100 - pctProtein - pctCarbs - pctFat : 0;
+
+    // Build conic-gradient for pie chart
+    let gradientStops = "";
+    let angle = 0;
+    const slices = [
+      { pct: pctCarbs, color: "var(--primary-color, #03a9f4)", label: "Koolhydraten", grams: carbs },
+      { pct: pctProtein, color: "#4caf50", label: "Eiwitten", grams: protein },
+      { pct: pctFat, color: "#ff9800", label: "Vetten", grams: fat },
+      { pct: pctFiber, color: "#8bc34a", label: "Vezels", grams: fiber },
+    ];
+    for (const s of slices) {
+      const end = angle + s.pct;
+      gradientStops += `${s.color} ${angle}% ${end}%, `;
+      angle = end;
+    }
+    gradientStops = gradientStops.replace(/, $/, "");
+
+    return html`
+      <div class="dialog-header">
+        <h2>Dagdetails — ${this._formatDateLabel(this._selectedDate)}</h2>
+        <button class="close-btn" @click=${() => this._closeDialog()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="pie-section">
+          <div class="pie-chart"
+            style="background: conic-gradient(${gradientStops || "#eee 0% 100%"})">
+            <div class="pie-center">
+              <span class="pie-kcal">${Math.round(kcal)}</span>
+              <span class="pie-unit">kcal</span>
+            </div>
+          </div>
+          <div class="pie-legend">
+            ${slices.map(
+              (s) => html`
+                <div class="legend-item">
+                  <span class="legend-dot" style="background:${s.color}"></span>
+                  <span class="legend-label">${s.label}</span>
+                  <span class="legend-value">${s.grams.toFixed(1)}g (${s.pct}%)</span>
+                </div>
+              `
+            )}
+          </div>
+        </div>
+
+        <div class="detail-table">
+          <div class="detail-table-header">Alle voedingswaarden</div>
+          ${Object.entries(this._config?.nutrients || {}).map(
+            ([key, meta]) => {
+              const raw = totals[key] || 0;
+              const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+              const value = raw * factor;
+              return html`
+                <div class="detail-row">
+                  <span>${meta.label}</span>
+                  <span>${value.toFixed(1)} ${meta.unit}</span>
+                </div>
+              `;
+            }
+          )}
+        </div>
+
+        <div class="detail-table" style="margin-top:12px">
+          <div class="detail-table-header">Gelogde items (${this._items.length})</div>
+          ${this._items.map(
+            (item) => {
+              const itemKcal = (item.nutrients?.["energy-kcal_100g"] || 0) * item.grams / 100;
+              return html`
+                <div class="detail-row">
+                  <span>${item.name}</span>
+                  <span>${item.grams}g · ${Math.round(itemKcal)} kcal</span>
+                </div>
+              `;
+            }
+          )}
+        </div>
+      </div>
+    `;
+  }
 
   private _renderCameraCapture(purpose: "barcode" | "photo"): TemplateResult {
     const fileChangeHandler = purpose === "barcode"

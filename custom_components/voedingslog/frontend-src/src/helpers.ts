@@ -27,6 +27,22 @@ export const KEY_NUTRIENTS_DISPLAY: NutrientDisplayConfig[] = [
   { key: "fat_100g", label: "Vet", unit: "g", decimals: 1 },
 ];
 
+/** Factor to convert raw nutrient values to display units (e.g. sodium g → mg) */
+export const NUTRIENTS_META: Record<string, number> = {
+  "energy-kcal_100g": 1,
+  "fat_100g": 1,
+  "saturated-fat_100g": 1,
+  "carbohydrates_100g": 1,
+  "sugars_100g": 1,
+  "fiber_100g": 1,
+  "proteins_100g": 1,
+  "sodium_100g": 1000,
+  "vitamin-c_100g": 1000,
+  "calcium_100g": 1000,
+  "iron_100g": 1000,
+  "vitamin-d_100g": 1000000,
+};
+
 export function defaultCategory(): MealCategory {
   const h = new Date().getHours();
   if (h < 10) return "breakfast";

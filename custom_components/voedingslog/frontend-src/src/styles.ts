@@ -198,4 +198,49 @@ export const panelStyles = css`
     width: 80px; padding: 6px 8px; border: 1px solid var(--divider-color); border-radius: 6px;
     font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color);
   }
+
+  /* Add chooser */
+  .chooser-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chooser-item {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 20px 12px; background: var(--secondary-background-color);
+    border: 1px solid var(--divider-color); border-radius: 12px;
+    cursor: pointer; color: var(--primary-text-color); font-size: 14px;
+    transition: background 0.2s;
+  }
+  .chooser-item:hover { background: var(--divider-color); }
+  .chooser-item:disabled { opacity: 0.4; cursor: not-allowed; }
+  .chooser-item ha-icon { --mdc-icon-size: 28px; color: var(--primary-color); }
+
+  /* Primary action button */
+  .action-btn-primary { background: var(--primary-color) !important; color: var(--text-primary-color, #fff) !important; border-color: var(--primary-color) !important; }
+
+  /* Day detail / pie chart */
+  .pie-section { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .pie-chart {
+    width: 180px; height: 180px; border-radius: 50%; position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pie-center {
+    width: 100px; height: 100px; border-radius: 50%;
+    background: var(--card-background-color);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .pie-kcal { font-size: 22px; font-weight: 600; line-height: 1; }
+  .pie-unit { font-size: 12px; color: var(--secondary-text-color); }
+  .pie-legend { width: 100%; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; font-size: 14px; }
+  .legend-value { font-size: 13px; color: var(--secondary-text-color); }
+
+  .detail-table { }
+  .detail-table-header { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--primary-text-color); }
+  .detail-row {
+    display: flex; justify-content: space-between; padding: 6px 0;
+    border-bottom: 1px solid var(--divider-color); font-size: 14px;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row span:last-child { color: var(--secondary-text-color); white-space: nowrap; }
 `;
+
