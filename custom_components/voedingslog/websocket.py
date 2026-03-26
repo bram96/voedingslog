@@ -34,9 +34,13 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_coordinator(hass: HomeAssistant):
-    """Get the first available coordinator."""
+def _get_coordinator(hass: HomeAssistant, person: str | None = None):
+    """Get the coordinator for a person, or the first available one."""
     entries = hass.data.get(DOMAIN, {})
+    if person:
+        for coord in entries.values():
+            if person in coord.persons:
+                return coord
     if entries:
         return next(iter(entries.values()))
     return None
@@ -77,9 +81,32 @@ async def ws_get_config(hass, connection, msg):
         connection.send_error(msg["id"], "not_configured", "Voedingslog is not configured")
         return
 
+    # Gather persons and per-person goals from all config entries
+    all_persons = []
+    person_goals = {}
+    ai_entity = ""
+    for e in hass.config_entries.async_entries(DOMAIN):
+        merged = {**e.data, **e.options}
+        for p in merged.get("personen", []):
+            if p not in all_persons:
+                all_persons.append(p)
+                person_goals[p] = {
+                    "calories_goal": merged.get("doel_calorieen", 2000),
+                    "macro_goals": {
+                        "carbs": merged.get("carbs_goal", 0),
+                        "protein": merged.get("protein_goal", 0),
+                        "fat": merged.get("fat_goal", 0),
+                        "fiber": merged.get("fiber_goal", 0),
+                    },
+                }
+        if not ai_entity:
+            ai_entity = merged.get("ai_task_entity", "")
+
+    # Use first person's goals as default
     opts = {**entry.data, **entry.options}
     connection.send_result(msg["id"], {
-        "persons": opts.get("personen", []),
+        "persons": all_persons,
+        "person_goals": person_goals,
         "calories_goal": opts.get("doel_calorieen", 2000),
         "macro_goals": {
             "carbs": opts.get("carbs_goal", 0),
@@ -90,7 +117,7 @@ async def ws_get_config(hass, connection, msg):
         "categories": MEAL_CATEGORIES,
         "category_labels": MEAL_CATEGORY_LABELS,
         "nutrients": {k: {"label": v["label"], "unit": v["unit"]} for k, v in NUTRIENTS.items()},
-        "ai_task_entity": opts.get("ai_task_entity", ""),
+        "ai_task_entity": ai_entity,
     })
 
 
@@ -104,12 +131,11 @@ async def ws_get_config(hass, connection, msg):
 @websocket_api.async_response
 async def ws_get_log(hass, connection, msg):
     """Return the log for a person on a given date."""
-    coordinator = _get_coordinator(hass)
+    person = msg["person"]
+    coordinator = _get_coordinator(hass, person)
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
-
-    person = msg["person"]
     day = msg.get("date")
     items = coordinator.get_log_for_date(person, day)
 
@@ -181,7 +207,7 @@ async def ws_search_products(hass, connection, msg):
 @websocket_api.async_response
 async def ws_log_product(hass, connection, msg):
     """Log a product with full nutrient data."""
-    coordinator = _get_coordinator(hass)
+    coordinator = _get_coordinator(hass, msg["person"])
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
@@ -208,7 +234,7 @@ async def ws_log_product(hass, connection, msg):
 @websocket_api.async_response
 async def ws_delete_item(hass, connection, msg):
     """Delete a specific item by index."""
-    coordinator = _get_coordinator(hass)
+    coordinator = _get_coordinator(hass, msg["person"])
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
@@ -230,7 +256,7 @@ async def ws_delete_item(hass, connection, msg):
 @websocket_api.async_response
 async def ws_edit_item(hass, connection, msg):
     """Edit the grams and/or category of an existing item."""
-    coordinator = _get_coordinator(hass)
+    coordinator = _get_coordinator(hass, msg["person"])
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
@@ -258,7 +284,7 @@ async def ws_edit_item(hass, connection, msg):
 @websocket_api.async_response
 async def ws_reset_day(hass, connection, msg):
     """Clear the log for a day."""
-    coordinator = _get_coordinator(hass)
+    coordinator = _get_coordinator(hass, msg["person"])
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return

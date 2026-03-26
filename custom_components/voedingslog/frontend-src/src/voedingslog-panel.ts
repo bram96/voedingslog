@@ -98,6 +98,16 @@ export class VoedingslogPanel extends LitElement {
     this._selectedPerson = this._config.persons[0];
   }
 
+  private _getCaloriesGoal(): number {
+    const pg = this._config?.person_goals?.[this._selectedPerson || ""];
+    return pg?.calories_goal ?? this._config?.calories_goal ?? 2000;
+  }
+
+  private _getMacroGoals(): { carbs: number; protein: number; fat: number; fiber: number } {
+    const pg = this._config?.person_goals?.[this._selectedPerson || ""];
+    return pg?.macro_goals ?? this._config?.macro_goals ?? { carbs: 0, protein: 0, fat: 0, fiber: 0 };
+  }
+
   private async _loadConfig(): Promise<void> {
     try {
       this._config = await this.hass.callWS<VoedingslogConfig>({
@@ -252,7 +262,7 @@ export class VoedingslogPanel extends LitElement {
 
   private _renderDayTotals(): TemplateResult {
     const totals = sumNutrients(this._items);
-    const goal = this._config?.calories_goal || 2000;
+    const goal = this._getCaloriesGoal();
     const kcal = totals["energy-kcal_100g"] || 0;
     const pct = Math.min(100, Math.round((kcal / goal) * 100));
 
@@ -375,8 +385,8 @@ export class VoedingslogPanel extends LitElement {
 
   private _renderDayDetailDialog(): TemplateResult {
     const totals = sumNutrients(this._items);
-    const mg = this._config?.macro_goals || { carbs: 0, protein: 0, fat: 0, fiber: 0 };
-    const goal = this._config?.calories_goal || 2000;
+    const mg = this._getMacroGoals();
+    const goal = this._getCaloriesGoal();
     const kcal = totals["energy-kcal_100g"] || 0;
     const protein = totals["proteins_100g"] || 0;
     const carbs = totals["carbohydrates_100g"] || 0;
@@ -499,7 +509,7 @@ export class VoedingslogPanel extends LitElement {
 
   private _exportDayImage(slices: { pct: number; color: string; label: string; grams: number; goal: number }[]): void {
     const totals = sumNutrients(this._items);
-    const goal = this._config?.calories_goal || 2000;
+    const goal = this._getCaloriesGoal();
     const kcal = totals["energy-kcal_100g"] || 0;
     const person = this._selectedPerson || "";
     const dateLabel = this._formatDateLabel(this._selectedDate);

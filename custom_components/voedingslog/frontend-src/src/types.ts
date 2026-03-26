@@ -46,10 +46,16 @@ export interface MacroGoals {
   fiber: number;
 }
 
+export interface PersonGoals {
+  calories_goal: number;
+  macro_goals: MacroGoals;
+}
+
 export interface VoedingslogConfig {
   persons: string[];
   calories_goal: number;
   macro_goals: MacroGoals;
+  person_goals?: Record<string, PersonGoals>;
   categories: MealCategory[];
   category_labels: Record<MealCategory, string>;
   nutrients: Record<string, { label: string; unit: string }>;

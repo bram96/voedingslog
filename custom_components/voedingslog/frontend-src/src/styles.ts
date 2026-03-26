@@ -44,10 +44,10 @@ export const panelStyles = css`
   .date-text { font-size: 15px; font-weight: 500; }
   .person-tabs { display: flex; gap: 8px; margin-top: 12px; }
   .person-tab {
-    background: rgba(255,255,255,0.15); border: none; color: inherit;
+    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: inherit;
     padding: 6px 16px; border-radius: 20px; font-size: 14px; cursor: pointer; transition: background 0.2s;
   }
-  .person-tab.active { background: rgba(255,255,255,0.35); font-weight: 500; }
+  .person-tab.active { background: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.5); font-weight: 600; }
 
   .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; }
 
