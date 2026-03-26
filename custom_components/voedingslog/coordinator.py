@@ -286,6 +286,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             "total_grams": total_grams,
             "nutrients_per_100g": nutrients_per_100g,
             "preferred_portion": preferred_portion,
+            "favorite": meal.get("favorite", False),
         }
 
         # Update existing or append

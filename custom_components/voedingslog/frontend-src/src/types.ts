@@ -92,6 +92,7 @@ export interface CustomMeal {
   total_grams: number;
   nutrients_per_100g: NutrientMap;
   preferred_portion?: number;
+  favorite?: boolean;
 }
 
 export interface GetMealsResponse {

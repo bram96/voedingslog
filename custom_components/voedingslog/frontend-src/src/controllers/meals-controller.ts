@@ -30,6 +30,8 @@ export class MealsController {
   meals: CustomMeal[] = [];
   editingMeal: CustomMeal | null = null;
   editingIngredientIndex: number | null = null;
+  searchQuery = "";
+  showFavoritesOnly = false;
 
   constructor(host: MealsControllerHost) {
     this.host = host;
@@ -38,21 +40,46 @@ export class MealsController {
   reset(): void {
     this.editingMeal = null;
     this.editingIngredientIndex = null;
+    this.searchQuery = "";
+  }
+
+  private _filteredMeals(): CustomMeal[] {
+    let result = this.meals;
+    if (this.showFavoritesOnly) {
+      result = result.filter((m) => m.favorite);
+    }
+    const q = this.searchQuery.toLowerCase().trim();
+    if (q) {
+      result = result.filter((m) => m.name.toLowerCase().includes(q));
+    }
+    return result;
   }
 
   renderMealsDialog(): TemplateResult {
     const h = this.host;
+    const filtered = this._filteredMeals();
     return html`
       <div class="dialog-header">
-        <h2>Maaltijden</h2>
+        <h2>Recepten</h2>
         <button class="close-btn" @click=${() => h._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
       <div class="dialog-body">
-        ${this.meals.length === 0
-          ? html`<p class="empty-hint">Nog geen maaltijden. Maak een maaltijd aan om snel te kunnen loggen.</p>`
-          : this.meals.map(
+        <div class="input-row" style="margin-bottom:12px">
+          <input type="text" placeholder="Zoek recept..."
+            .value=${this.searchQuery}
+            @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; h.requestUpdate(); }} />
+          <button class="btn-secondary ${this.showFavoritesOnly ? "active" : ""}" style="padding:8px 12px"
+            @click=${() => { this.showFavoritesOnly = !this.showFavoritesOnly; h.requestUpdate(); }}>
+            <ha-icon icon=${this.showFavoritesOnly ? "mdi:star" : "mdi:star-outline"}></ha-icon>
+          </button>
+        </div>
+        ${filtered.length === 0
+          ? html`<p class="empty-hint">${this.meals.length === 0
+              ? "Nog geen recepten. Maak een recept aan om snel te kunnen loggen."
+              : "Geen recepten gevonden."}</p>`
+          : filtered.map(
               (meal) => html`
                 <div class="meal-item">
                   <div class="meal-info" @click=${() => this.logMeal(meal)}>
@@ -62,6 +89,9 @@ export class MealsController {
                       ${Math.round((meal.nutrients_per_100g?.["energy-kcal_100g"] || 0) * meal.total_grams / 100)} kcal
                     </span>
                   </div>
+                  <button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this.toggleFavorite(meal); }}>
+                    <ha-icon icon=${meal.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
+                  </button>
                   <button class="item-edit" @click=${() => this.openEditor(meal)}>
                     <ha-icon icon="mdi:pencil"></ha-icon>
                   </button>
@@ -73,7 +103,7 @@ export class MealsController {
             )}
         <button class="btn-primary btn-confirm" style="margin-top:12px" @click=${() => this.openEditor(null)}>
           <ha-icon icon="mdi:plus"></ha-icon>
-          Nieuwe maaltijd
+          Nieuw recept
         </button>
       </div>
     `;
@@ -85,7 +115,7 @@ export class MealsController {
     const ingredients = meal?.ingredients || [];
     return html`
       <div class="dialog-header">
-        <h2>${meal?.id ? "Maaltijd bewerken" : "Nieuwe maaltijd"}</h2>
+        <h2>${meal?.id ? "Recept bewerken" : "Nieuw recept"}</h2>
         <button class="close-btn" @click=${() => { h._setDialogMode("meals"); this.editingMeal = null; h.requestUpdate(); }}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
@@ -271,6 +301,16 @@ export class MealsController {
     this.host.requestUpdate();
   }
 
+  toggleFavorite(meal: CustomMeal): void {
+    meal.favorite = !meal.favorite;
+    // Persist favorite state by saving the meal
+    this.host.hass.callWS<SaveMealResponse>({
+      type: "voedingslog/save_meal",
+      meal: { id: meal.id, name: meal.name, ingredients: meal.ingredients, preferred_portion: meal.preferred_portion, favorite: meal.favorite },
+    }).catch((e) => console.error("Failed to save favorite:", e));
+    this.host.requestUpdate();
+  }
+
   async save(): Promise<void> {
     const h = this.host;
     if (!this.editingMeal) return;
@@ -300,7 +340,7 @@ export class MealsController {
   }
 
   async deleteMeal(mealId: string): Promise<void> {
-    if (!confirm("Maaltijd verwijderen?")) return;
+    if (!confirm("Recept verwijderen?")) return;
     try {
       await this.host.hass.callWS({ type: "voedingslog/delete_meal", meal_id: mealId });
       this.meals = this.meals.filter((m) => m.id !== mealId);

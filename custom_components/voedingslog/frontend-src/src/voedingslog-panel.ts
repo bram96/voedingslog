@@ -278,7 +278,7 @@ export class VoedingslogPanel extends LitElement {
         </button>
         <button class="action-btn" @click=${() => this._meals.loadMeals()}>
           <ha-icon icon="mdi:pot-steam"></ha-icon>
-          <span>Maaltijden</span>
+          <span>Recepten</span>
         </button>
       </div>
     `;
