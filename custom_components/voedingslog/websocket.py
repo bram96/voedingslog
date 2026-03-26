@@ -333,7 +333,6 @@ async def ws_analyze_photo(hass, connection, msg):
             "ai_task",
             "generate_data",
             {
-                "task_type": "data_extraction",
                 "entity_id": ai_entity,
                 "instructions": instructions,
                 "attachments": [
