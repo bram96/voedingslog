@@ -62,6 +62,14 @@ class VoedingslogOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        # Build list of mobile_app notify services for dropdown
+        mobile_devices: list[dict[str, str]] = [{"value": "", "label": "Geen"}]
+        notify_services = self.hass.services.async_services().get("notify", {})
+        for service_name in sorted(notify_services):
+            if service_name.startswith("mobile_app_"):
+                label = service_name.replace("mobile_app_", "").replace("_", " ").title()
+                mobile_devices.append({"value": service_name, "label": label})
+
         if user_input is not None:
             persons = [p.strip() for p in user_input["personen"].split(",") if p.strip()]
             return self.async_create_entry(
@@ -103,7 +111,12 @@ class VoedingslogOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     "mobile_app_device",
                     default=options.get("mobile_app_device", ""),
-                ): str,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=mobile_devices,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 
