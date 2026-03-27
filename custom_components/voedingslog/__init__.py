@@ -16,7 +16,6 @@ from .const import (
     DOMAIN,
     SERVICE_LOG_PRODUCT,
     SERVICE_LOG_BARCODE,
-    SERVICE_RESET_DAY,
     SERVICE_DELETE_LAST,
 )
 from .coordinator import VoedingslogCoordinator
@@ -171,27 +170,6 @@ def _register_services(hass: HomeAssistant, coordinator: VoedingslogCoordinator)
                     vol.Required("naam"): cv.string,
                     vol.Optional("gram", default=100): vol.Coerce(float),
                     vol.Optional("category"): cv.string,
-                }
-            ),
-        )
-
-    async def handle_reset_day(call: ServiceCall):
-        coord, person = _resolve_entry(hass, call)
-        if not coord or not person:
-            return
-        day = call.data.get("dag")
-        await coord.reset_day(person, day)
-        _LOGGER.info("Log reset for %s (day: %s)", person, day or "today")
-
-    if not hass.services.has_service(DOMAIN, SERVICE_RESET_DAY):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_RESET_DAY,
-            handle_reset_day,
-            schema=vol.Schema(
-                {
-                    vol.Required("config_entry_id"): cv.string,
-                    vol.Optional("dag"): cv.string,
                 }
             ),
         )

@@ -81,24 +81,7 @@ log_product:
             - label: Tussendoor
               value: snack
 
-reset_dag:
-  name: Reset dag
-  description: Wis de voedingslog voor een dag.
-  fields:
-    config_entry_id:
-      name: Voedingslog integratie
-      description: Kies de persoon (integratie) waarvan je de dag wilt wissen.
-      required: true
-      selector:
-        config_entry:
-          integration: voedingslog
-    dag:
-      name: Datum
-      description: Datum om te wissen (optioneel, standaard vandaag).
-      selector:
-        date:
-
-verwijder_laatste:
+delete_last:
   name: Verwijder laatste
   description: Verwijder het laatst gelogde item.
   fields:

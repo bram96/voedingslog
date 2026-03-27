@@ -254,6 +254,16 @@ export const panelStyles = css`
   .add-ingredient { margin-top: 12px; }
   .ingredient-nutrients { padding: 8px 0 8px 12px; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); border-radius: 0 0 8px 8px; margin-bottom: 4px; }
 
+  /* Period toggle */
+  .period-toggle { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden; }
+  .period-toggle button { flex: 1; padding: 8px; border: none; background: var(--card-background-color); cursor: pointer; font-size: 14px; color: var(--primary-text-color); transition: background 0.2s; }
+  .period-toggle button.active { background: var(--primary-color); color: var(--text-primary-color, #fff); }
+
+  /* Period charts */
+  .period-chart { width: 100%; height: auto; display: block; }
+  .period-chart-title { font-size: 14px; font-weight: 500; margin: 12px 0 4px; }
+  .period-loading { text-align: center; padding: 24px; color: var(--secondary-text-color); }
+
   /* Day detail / pie chart */
   .pie-section { display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 20px; }
   .pie-chart {

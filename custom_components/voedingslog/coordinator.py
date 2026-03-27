@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -560,6 +560,24 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
     def get_log_today(self, person: str) -> list[dict]:
         """Return today's log for a person."""
         return self._logs[person].get(str(date.today()), [])
+
+    def get_period_totals(self, person: str, start_date: str, end_date: str) -> list[dict]:
+        """Return daily totals for a date range [{date, totals, item_count}, ...]."""
+        person_logs = self._logs.get(person, {})
+        current = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+        days: list[dict] = []
+        while current <= end:
+            day_str = str(current)
+            items = person_logs.get(day_str, [])
+            totals = {k: 0.0 for k in NUTRIENTS}
+            for item in items:
+                factor = item["grams"] / 100.0
+                for nutrient in NUTRIENTS:
+                    totals[nutrient] += item["nutrients"].get(nutrient, 0.0) * factor
+            days.append({"date": day_str, "totals": totals, "item_count": len(items)})
+            current += timedelta(days=1)
+        return days
 
     # ------------------------------------------------------------------
     # Internal

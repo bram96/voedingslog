@@ -20,6 +20,7 @@ from .const import (
     WS_DELETE_ITEM,
     WS_EDIT_ITEM,
     WS_RESET_DAY,
+    WS_GET_PERIOD,
     WS_GET_PRODUCTS,
     WS_SAVE_PRODUCT,
     WS_DELETE_PRODUCT,
@@ -62,6 +63,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_edit_item)
     websocket_api.async_register_command(hass, ws_reset_day)
     register_ai_commands(hass, _get_coordinator)
+    websocket_api.async_register_command(hass, ws_get_period)
     websocket_api.async_register_command(hass, ws_get_products)
     websocket_api.async_register_command(hass, ws_save_product)
     websocket_api.async_register_command(hass, ws_delete_product)
@@ -300,6 +302,27 @@ async def ws_reset_day(hass, connection, msg):
 
     await coordinator.reset_day(msg["person"], msg.get("date"))
     connection.send_result(msg["id"], {"success": True})
+
+
+# ── Period data ──────────────────────────────────────────────────
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_GET_PERIOD,
+        vol.Required("person"): str,
+        vol.Required("start_date"): str,
+        vol.Required("end_date"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_period(hass, connection, msg):
+    """Return daily totals for a date range."""
+    coordinator = _get_coordinator(hass, msg["person"])
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    days = coordinator.get_period_totals(msg["person"], msg["start_date"], msg["end_date"])
+    connection.send_result(msg["id"], {"days": days})
 
 
 # ── Unified products (base + recipes) ────────────────────────────

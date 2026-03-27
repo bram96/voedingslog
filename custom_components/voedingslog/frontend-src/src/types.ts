@@ -127,6 +127,16 @@ export interface SaveProductResponse {
   product: UnifiedProduct;
 }
 
+export interface PeriodDay {
+  date: string;
+  totals: NutrientMap;
+  item_count: number;
+}
+
+export interface GetPeriodResponse {
+  days: PeriodDay[];
+}
+
 export interface NutrientDisplayConfig {
   key: string;
   label: string;

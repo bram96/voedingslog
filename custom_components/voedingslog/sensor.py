@@ -1,6 +1,8 @@
 """Sensor platform for Voedingslog — one sensor per nutrient per person."""
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -28,13 +30,36 @@ async def async_setup_entry(
             entities.append(
                 NutrientSensor(coordinator, person, nutrient_key, meta, goals)
             )
+            entities.append(
+                WeekAverageSensor(coordinator, person, nutrient_key, meta)
+            )
+            entities.append(
+                WeekTotalSensor(coordinator, person, nutrient_key, meta)
+            )
         entities.append(LogOverviewSensor(coordinator, person))
 
     async_add_entities(entities, True)
 
 
+def _person_slug(person: str) -> str:
+    return person.lower().replace(" ", "_")
+
+
+def _nutrient_slug(nutrient_key: str) -> str:
+    return nutrient_key.replace("-", "_").replace("_100g", "")
+
+
+def _device_info(person: str) -> dict:
+    return {
+        "identifiers": {(DOMAIN, person)},
+        "name": f"Voedingslog – {person}",
+        "manufacturer": "Open Food Facts",
+        "model": "Voedingslog Custom Component",
+    }
+
+
 class NutrientSensor(CoordinatorEntity, SensorEntity):
-    """A single nutrient sensor for one person."""
+    """A single nutrient sensor for one person (today's total)."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
@@ -45,9 +70,7 @@ class NutrientSensor(CoordinatorEntity, SensorEntity):
         self._nutrient_key = nutrient_key
         self._meta = meta
         self._goals = goals
-        person_slug = person.lower().replace(" ", "_")
-        nutrient_slug = nutrient_key.replace("-", "_").replace("_100g", "")
-        self._attr_unique_id = f"voedingslog_{person_slug}_{nutrient_slug}"
+        self._attr_unique_id = f"voedingslog_{_person_slug(person)}_{_nutrient_slug(nutrient_key)}"
         self._attr_icon = meta["icon"]
 
     @property
@@ -85,12 +108,81 @@ class NutrientSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._person)},
-            "name": f"Voedingslog – {self._person}",
-            "manufacturer": "Open Food Facts",
-            "model": "Voedingslog Custom Component",
-        }
+        return _device_info(self._person)
+
+
+class WeekAverageSensor(CoordinatorEntity, SensorEntity):
+    """7-day average per day for a nutrient."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, person, nutrient_key, meta):
+        super().__init__(coordinator)
+        self._person = person
+        self._nutrient_key = nutrient_key
+        self._meta = meta
+        self._attr_unique_id = f"voedingslog_{_person_slug(person)}_week_avg_{_nutrient_slug(nutrient_key)}"
+        self._attr_icon = meta["icon"]
+
+    @property
+    def name(self):
+        return f"{self._person} – Week gem. {self._meta['label']}"
+
+    @property
+    def native_unit_of_measurement(self):
+        return self._meta["unit"]
+
+    @property
+    def native_value(self):
+        end = str(date.today())
+        start = str(date.today() - timedelta(days=6))
+        days = self.coordinator.get_period_totals(self._person, start, end)
+        if not days:
+            return 0
+        factor = self._meta.get("factor", 1)
+        total = sum(d["totals"].get(self._nutrient_key, 0.0) for d in days)
+        return round(total / len(days) * factor, 1)
+
+    @property
+    def device_info(self):
+        return _device_info(self._person)
+
+
+class WeekTotalSensor(CoordinatorEntity, SensorEntity):
+    """7-day total for a nutrient."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, person, nutrient_key, meta):
+        super().__init__(coordinator)
+        self._person = person
+        self._nutrient_key = nutrient_key
+        self._meta = meta
+        self._attr_unique_id = f"voedingslog_{_person_slug(person)}_week_total_{_nutrient_slug(nutrient_key)}"
+        self._attr_icon = meta["icon"]
+
+    @property
+    def name(self):
+        return f"{self._person} – Week totaal {self._meta['label']}"
+
+    @property
+    def native_unit_of_measurement(self):
+        return self._meta["unit"]
+
+    @property
+    def native_value(self):
+        end = str(date.today())
+        start = str(date.today() - timedelta(days=6))
+        days = self.coordinator.get_period_totals(self._person, start, end)
+        factor = self._meta.get("factor", 1)
+        total = sum(d["totals"].get(self._nutrient_key, 0.0) for d in days)
+        return round(total * factor, 1)
+
+    @property
+    def device_info(self):
+        return _device_info(self._person)
 
 
 class LogOverviewSensor(CoordinatorEntity, SensorEntity):
@@ -102,8 +194,7 @@ class LogOverviewSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, person):
         super().__init__(coordinator)
         self._person = person
-        person_slug = person.lower().replace(" ", "_")
-        self._attr_unique_id = f"voedingslog_{person_slug}_log_overzicht"
+        self._attr_unique_id = f"voedingslog_{_person_slug(person)}_log_overzicht"
 
     @property
     def name(self):
@@ -136,9 +227,4 @@ class LogOverviewSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._person)},
-            "name": f"Voedingslog – {self._person}",
-            "manufacturer": "Open Food Facts",
-            "model": "Voedingslog Custom Component",
-        }
+        return _device_info(self._person)

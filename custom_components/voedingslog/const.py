@@ -35,8 +35,7 @@ MEAL_CATEGORY_LABELS = {
 # Service names
 SERVICE_LOG_PRODUCT = "log_product"
 SERVICE_LOG_BARCODE = "log_barcode"
-SERVICE_RESET_DAY = "reset_dag"
-SERVICE_DELETE_LAST = "verwijder_laatste"
+SERVICE_DELETE_LAST = "delete_last"
 
 # WebSocket command types
 WS_GET_CONFIG = f"{DOMAIN}/get_config"
@@ -51,6 +50,7 @@ WS_ANALYZE_PHOTO = f"{DOMAIN}/analyze_photo"
 WS_GET_PRODUCTS = f"{DOMAIN}/get_products"
 WS_SAVE_PRODUCT = f"{DOMAIN}/save_product"
 WS_DELETE_PRODUCT = f"{DOMAIN}/delete_product"
+WS_GET_PERIOD = f"{DOMAIN}/get_period"
 WS_CLEANUP_PRODUCTS = f"{DOMAIN}/cleanup_products"
 WS_ADD_ALIAS = f"{DOMAIN}/add_alias"
 WS_GET_FAVORITES = f"{DOMAIN}/get_favorites"

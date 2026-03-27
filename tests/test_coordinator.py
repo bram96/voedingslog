@@ -403,6 +403,46 @@ class TestCleanupUnusedProducts:
         assert len(coord._products) == 1
 
 
+class TestGetPeriodTotals:
+    def test_multiple_days(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {
+            "2024-01-01": [{"name": "A", "grams": 100, "nutrients": {"energy-kcal_100g": 200}, "time": "12:00", "category": "lunch"}],
+            "2024-01-02": [{"name": "B", "grams": 200, "nutrients": {"energy-kcal_100g": 100}, "time": "12:00", "category": "lunch"}],
+            "2024-01-03": [],
+        }}
+        days = coord.get_period_totals("Jan", "2024-01-01", "2024-01-03")
+        assert len(days) == 3
+        assert days[0]["date"] == "2024-01-01"
+        assert days[0]["totals"]["energy-kcal_100g"] == 200.0  # 200 * 100/100
+        assert days[0]["item_count"] == 1
+        assert days[1]["totals"]["energy-kcal_100g"] == 200.0  # 100 * 200/100
+        assert days[1]["item_count"] == 1
+        assert days[2]["totals"]["energy-kcal_100g"] == 0.0
+        assert days[2]["item_count"] == 0
+
+    def test_empty_range(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {}}
+        days = coord.get_period_totals("Jan", "2024-01-01", "2024-01-07")
+        assert len(days) == 7
+        assert all(d["item_count"] == 0 for d in days)
+
+    def test_single_day(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {
+            "2024-01-15": [
+                {"name": "X", "grams": 50, "nutrients": {"energy-kcal_100g": 400}, "time": "08:00", "category": "breakfast"},
+                {"name": "Y", "grams": 100, "nutrients": {"energy-kcal_100g": 100}, "time": "12:00", "category": "lunch"},
+            ],
+        }}
+        days = coord.get_period_totals("Jan", "2024-01-15", "2024-01-15")
+        assert len(days) == 1
+        assert days[0]["item_count"] == 2
+        # 400*50/100 + 100*100/100 = 200 + 100 = 300
+        assert days[0]["totals"]["energy-kcal_100g"] == 300.0
+
+
 class TestEditItemWithComponents:
     @pytest.mark.asyncio
     async def test_edit_components_recalculates(self):
