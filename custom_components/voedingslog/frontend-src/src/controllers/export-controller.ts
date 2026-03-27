@@ -2,8 +2,8 @@
  * Export controller — day detail dialog, period charts, PNG export, download/share.
  */
 import { html, nothing, type TemplateResult } from "lit";
-import type { HomeAssistant, LogItem, VoedingslogConfig, PeriodDay, GetPeriodResponse } from "../types.js";
-import { sumNutrients, itemKcal, NUTRIENTS_META } from "../helpers.js";
+import type { HomeAssistant, LogItem, MealCategory, VoedingslogConfig, PeriodDay, GetPeriodResponse } from "../types.js";
+import { sumNutrients, itemKcal, NUTRIENTS_META, groupByCategory, CATEGORY_ICONS, DEFAULT_CATEGORY_LABELS } from "../helpers.js";
 import { svg } from "lit";
 
 export interface ExportControllerHost {
@@ -301,15 +301,7 @@ export class ExportController {
 
       <div style="margin-top:12px">
         <div class="detail-table-header">Gelogde items (${h._items.length})</div>
-        ${h._items.map((item) => {
-          const kcalVal = itemKcal(item);
-          return html`
-            <div class="detail-row">
-              <span>${item.name}</span>
-              <span>${item.grams}g · ${Math.round(kcalVal)} kcal</span>
-            </div>
-          `;
-        })}
+        ${this._renderGroupedItems(h._items, h._config?.category_labels || DEFAULT_CATEGORY_LABELS)}
       </div>
 
       ${this.exportImageUrl
@@ -341,6 +333,34 @@ export class ExportController {
   }
 
   // ── Period view (line charts) ─────────────────────────────────
+
+  private _renderGroupedItems(items: LogItem[], labels: Record<MealCategory, string>): TemplateResult {
+    const groups = groupByCategory(items);
+    const categories: MealCategory[] = ["breakfast", "lunch", "dinner", "snack"];
+    return html`
+      ${categories.map((cat) => {
+        const catItems = groups[cat];
+        if (catItems.length === 0) return nothing;
+        return html`
+          <div class="detail-category">
+            <div class="detail-category-header">
+              <ha-icon icon=${CATEGORY_ICONS[cat]} style="--mdc-icon-size:16px"></ha-icon>
+              <span>${labels[cat]}</span>
+            </div>
+            ${catItems.map((item) => {
+              const kcalVal = itemKcal(item);
+              return html`
+                <div class="detail-row">
+                  <span>${item.name}</span>
+                  <span>${item.grams}g · ${Math.round(kcalVal)} kcal</span>
+                </div>
+              `;
+            })}
+          </div>
+        `;
+      })}
+    `;
+  }
 
   private _renderPeriodView(): TemplateResult {
     if (this.periodLoading) {
@@ -460,7 +480,7 @@ export class ExportController {
     const items = h._items;
     const rowH = 28;
     const nutrientEntries = Object.entries(h._config?.nutrients || {});
-    const canvasH = 420 + nutrientEntries.length * rowH + items.length * rowH + 80;
+    const canvasH = 420 + nutrientEntries.length * rowH + items.length * rowH + 4 * 22 + 80;
     const canvas = document.createElement("canvas");
     canvas.width = W * dpr;
     canvas.height = canvasH * dpr;
@@ -560,24 +580,34 @@ export class ExportController {
     y += 30;
     ctx.fillStyle = "#333";
     ctx.font = "bold 14px sans-serif";
+    const labels = h._config?.category_labels || DEFAULT_CATEGORY_LABELS;
+    const groups = groupByCategory(items);
+    const categories: MealCategory[] = ["breakfast", "lunch", "dinner", "snack"];
     ctx.fillText(`Gelogde items (${items.length})`, 20, y);
-    y += 8;
-    ctx.font = "13px sans-serif";
-    for (const item of items) {
-      const kcalVal = itemKcal(item);
-      y += rowH;
-      ctx.fillStyle = "#333";
-      const name = item.name.length > 40 ? item.name.substring(0, 37) + "..." : item.name;
-      ctx.fillText(name, 20, y);
+    for (const cat of categories) {
+      const catItems = groups[cat];
+      if (catItems.length === 0) continue;
+      y += 22;
       ctx.fillStyle = "#888";
-      ctx.textAlign = "right";
-      ctx.fillText(`${item.grams}g · ${Math.round(kcalVal)} kcal`, W - 20, y);
-      ctx.textAlign = "left";
-      ctx.strokeStyle = "#eee";
-      ctx.beginPath();
-      ctx.moveTo(20, y + 8);
-      ctx.lineTo(W - 20, y + 8);
-      ctx.stroke();
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText(labels[cat], 20, y);
+      ctx.font = "13px sans-serif";
+      for (const item of catItems) {
+        const kcalVal = itemKcal(item);
+        y += rowH;
+        ctx.fillStyle = "#333";
+        const name = item.name.length > 40 ? item.name.substring(0, 37) + "..." : item.name;
+        ctx.fillText(name, 20, y);
+        ctx.fillStyle = "#888";
+        ctx.textAlign = "right";
+        ctx.fillText(`${item.grams}g · ${Math.round(kcalVal)} kcal`, W - 20, y);
+        ctx.textAlign = "left";
+        ctx.strokeStyle = "#eee";
+        ctx.beginPath();
+        ctx.moveTo(20, y + 8);
+        ctx.lineTo(W - 20, y + 8);
+        ctx.stroke();
+      }
     }
 
     canvas.toBlob(async (blob) => {

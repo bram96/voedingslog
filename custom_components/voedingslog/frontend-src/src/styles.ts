@@ -10,15 +10,16 @@ export const panelStyles = css`
     color: var(--primary-text-color);
   }
 
-  .panel { max-width: 600px; margin: 0 auto; padding-bottom: 24px; }
+  .panel { padding-bottom: 24px; }
 
   /* Header */
   .header {
-    background: var(--primary-color);
-    color: var(--text-primary-color, #fff);
+    background: var(--app-header-background-color, var(--primary-color));
+    color: var(--app-header-text-color, var(--text-primary-color, #fff));
     padding: var(--panel-padding);
     padding-top: calc(var(--panel-padding) + env(safe-area-inset-top, 0px));
   }
+  .header-inner { max-width: 600px; margin: 0 auto; }
   .header-top { display: flex; align-items: center; }
   .menu-btn {
     background: none; border: none; color: inherit; cursor: pointer;
@@ -49,7 +50,7 @@ export const panelStyles = css`
   }
   .person-tab.active { background: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.5); font-weight: 600; }
 
-  .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; }
+  .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto; }
 
   /* Actions */
   .actions { display: flex; gap: 8px; }
@@ -78,6 +79,9 @@ export const panelStyles = css`
   .macro-label { display: block; font-size: 11px; color: var(--secondary-text-color); }
   .macro-bar { height: 4px; background: var(--divider-color); border-radius: 2px; margin: 3px 4px 1px; overflow: hidden; }
   .macro-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+  .totals-hint { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; opacity: 0.7; }
+  .totals-hint ha-icon { --mdc-icon-size: 14px; }
 
   /* Category sections */
   .category-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--divider-color); }
@@ -297,4 +301,6 @@ export const panelStyles = css`
   }
   .detail-row:last-child { border-bottom: none; }
   .detail-row span:last-child { color: var(--secondary-text-color); white-space: nowrap; }
+  .detail-category { margin-top: 8px; }
+  .detail-category-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); padding: 4px 0; }
 `;

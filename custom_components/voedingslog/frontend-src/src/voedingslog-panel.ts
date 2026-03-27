@@ -232,51 +232,53 @@ export class VoedingslogPanel extends LitElement {
     const persons = this._config?.persons || [];
     return html`
       <div class="header">
-        <div class="header-top">
-          ${this.narrow
-            ? html`<button class="menu-btn" @click=${() => this._toggleMenu()}>
-                <ha-icon icon="mdi:menu"></ha-icon>
-              </button>`
+        <div class="header-inner">
+          <div class="header-top">
+            ${this.narrow
+              ? html`<button class="menu-btn" @click=${() => this._toggleMenu()}>
+                  <ha-icon icon="mdi:menu"></ha-icon>
+                </button>`
+              : nothing}
+            <h1>Voedingslog</h1>
+          </div>
+          ${persons.length > 1
+            ? html`<div class="person-tabs">
+                ${persons.map(
+                  (p) => html`
+                    <button
+                      class="person-tab ${p === this._selectedPerson ? "active" : ""}"
+                      @click=${() => {
+                        this._selectedPerson = p;
+                        this._loadLog();
+                      }}
+                    >
+                      ${p}
+                    </button>
+                  `
+                )}
+              </div>`
             : nothing}
-          <h1>Voedingslog</h1>
-        </div>
-        ${persons.length > 1
-          ? html`<div class="person-tabs">
-              ${persons.map(
-                (p) => html`
-                  <button
-                    class="person-tab ${p === this._selectedPerson ? "active" : ""}"
-                    @click=${() => {
-                      this._selectedPerson = p;
-                      this._loadLog();
-                    }}
-                  >
-                    ${p}
-                  </button>
-                `
-              )}
-            </div>`
-          : nothing}
-        <div class="date-nav">
-          <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
-            <ha-icon icon="mdi:chevron-left"></ha-icon>
-          </button>
-          <button class="date-picker-btn" @click=${() => this._openDatePicker()}>
-            <span class="date-text">${this._formatDateLabel(this._selectedDate)}</span>
-          </button>
-          <input
-            type="date"
-            id="header-date-picker"
-            .value=${this._selectedDate}
-            @change=${(e: Event) => {
-              this._selectedDate = (e.target as HTMLInputElement).value;
-              this._loadLog();
-            }}
-            style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;"
-          />
-          <button class="date-nav-btn" @click=${() => this._changeDate(1)}>
-            <ha-icon icon="mdi:chevron-right"></ha-icon>
-          </button>
+          <div class="date-nav">
+            <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
+              <ha-icon icon="mdi:chevron-left"></ha-icon>
+            </button>
+            <button class="date-picker-btn" @click=${() => this._openDatePicker()}>
+              <span class="date-text">${this._formatDateLabel(this._selectedDate)}</span>
+            </button>
+            <input
+              type="date"
+              id="header-date-picker"
+              .value=${this._selectedDate}
+              @change=${(e: Event) => {
+                this._selectedDate = (e.target as HTMLInputElement).value;
+                this._loadLog();
+              }}
+              style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;"
+            />
+            <button class="date-nav-btn" @click=${() => this._changeDate(1)}>
+              <ha-icon icon="mdi:chevron-right"></ha-icon>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -328,6 +330,10 @@ export class VoedingslogPanel extends LitElement {
               </div>
             `
           )}
+        </div>
+        <div class="totals-hint">
+          <ha-icon icon="mdi:information-outline"></ha-icon>
+          <span>Tik voor details, weekoverzicht en exporteren</span>
         </div>
       </div>
     `;
