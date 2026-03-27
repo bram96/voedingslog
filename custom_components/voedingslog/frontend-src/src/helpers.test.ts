@@ -13,7 +13,12 @@ function makeItem(overrides: Partial<LogItem> = {}): LogItem {
   return {
     name: "Test",
     grams: 100,
-    nutrients: { "energy-kcal_100g": 200, "proteins_100g": 10, "carbohydrates_100g": 30, "fat_100g": 8, "fiber_100g": 3 },
+    nutrients: {
+      "energy-kcal_100g": 200, "proteins_100g": 10, "carbohydrates_100g": 30,
+      "fat_100g": 8, "fiber_100g": 3, "saturated-fat_100g": 2, "sugars_100g": 5,
+      "sodium_100g": 0.4, "vitamin-c_100g": 0.01, "calcium_100g": 0.05,
+      "iron_100g": 0.002, "vitamin-d_100g": 0.000001,
+    },
     time: "12:00",
     category: "lunch",
     ...overrides,
@@ -81,12 +86,18 @@ describe("calcItemNutrients", () => {
     expect(result["energy-kcal_100g"]).toBe(200);
   });
 
+  it("computes all nutrient keys, not just display ones", () => {
+    const item = makeItem({ grams: 100 });
+    const result = calcItemNutrients(item);
+    expect(result["saturated-fat_100g"]).toBe(2);
+    expect(result["sugars_100g"]).toBe(5);
+    expect(result["sodium_100g"]).toBe(0.4);
+  });
+
   it("handles missing nutrients gracefully", () => {
     const item = makeItem({ nutrients: {} });
     const result = calcItemNutrients(item);
-    for (const n of KEY_NUTRIENTS_DISPLAY) {
-      expect(result[n.key]).toBe(0);
-    }
+    expect(Object.keys(result)).toHaveLength(0);
   });
 });
 
@@ -118,11 +129,16 @@ describe("sumNutrients", () => {
     expect(totals["proteins_100g"]).toBe(20);
   });
 
-  it("returns zeros for empty list", () => {
+  it("sums all nutrient keys, not just display ones", () => {
+    const items = [makeItem({ grams: 100 }), makeItem({ grams: 100 })];
+    const totals = sumNutrients(items);
+    expect(totals["saturated-fat_100g"]).toBe(4);  // 2 + 2
+    expect(totals["sodium_100g"]).toBeCloseTo(0.8);
+  });
+
+  it("returns empty object for empty list", () => {
     const totals = sumNutrients([]);
-    for (const n of KEY_NUTRIENTS_DISPLAY) {
-      expect(totals[n.key]).toBe(0);
-    }
+    expect(Object.keys(totals)).toHaveLength(0);
   });
 
   it("handles mixed grams", () => {

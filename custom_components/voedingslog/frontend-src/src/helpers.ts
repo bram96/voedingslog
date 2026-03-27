@@ -73,8 +73,8 @@ export function groupByCategory(
 export function calcItemNutrients(item: LogItem): NutrientMap {
   const factor = (item.grams || 0) / 100;
   const result: NutrientMap = {};
-  for (const n of KEY_NUTRIENTS_DISPLAY) {
-    result[n.key] = (item.nutrients?.[n.key] || 0) * factor;
+  for (const key of Object.keys(item.nutrients || {})) {
+    result[key] = (item.nutrients[key] || 0) * factor;
   }
   return result;
 }
@@ -85,10 +85,11 @@ export function itemKcal(item: LogItem): number {
 
 export function sumNutrients(items: LogItem[]): NutrientMap {
   const totals: NutrientMap = {};
-  for (const n of KEY_NUTRIENTS_DISPLAY) totals[n.key] = 0;
   for (const item of items) {
     const vals = calcItemNutrients(item);
-    for (const k in vals) totals[k] += vals[k];
+    for (const k in vals) {
+      totals[k] = (totals[k] || 0) + vals[k];
+    }
   }
   return totals;
 }
