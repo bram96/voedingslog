@@ -1,7 +1,7 @@
 /**
  * Entry controller — weight/portion selection and item edit dialogs.
  */
-import { html, nothing, type TemplateResult } from "lit";
+import { nothing, type TemplateResult } from "lit";
 import type {
   HomeAssistant,
   MealCategory,
@@ -10,8 +10,9 @@ import type {
   IndexedLogItem,
   VoedingslogConfig,
 } from "../types.js";
-import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory, NUTRIENTS_META } from "../helpers.js";
+import { KEY_NUTRIENTS_DISPLAY, defaultCategory, NUTRIENTS_META } from "../helpers.js";
 import { renderWeightView } from "../views/weight-view.js";
+import { renderEditView } from "../views/edit-view.js";
 
 export interface EntryControllerHost {
   hass: HomeAssistant;
@@ -151,95 +152,13 @@ export class EntryController {
     const h = this.host;
     const item = h._editingItem;
     if (!item) return nothing;
-
-    const hasComponents = !!item.components?.length;
-
-    return html`
-      <div class="dialog-header">
-        <h2>${item.name}</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="form-field">
-          <label>Naam</label>
-          <input type="text" id="edit-name-input" .value=${item.name} />
-        </div>
-
-        ${hasComponents
-          ? this._renderComponentEditSection(item.components!)
-          : html`
-            <div class="form-field">
-              <label>Gewicht (gram)</label>
-              <input type="number" id="edit-weight-input"
-                .value=${String(item.grams)} min="1" step="1"
-                inputmode="numeric" @input=${() => h.requestUpdate()} />
-            </div>
-          `}
-
-        <div class="form-field">
-          <label>Maaltijd</label>
-          <select id="edit-category-select">
-            ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-              (cat) => html`
-                <option value=${cat} ?selected=${cat === item.category}>
-                  ${(h._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
-                </option>
-              `
-            )}
-          </select>
-        </div>
-
-        <div class="form-field">
-          <label>Datum</label>
-          <input type="date" id="edit-date-input" .value=${h._selectedDate} />
-        </div>
-
-        ${!hasComponents ? html`
-          <div class="nutrient-edit-section">
-            <div class="preview-title">Voedingswaarden per 100g</div>
-            ${Object.entries(h._config?.nutrients || {}).map(
-              ([key, meta]) => {
-                const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
-                const displayVal = ((item.nutrients?.[key] || 0) * factor).toFixed(2);
-                return html`
-                  <div class="form-field form-field-inline">
-                    <label>${meta.label} (${meta.unit})</label>
-                    <input type="number" id="edit-nutrient-${key}"
-                      .value=${displayVal}
-                      min="0" step="0.01" inputmode="decimal" />
-                  </div>
-                `;}
-            )}
-          </div>
-        ` : nothing}
-
-        <button class="btn-primary btn-confirm" @click=${() => this.confirmEdit()}>
-          <ha-icon icon="mdi:check"></ha-icon>
-          Opslaan
-        </button>
-      </div>
-    `;
-  }
-
-  private _renderComponentEditSection(components: MealIngredient[]): TemplateResult {
-    return html`
-      <div class="component-list">
-        <div class="preview-title">Onderdelen</div>
-        ${components.map(
-          (c, idx) => html`
-            <div class="component-row">
-              <span class="component-name">${c.name}</span>
-              <input type="number" class="component-grams-input"
-                id="edit-component-${idx}"
-                .value=${String(c.grams)} min="0" step="1" inputmode="numeric" />
-              <span class="ingredient-unit">g</span>
-            </div>
-          `
-        )}
-      </div>
-    `;
+    return renderEditView({
+      item,
+      config: h._config,
+      selectedDate: h._selectedDate,
+      onClose: () => h._closeDialog(),
+      onConfirm: () => this.confirmEdit(),
+    });
   }
 
   async confirmEdit(): Promise<void> {

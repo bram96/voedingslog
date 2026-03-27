@@ -4,9 +4,11 @@
 import { html, nothing, type TemplateResult } from "lit";
 import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
 import { ProductSearch } from "../product-search.js";
-import { renderPhotoPicker, readFileAsBase64 } from "../photo-capture.js";
+import { readFileAsBase64 } from "../photo-capture.js";
 import { readNutrientFields } from "../ui/nutrient-fields.js";
+import { renderSearchView } from "../views/search-view.js";
 import { renderBarcodeView } from "../views/barcode-view.js";
+import { renderPhotoView } from "../views/photo-view.js";
 import { renderManualEntryView } from "../views/manual-entry-view.js";
 
 export interface SearchControllerHost {
@@ -72,40 +74,15 @@ export class SearchController {
 
   renderSearchDialog(): TemplateResult {
     const h = this.host;
-    const showFavorites = !this.search.query.trim() && this.favorites.length > 0;
-    return html`
-      <div class="dialog-header">
-        <h2>Zoek product</h2>
-        <button class="close-btn" @click=${() => this.closeSearch()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${showFavorites
-          ? html`
-            <div class="favorites-section">
-              <div class="section-label"><ha-icon icon="mdi:star" style="--mdc-icon-size:16px;vertical-align:middle;color:#ff9800"></ha-icon> Favorieten</div>
-              ${this.favorites.map((p) => this._renderResult(p, true))}
-            </div>
-          `
-          : nothing}
-        ${this.search.renderSearchBar(
-          (p) => this._onSelected(p),
-          { renderResult: (p) => this._renderResult(p, true) },
-        )}
-
-        <div class="ai-validate-actions" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
-          <button class="btn-secondary btn-confirm" @click=${() => h._openBarcodeScanner()}>
-            <ha-icon icon="mdi:barcode-scan"></ha-icon>
-            Barcode
-          </button>
-          <button class="btn-secondary btn-confirm" @click=${() => { h._prefillProduct = null; h._setDialogMode("manual"); }}>
-            <ha-icon icon="mdi:pencil-plus"></ha-icon>
-            Handmatig
-          </button>
-        </div>
-      </div>
-    `;
+    return renderSearchView({
+      search: this.search,
+      favorites: this.favorites,
+      onClose: () => this.closeSearch(),
+      onSelected: (p) => this._onSelected(p),
+      renderResult: (p) => this._renderResult(p, true),
+      onBarcode: () => h._openBarcodeScanner(),
+      onManual: () => { h._prefillProduct = null; h._setDialogMode("manual"); },
+    });
   }
 
   // ── Barcode dialog ───────────────────────────────────────────
@@ -126,23 +103,12 @@ export class SearchController {
 
   renderPhotoDialog(): TemplateResult {
     const h = this.host;
-    return html`
-      <div class="dialog-header">
-        <h2>Foto van etiket</h2>
-        <button class="close-btn" @click=${() => h._setDialogMode("manual")}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${renderPhotoPicker(
-          h,
-          "file-input-photo",
-          (e: Event) => this.handlePhotoCapture(e),
-          () => this.capturePhotoFrame(),
-          "Maak een foto van het voedingsetiket op de verpakking.",
-        )}
-      </div>
-    `;
+    return renderPhotoView({
+      host: h,
+      onClose: () => h._setDialogMode("manual"),
+      onCapture: (e) => this.handlePhotoCapture(e),
+      onFrame: () => this.capturePhotoFrame(),
+    });
   }
 
   // ── Manual entry dialog ──────────────────────────────────────
