@@ -9,33 +9,44 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 
 ### Dagelijks loggen
 - **Sidebar panel** — eigen pagina met dagoverzicht per maaltijd (ontbijt, lunch, avondeten, tussendoor)
-- **Product zoeken** — zoek lokaal in je opgeslagen producten of online in Open Food Facts, met favorieten en type filters
-- **Barcode scanner** — scan producten met je camera of voer de barcode handmatig in. Barcodes worden lokaal opgeslagen zodat je ze maar een keer hoeft te scannen
+- **Slim zoeken** — fuzzy multi-word search ("brood kaas" vindt producten met beide woorden), barcode zoeken in de zoekbalk, recent gezochte termen
+- **Recent en favorieten** — recent gelogde producten bovenaan het toevoeg-scherm voor snel opnieuw loggen
+- **Barcode scanner** — scan producten met je camera of voer de barcode handmatig in. Barcodes worden lokaal opgeslagen
 - **Foto-analyse** — maak een foto van het voedingsetiket, AI leest de waarden uit en je kunt ze controleren
-- **Bulk toevoegen** — beschrijf wat je gegeten hebt in tekst, of maak een foto van een handgeschreven lijst. AI herkent de producten, zoekt voedingswaarden op in Open Food Facts, en je valideert ze een voor een
+- **Bulk toevoegen** — beschrijf wat je gegeten hebt in tekst, of maak een foto van een handgeschreven lijst. AI herkent de producten en zoekt voedingswaarden op
 - **Handmatig invoeren** — voer zelf een product in met alle voedingswaarden
+- **Snel portie aanpassen** — tik op de grammen van een gelogd item om direct het gewicht aan te passen zonder het bewerkscherm te openen
+- **Swipe navigatie** — veeg links/rechts op mobiel om tussen dagen te navigeren
 
 ### Producten en recepten
-- **Unified product database** — alle producten en recepten in een beheerbaar overzicht met zoeken, favorieten en type filters (producten / recepten)
+- **Unified product database** — alle producten en recepten in een beheerbaar overzicht met zoeken, favorieten en type filters
 - **Twee soorten recepten**:
   - **Vast recept** (bijv. pasta bolognese) — ingredienten worden gemengd, je logt een portie van het geheel
   - **Samengesteld recept** (bijv. ontbijt) — losse onderdelen met standaard hoeveelheden, per keer aanpasbaar
-- **Ingredienten refereren naar producten** — als je de voedingswaarden van een basisproduct wijzigt, worden alle recepten die het gebruiken automatisch bijgewerkt
-- **Aliassen** — voeg alternatieve namen toe aan producten voor beter zoeken. AI-herkenning slaat automatisch aliassen op zodat herhaalde invoer sneller matcht
-- **Lokale barcode cache** — eerder gescande barcodes worden herkend zonder internet
+- **Ingredienten refereren naar producten** — wijzig voedingswaarden van een basisproduct en alle recepten worden automatisch bijgewerkt
+- **Aliassen** — alternatieve namen voor producten. AI-herkenning slaat automatisch aliassen op voor snellere matching
+- **Ververs vanuit OFF** — haal bijgewerkte voedingswaarden op van Open Food Facts
+- **Duplicaten samenvoegen** — voeg twee producten samen, aliassen en barcode worden overgenomen, recepten bijgewerkt
+- **Gedeelde recepten** — recepten zijn beschikbaar voor alle personen (zichtbaar als "gedeeld" bij meerdere personen)
 - **Opruimen** — verwijder producten die niet in logs of recepten voorkomen
+
+### Overzichten en inzichten
+- **Dag/Week/Maand overzicht** — schakel tussen dagdetails (taartdiagram), weekoverzicht en maandoverzicht met navigatiepijltjes
+- **Staafdiagrammen met doellijnen** — per doelnutrient een grafiek met dagelijkse waarden, doellijn en trendlijn (3-daags gemiddelde)
+- **Streak tracker** — toont het aantal opeenvolgende dagen dat je hebt gelogd
+- **Live voedingswaarden** — het gewichtscherm toont berekende voedingswaarden die meebewegen terwijl je het gewicht aanpast
+- **Exporteren** — exporteer dag of periode als PNG afbeelding, download of deel via je telefoon
 
 ### Personen en doelen
 - **Meerdere personen** — elke persoon is een aparte integratie-instantie met eigen doelen en data
-- **Persoon wisselen** — schakel tussen personen via tabs, standaard geselecteerd op basis van je HA-account
+- **Persoon wisselen** — schakel tussen personen via tabs (HA dashboard-stijl)
 - **Calorie- en macrodoelen** — stel per persoon doelen in voor calorieen, eiwit, koolhydraten, vet en vezels
 
-### Overig
-- **Datum navigatie** — blader door dagen met pijltjes of kies een datum
-- **Bewerken** — tik op een item om naam, gewicht, maaltijd, datum en alle voedingswaarden aan te passen
-- **Dagdetails** — taartdiagram met macro-verdeling, voortgangsbalken per doel, alle voedingswaarden
-- **Exporteren** — exporteer je dag als PNG afbeelding, download of deel via je telefoon
-- **HA Sensoren** — alle voedingswaarden beschikbaar als sensoren voor automations en dashboards
+### Technisch
+- **HA Sensoren** — dagwaarden en weekgemiddelden/-totalen als sensoren voor automations en dashboards
+- **Inputvalidatie** — voedingswaarden worden altijd gevalideerd voor opslag
+- **Error boundary** — een fout in de UI blankt niet het hele scherm, maar toont een herstelbericht
+- **Dark mode** — volledig compatibel met HA donker thema
 - **Persistentie** — alle data wordt meegenomen in HA backups
 
 ---

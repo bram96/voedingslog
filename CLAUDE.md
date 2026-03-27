@@ -96,7 +96,7 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 
 | File | What it tests |
 |------|---------------|
-| `tests/test_coordinator.py` | Nutrient computation, product CRUD, search, favorites, aliases, barcode, component editing, recipe product refs, cleanup, period totals |
+| `tests/test_coordinator.py` | Nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items, input sanitization |
 | `tests/test_open_food_facts.py` | OFF product processing, serving parsing, portion building |
 | `frontend-src/src/helpers.test.ts` | Nutrient calculation, grouping, display constants |
 
@@ -121,6 +121,11 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 - **Local-first search**: Products are cached on first use. Search checks local products (name + aliases) first, "Zoek online" button for OFF API.
 - **AI structured output**: AI uses `ai_task.generate_data` with the `structure` parameter for typed responses. Photo attachments use `media-source://` URIs via temp files in `/media`.
 - **AI text/handwriting → product lookup**: AI only identifies product names + estimated grams. Real nutrients come from local cache / OFF search, not AI guessing. Matched names are stored as aliases for future instant matching.
+- **Fuzzy search**: Multi-word queries score products by word matches. Exact substring > alias match > partial word. Barcode numbers are checked as exact match first.
+- **Swipe navigation**: Touch start/end tracking on the host element. Requires >60px horizontal distance and mostly-horizontal direction. Disabled when dialogs are open.
+- **Quick inline editing**: Tap grams text on logged items to show inline number input. Saves on blur/enter, avoids full edit dialog for simple weight changes.
+- **Streak tracking**: Counts consecutive days with logged items backwards from today (or yesterday if today is empty). In-memory calculation, no persisted state.
+- **Product merge**: Absorbs aliases, barcode, and recipe ingredient references from the removed product into the kept product. Uses search dialog to pick the duplicate.
 - **Period view with navigation**: Day detail dialog has Dag/Week/Maand toggle. Week snaps to Monday, month to 1st. Each mode has back/forward arrows. Day navigation syncs with the main panel date.
 - **Week sensors**: Per person per nutrient — both 7-day average and 7-day total. Computed from coordinator's `get_period_totals()` on each refresh.
 
@@ -170,9 +175,11 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 |---------|---------|
 | `voedingslog/get_config` | Panel initialization data (persons from all entries, per-person goals) |
 | `voedingslog/get_log` | Day's log for a person |
+| `voedingslog/get_recent` | Recently logged unique products (last 7 days, deduped) |
+| `voedingslog/get_streak` | Consecutive days with logged items |
 | `voedingslog/get_period` | Daily totals for a date range (person, start_date, end_date) |
 | `voedingslog/lookup_barcode` | Barcode lookup — local first, then OFF (no logging) |
-| `voedingslog/search_products` | Search local products (name + aliases) or online (OFF) |
+| `voedingslog/search_products` | Fuzzy search (name + aliases + barcode), tracks recent queries |
 | `voedingslog/log_product` | Log a product with full nutrient data (optional `components`) |
 | `voedingslog/edit_item` | Edit name, weight, category, nutrients, components of existing item |
 | `voedingslog/delete_item` | Delete item by index |
@@ -180,6 +187,8 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 | `voedingslog/get_products` | List all products (optional `product_type` filter) |
 | `voedingslog/save_product` | Create/update product — resolves ingredient product_ids, refreshes referencing recipes |
 | `voedingslog/delete_product` | Delete product by ID |
+| `voedingslog/merge_products` | Merge two products — absorbs aliases/barcode, updates recipe refs |
+| `voedingslog/refresh_product` | Re-fetch nutrients from OFF for a product |
 | `voedingslog/cleanup_products` | Remove base products not in any log or recipe (keeps favorites) |
 | `voedingslog/add_alias` | Add an alias to a product |
 | `voedingslog/get_favorites` | List favorite products |
