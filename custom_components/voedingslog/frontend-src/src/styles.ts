@@ -12,43 +12,51 @@ export const panelStyles = css`
 
   .panel { padding-bottom: 24px; }
 
-  /* Header */
+  /* Header — HA-style app toolbar */
   .header {
     background: var(--app-header-background-color, var(--primary-color));
     color: var(--app-header-text-color, var(--text-primary-color, #fff));
-    padding: var(--panel-padding);
-    padding-top: calc(var(--panel-padding) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    border-bottom: 1px solid var(--divider-color);
   }
-  .header-inner { max-width: 600px; margin: 0 auto; }
-  .header-top { display: flex; align-items: center; }
+  .header-bar {
+    display: flex; align-items: center; height: 48px; padding: 0 4px;
+  }
   .menu-btn {
     background: none; border: none; color: inherit; cursor: pointer;
-    padding: 4px; margin-right: 8px; display: flex; align-items: center;
+    padding: 8px; display: flex; align-items: center;
   }
   .menu-btn ha-icon { --mdc-icon-size: 24px; }
-  .header h1 { margin: 0; font-size: 20px; font-weight: 500; flex: 1; }
-  .header-person { font-size: 14px; opacity: 0.8; }
-  .date-nav { display: flex; align-items: center; gap: 4px; margin-top: 10px; }
+  .header-title { font-size: 20px; font-weight: 400; margin: 0 0 0 4px; flex: 1; }
+  .person-tabs { display: flex; padding: 0 16px; }
+  .person-tab {
+    background: none; border: none; border-bottom: 3px solid transparent;
+    color: inherit; opacity: 0.7;
+    padding: 12px 16px; font-size: 14px; cursor: pointer;
+    transition: opacity 0.2s, border-color 0.2s;
+  }
+  .person-tab:hover { opacity: 1; }
+  .person-tab.active { opacity: 1; border-bottom-color: currentColor; font-weight: 500; }
+
+  /* Date nav — below header */
+  .date-nav {
+    display: flex; align-items: center; gap: 4px;
+    max-width: 600px; margin: 0 auto; padding: 8px var(--panel-padding);
+  }
   .date-nav-btn {
-    background: rgba(255,255,255,0.15); border: none; color: inherit;
+    background: var(--secondary-background-color); border: none; color: var(--primary-text-color);
     padding: 6px; border-radius: 50%; cursor: pointer;
     display: flex; align-items: center; justify-content: center; transition: background 0.2s;
   }
-  .date-nav-btn:hover { background: rgba(255,255,255,0.3); }
+  .date-nav-btn:hover { background: var(--divider-color); }
   .date-nav-btn ha-icon { --mdc-icon-size: 22px; }
   .date-picker-btn {
     flex: 1; text-align: center; cursor: pointer;
-    background: rgba(255,255,255,0.15); border: none; color: inherit;
+    background: var(--secondary-background-color); border: none; color: var(--primary-text-color);
     border-radius: 8px; padding: 8px 12px; transition: background 0.2s;
   }
-  .date-picker-btn:hover { background: rgba(255,255,255,0.25); }
+  .date-picker-btn:hover { background: var(--divider-color); }
   .date-text { font-size: 15px; font-weight: 500; }
-  .person-tabs { display: flex; gap: 8px; margin-top: 12px; }
-  .person-tab {
-    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: inherit;
-    padding: 6px 16px; border-radius: 20px; font-size: 14px; cursor: pointer; transition: background 0.2s;
-  }
-  .person-tab.active { background: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.5); font-weight: 600; }
 
   .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto; }
 
