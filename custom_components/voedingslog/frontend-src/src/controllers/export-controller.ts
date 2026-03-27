@@ -454,6 +454,19 @@ export class ExportController {
             fill=${over ? "#e53935" : goal.color} opacity=${over ? 0.8 : 0.7} />`;
         })}
 
+        <!-- 3-day moving average -->
+        ${values.length >= 3 ? (() => {
+          const pts: string[] = [];
+          for (let i = 0; i < values.length; i++) {
+            const window = values.slice(Math.max(0, i - 1), Math.min(values.length, i + 2));
+            const avg = window.reduce((a, b) => a + b, 0) / window.length;
+            const x = padL + (i / days.length) * chartW + chartW / days.length / 2;
+            const y = padT + chartH - (avg / maxVal) * chartH;
+            pts.push(`${x},${y}`);
+          }
+          return svg`<polyline points=${pts.join(" ")} fill="none" stroke=${goal.color} stroke-width="1.5" opacity="0.9" />`;
+        })() : nothing}
+
         <!-- X-axis labels -->
         ${days.map((d, i) => {
           if (isMonth && i % 5 !== 0 && i !== days.length - 1) return nothing;

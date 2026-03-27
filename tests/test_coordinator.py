@@ -1,6 +1,6 @@
 """Tests for coordinator logic — nutrient computation, product CRUD, migration."""
 import pytest
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from custom_components.voedingslog.coordinator import (
     _compute_nutrients_from_components,
@@ -365,6 +365,80 @@ class TestSanitizeNutrients:
         from custom_components.voedingslog.coordinator import _sanitize_nutrients
         result = _sanitize_nutrients({})
         assert result["energy-kcal_100g"] == 0.0
+
+
+class TestFuzzySearch:
+    def test_multi_word_match(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Volkoren brood met kaas", "aliases": [], "nutrients": {}},
+            {"id": "2", "type": "base", "name": "Wit brood", "aliases": [], "nutrients": {}},
+        ]
+        results = coord.search_products_local("brood kaas")
+        assert len(results) == 2
+        assert results[0]["name"] == "Volkoren brood met kaas"  # higher score (2 words match)
+
+    def test_barcode_exact_match(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Melk", "barcode": "12345", "aliases": [], "nutrients": {}},
+            {"id": "2", "type": "base", "name": "Kaas", "aliases": [], "nutrients": {}},
+        ]
+        results = coord.search_products_local("12345")
+        assert len(results) == 1
+        assert results[0]["name"] == "Melk"
+
+
+class TestStreak:
+    def test_consecutive_days(self):
+        coord = _make_coordinator(["Jan"])
+        today = date.today()
+        coord._logs = {"Jan": {
+            str(today): [{"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}],
+            str(today - timedelta(days=1)): [{"name": "B", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}],
+            str(today - timedelta(days=2)): [{"name": "C", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}],
+        }}
+        assert coord.get_streak("Jan") == 3
+
+    def test_streak_allows_empty_today(self):
+        coord = _make_coordinator(["Jan"])
+        today = date.today()
+        coord._logs = {"Jan": {
+            str(today - timedelta(days=1)): [{"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}],
+            str(today - timedelta(days=2)): [{"name": "B", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}],
+        }}
+        assert coord.get_streak("Jan") == 2
+
+    def test_no_streak(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {}}
+        assert coord.get_streak("Jan") == 0
+
+
+class TestMergeProducts:
+    @pytest.mark.asyncio
+    async def test_merge_absorbs_aliases(self):
+        coord = _make_coordinator()
+        keep = await coord.save_product({"type": "base", "name": "Melk", "aliases": ["milk"], "nutrients": {}})
+        remove = await coord.save_product({"type": "base", "name": "Volle melk", "aliases": ["whole milk"], "nutrients": {}})
+        result = await coord.merge_products(keep["id"], remove["id"])
+        assert result is not None
+        assert "Volle melk" in result["aliases"]
+        assert "whole milk" in result["aliases"]
+        assert len(coord._products) == 1
+
+    @pytest.mark.asyncio
+    async def test_merge_updates_recipe_refs(self):
+        coord = _make_coordinator()
+        keep = await coord.save_product({"type": "base", "name": "A", "nutrients": {"energy-kcal_100g": 100}})
+        remove = await coord.save_product({"type": "base", "name": "B", "nutrients": {"energy-kcal_100g": 200}})
+        await coord.save_product({
+            "type": "recipe", "name": "R",
+            "ingredients": [{"product_id": remove["id"], "name": "B", "grams": 100, "nutrients": {"energy-kcal_100g": 200}}],
+        })
+        await coord.merge_products(keep["id"], remove["id"])
+        recipe = next(p for p in coord._products if p["type"] == "recipe")
+        assert recipe["ingredients"][0]["product_id"] == keep["id"]
 
 
 class TestDuplicateDetection:

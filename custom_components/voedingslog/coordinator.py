@@ -79,6 +79,8 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         # Unified product store (shared across all entries)
         self._products_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PRODUCTS_V2)
         self._products: list[dict] = []
+        # Recent searches (in-memory, per person, not persisted)
+        self._recent_searches: dict[str, list[str]] = {}
 
     async def async_load_from_store(self) -> None:
         """Load persisted logs and products from disk."""
@@ -232,17 +234,52 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                     p["barcode"] = barcode
 
     def search_products_local(self, query: str) -> list[dict]:
-        """Search the unified product list by name and aliases."""
-        q = query.lower()
-        results = []
+        """Search the unified product list by name, aliases, and barcode. Supports fuzzy multi-word matching."""
+        q = query.strip().lower()
+        if not q:
+            return []
+
+        # Exact barcode match
         for p in self._products:
-            if q in p.get("name", "").lower():
-                results.append(p)
-            elif any(q in a.lower() for a in p.get("aliases", [])):
-                results.append(p)
-            if len(results) >= 10:
-                break
-        return results
+            if p.get("barcode") == query.strip():
+                return [p]
+
+        # Score each product by how well it matches
+        words = q.split()
+        scored: list[tuple[int, dict]] = []
+        for p in self._products:
+            name_lower = p.get("name", "").lower()
+            alias_text = " ".join(p.get("aliases", [])).lower()
+            searchable = name_lower + " " + alias_text
+
+            # Exact substring match gets highest score
+            if q in name_lower:
+                scored.append((100, p))
+            elif q in alias_text:
+                scored.append((90, p))
+            else:
+                # Fuzzy: count how many query words appear in the searchable text
+                matches = sum(1 for w in words if w in searchable)
+                if matches > 0:
+                    scored.append((matches * 10, p))
+
+        scored.sort(key=lambda x: -x[0])
+        return [p for _, p in scored[:10]]
+
+    def add_recent_search(self, person: str, query: str) -> None:
+        """Track a search query for the recently searched list."""
+        q = query.strip()
+        if not q or len(q) < 2:
+            return
+        recent = self._recent_searches.setdefault(person, [])
+        if q in recent:
+            recent.remove(q)
+        recent.insert(0, q)
+        self._recent_searches[person] = recent[:10]
+
+    def get_recent_searches(self, person: str) -> list[str]:
+        """Return recent search queries for a person."""
+        return self._recent_searches.get(person, [])
 
     async def search_products_online(self, query: str) -> list[dict]:
         """Search products via Open Food Facts API."""
@@ -389,6 +426,37 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Refreshed product from OFF: %s", product["name"])
         return product
 
+    async def merge_products(self, keep_id: str, remove_id: str) -> dict | None:
+        """Merge two products: keep one, absorb the other's aliases, then delete it."""
+        keep = self._get_product_by_id(keep_id)
+        remove = self._get_product_by_id(remove_id)
+        if not keep or not remove:
+            return None
+        # Merge aliases
+        keep_aliases = keep.get("aliases", [])
+        remove_name = remove.get("name", "")
+        if remove_name and remove_name.lower() not in [a.lower() for a in keep_aliases] and remove_name.lower() != keep.get("name", "").lower():
+            keep_aliases.append(remove_name)
+        for alias in remove.get("aliases", []):
+            if alias.lower() not in [a.lower() for a in keep_aliases]:
+                keep_aliases.append(alias)
+        keep["aliases"] = keep_aliases
+        # Merge barcode
+        if not keep.get("barcode") and remove.get("barcode"):
+            keep["barcode"] = remove["barcode"]
+        # Update recipe references from remove_id to keep_id
+        for p in self._products:
+            if p.get("type") != "recipe":
+                continue
+            for ing in p.get("ingredients", []):
+                if ing.get("product_id") == remove_id:
+                    ing["product_id"] = keep_id
+        # Delete the merged product
+        self._products = [p for p in self._products if p.get("id") != remove_id]
+        await self._async_save_products()
+        _LOGGER.info("Merged product '%s' into '%s'", remove_name, keep.get("name"))
+        return keep
+
     async def cleanup_unused_products(self) -> int:
         """Remove base products not referenced in any log or recipe. Returns number removed."""
         # Collect all product names from logs across ALL coordinators
@@ -534,6 +602,19 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                         return recent
             current -= timedelta(days=1)
         return recent
+
+    def get_streak(self, person: str) -> int:
+        """Return the number of consecutive days with logged items, ending today or yesterday."""
+        person_logs = self._logs.get(person, {})
+        current = date.today()
+        # Allow starting from yesterday if today has no logs yet
+        if not person_logs.get(str(current)):
+            current -= timedelta(days=1)
+        streak = 0
+        while person_logs.get(str(current)):
+            streak += 1
+            current -= timedelta(days=1)
+        return streak
 
     def get_period_totals(self, person: str, start_date: str, end_date: str) -> list[dict]:
         """Return daily totals for a date range [{date, totals, item_count}, ...]."""

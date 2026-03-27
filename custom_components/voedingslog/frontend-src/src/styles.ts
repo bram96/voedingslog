@@ -109,6 +109,8 @@ export const panelStyles = css`
   .item-main { flex: 1; min-width: 0; }
   .item-name { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item-meta { display: block; font-size: 12px; color: var(--secondary-text-color); }
+  .item-grams { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+  .quick-gram-input { width: 60px; padding: 2px 6px; border: 1px solid var(--primary-color); border-radius: 4px; font-size: 13px; text-align: right; background: var(--card-background-color); color: var(--primary-text-color); }
   .item-nutrients { white-space: nowrap; }
   .item-kcal { font-size: 13px; white-space: nowrap; font-weight: 500; }
   .item-delete, .item-edit {

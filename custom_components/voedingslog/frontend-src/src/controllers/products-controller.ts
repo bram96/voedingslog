@@ -96,7 +96,8 @@ export class ProductsController {
     }
     const recipe = product as Recipe;
     const kcal = Math.round((recipe.nutrients?.["energy-kcal_100g"] || 0) * recipe.total_grams / 100);
-    return `${recipe.ingredients.length} ingrediënten · ${Math.round(recipe.total_grams)}g · ${kcal} kcal`;
+    const shared = (this.host._config?.persons?.length || 0) > 1 ? " · gedeeld" : "";
+    return `${recipe.ingredients.length} ingrediënten · ${Math.round(recipe.total_grams)}g · ${kcal} kcal${shared}`;
   }
 
   // ── Shared product item rendering ─────────────────────────────
@@ -344,6 +345,10 @@ export class ProductsController {
           <button class="btn-secondary btn-confirm" @click=${() => this._refreshFromOff(product.id)}>
             <ha-icon icon="mdi:refresh"></ha-icon>
             Ververs vanuit Open Food Facts
+          </button>
+          <button class="btn-secondary btn-confirm" @click=${() => this._mergeInto(product.id)}>
+            <ha-icon icon="mdi:merge"></ha-icon>
+            Duplicaat samenvoegen
           </button>
         ` : nothing}
 
@@ -701,6 +706,22 @@ export class ProductsController {
 
   private _openPhotoForBase(): void {
     this.host._setDialogMode("photo");
+  }
+
+  private _mergeInto(keepId: string): void {
+    this.host._openSearchDialog(async (product) => {
+      if (!product.id || product.id === keepId) {
+        alert("Kies een ander product om samen te voegen.");
+        return;
+      }
+      if (!confirm(`'${product.name}' samenvoegen in dit product? Het duplicaat wordt verwijderd.`)) return;
+      try {
+        await this.host.hass.callWS({ type: "voedingslog/merge_products", keep_id: keepId, remove_id: product.id });
+        await this.open(this.mode);
+      } catch {
+        alert("Fout bij samenvoegen.");
+      }
+    }, "product-edit");
   }
 
   private async _refreshFromOff(productId: string): Promise<void> {

@@ -21,10 +21,12 @@ from .const import (
     WS_EDIT_ITEM,
     WS_RESET_DAY,
     WS_GET_RECENT,
+    WS_GET_STREAK,
     WS_GET_PERIOD,
     WS_GET_PRODUCTS,
     WS_SAVE_PRODUCT,
     WS_DELETE_PRODUCT,
+    WS_MERGE_PRODUCTS,
     WS_REFRESH_PRODUCT,
     WS_CLEANUP_PRODUCTS,
     WS_ADD_ALIAS,
@@ -66,10 +68,12 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_reset_day)
     register_ai_commands(hass, _get_coordinator)
     websocket_api.async_register_command(hass, ws_get_recent)
+    websocket_api.async_register_command(hass, ws_get_streak)
     websocket_api.async_register_command(hass, ws_get_period)
     websocket_api.async_register_command(hass, ws_get_products)
     websocket_api.async_register_command(hass, ws_save_product)
     websocket_api.async_register_command(hass, ws_delete_product)
+    websocket_api.async_register_command(hass, ws_merge_products)
     websocket_api.async_register_command(hass, ws_refresh_product)
     websocket_api.async_register_command(hass, ws_cleanup_products)
     websocket_api.async_register_command(hass, ws_add_alias)
@@ -182,22 +186,32 @@ async def ws_lookup_barcode(hass, connection, msg):
         vol.Required("type"): WS_SEARCH_PRODUCTS,
         vol.Required("query"): str,
         vol.Optional("online", default=False): bool,
+        vol.Optional("person"): str,
     }
 )
 @websocket_api.async_response
 async def ws_search_products(hass, connection, msg):
-    """Search products: local cache first, optionally online."""
-    coordinator = _get_coordinator(hass)
+    """Search products: local cache first (fuzzy + barcode), optionally online."""
+    coordinator = _get_coordinator(hass, msg.get("person"))
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
+
+    # Track recent searches
+    person = msg.get("person")
+    if person:
+        coordinator.add_recent_search(person, msg["query"])
 
     if msg.get("online"):
         products = await coordinator.search_products_online(msg["query"])
         connection.send_result(msg["id"], {"products": products, "source": "online"})
     else:
         local = coordinator.search_products_local(msg["query"])
-        connection.send_result(msg["id"], {"products": local, "source": "local"})
+        connection.send_result(msg["id"], {
+            "products": local,
+            "source": "local",
+            "recent_searches": coordinator.get_recent_searches(person) if person else [],
+        })
 
 
 @websocket_api.websocket_command(
@@ -327,6 +341,23 @@ async def ws_get_recent(hass, connection, msg):
     connection.send_result(msg["id"], {"items": items})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_GET_STREAK,
+        vol.Required("person"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_streak(hass, connection, msg):
+    """Return the current logging streak (consecutive days)."""
+    coordinator = _get_coordinator(hass, msg["person"])
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    streak = coordinator.get_streak(msg["person"])
+    connection.send_result(msg["id"], {"streak": streak})
+
+
 # ── Period data ──────────────────────────────────────────────────
 
 @websocket_api.websocket_command(
@@ -402,6 +433,27 @@ async def ws_delete_product(hass, connection, msg):
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Product not found")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_MERGE_PRODUCTS,
+        vol.Required("keep_id"): str,
+        vol.Required("remove_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_merge_products(hass, connection, msg):
+    """Merge two products into one."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    result = await coordinator.merge_products(msg["keep_id"], msg["remove_id"])
+    if result:
+        connection.send_result(msg["id"], {"product": result})
+    else:
+        connection.send_error(msg["id"], "not_found", "One or both products not found")
 
 
 @websocket_api.websocket_command(

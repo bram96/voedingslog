@@ -39,6 +39,7 @@ export class VoedingslogPanel extends LitElement {
   @state() _selectedDate: string = new Date().toISOString().split("T")[0];
   @state() _items: LogItem[] = [];
   @state() private _loading = true;
+  @state() private _streak = 0;
 
   @state() _dialogMode: DialogMode = null;
   @state() _pendingProduct: Product | null = null;
@@ -69,15 +70,38 @@ export class VoedingslogPanel extends LitElement {
   async connectedCallback(): Promise<void> {
     super.connectedCallback();
     window.addEventListener("popstate", this._popStateHandler);
+    this.addEventListener("touchstart", this._onTouchStart, { passive: true });
+    this.addEventListener("touchend", this._onTouchEnd, { passive: true });
     await this._loadConfig();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("popstate", this._popStateHandler);
+    this.removeEventListener("touchstart", this._onTouchStart);
+    this.removeEventListener("touchend", this._onTouchEnd);
     this._barcodeCamera.stop();
     this._photoCamera.stop();
   }
+
+  // ── Swipe navigation ─────────────────────────────────────────────
+  private _touchStartX = 0;
+  private _touchStartY = 0;
+
+  private _onTouchStart = (e: TouchEvent) => {
+    this._touchStartX = e.touches[0].clientX;
+    this._touchStartY = e.touches[0].clientY;
+  };
+
+  private _onTouchEnd = (e: TouchEvent) => {
+    if (this._dialogMode) return; // don't swipe when dialog is open
+    const dx = e.changedTouches[0].clientX - this._touchStartX;
+    const dy = e.changedTouches[0].clientY - this._touchStartY;
+    // Require horizontal swipe > 60px and mostly horizontal (not scrolling)
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) {
+      this._changeDate(dx < 0 ? 1 : -1);
+    }
+  };
 
   private _pushDialogHistory(): void {
     this._dialogHistoryDepth++;
@@ -171,6 +195,10 @@ export class VoedingslogPanel extends LitElement {
     } catch (e) {
       console.error("Failed to load log:", e);
     }
+    // Load streak in background
+    this.hass.callWS<{ streak: number }>({
+      type: "voedingslog/get_streak", person: this._selectedPerson,
+    }).then((r) => { this._streak = r.streak; }).catch(() => {});
     this._loading = false;
   }
 
@@ -340,8 +368,11 @@ export class VoedingslogPanel extends LitElement {
           )}
         </div>
         <div class="totals-hint">
+          ${this._streak > 1
+            ? html`<ha-icon icon="mdi:fire"></ha-icon><span>${this._streak} dagen streak</span><span style="margin:0 4px">·</span>`
+            : nothing}
           <ha-icon icon="mdi:information-outline"></ha-icon>
-          <span>Tik voor details, weekoverzicht en exporteren</span>
+          <span>Tik voor details</span>
         </div>
       </div>
     `;
@@ -367,13 +398,25 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  @state() private _quickEditIndex: number | null = null;
+
   private _renderItem(item: IndexedLogItem): TemplateResult {
     const vals = calcItemNutrients(item);
+    const isQuickEdit = this._quickEditIndex === item._index;
     return html`
       <div class="food-item" @click=${() => this._openEditDialog(item)}>
         <div class="item-main">
           <span class="item-name">${item.name}</span>
-          <span class="item-meta">${item.grams}g · ${item.time}</span>
+          ${isQuickEdit
+            ? html`<input type="number" class="quick-gram-input"
+                .value=${String(item.grams)} min="1" step="1" inputmode="numeric"
+                @click=${(e: Event) => e.stopPropagation()}
+                @blur=${(e: Event) => this._saveQuickGrams(item, e)}
+                @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); e.stopPropagation(); }}
+              />`
+            : html`<span class="item-meta item-grams" @click=${(e: Event) => { e.stopPropagation(); this._quickEditIndex = item._index; }}>
+                ${item.grams}g · ${item.time}
+              </span>`}
         </div>
         <div class="item-nutrients">
           <span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>
@@ -383,6 +426,24 @@ export class VoedingslogPanel extends LitElement {
         </button>
       </div>
     `;
+  }
+
+  private async _saveQuickGrams(item: IndexedLogItem, e: Event): Promise<void> {
+    const grams = parseFloat((e.target as HTMLInputElement).value) || item.grams;
+    this._quickEditIndex = null;
+    if (grams === item.grams) return;
+    try {
+      await this.hass.callWS({
+        type: "voedingslog/edit_item",
+        person: this._selectedPerson,
+        index: item._index,
+        grams,
+        date: this._selectedDate,
+      });
+      await this._loadLog();
+    } catch (err) {
+      console.error("Failed to update grams:", err);
+    }
   }
 
   // ── Dialogs ──────────────────────────────────────────────────────
