@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -355,13 +356,44 @@ async def ws_get_suggestions(hass, connection, msg):
             break
 
     if ai_entity:
-        gap_text = ", ".join(
-            f"{g['nutrient_label']}: {g['deficit']} {g.get('nutrient_key', '').split('_')[0]} tekort"
-            for g in gaps
+        # Build detailed context for the AI
+        all_goals = {}
+        for g in gaps:
+            all_goals[g["nutrient_label"]] = {"goal": g["goal"], "average": g["average"], "deficit": g["deficit"]}
+
+        # Also include nutrients that are on/over target as constraints
+        period = coordinator.get_period_totals(msg["person"], str(date.today() - timedelta(days=6)), str(date.today()))
+        for e_entry in hass.config_entries.async_entries(DOMAIN):
+            m = {**e_entry.data, **e_entry.options}
+            for p in m.get("personen", []):
+                if p == msg["person"]:
+                    nutrient_goals = {
+                        "Calorieen": m.get("doel_calorieen", 0),
+                        "Koolhydraten": m.get("carbs_goal", 0),
+                        "Vet": m.get("fat_goal", 0),
+                    }
+                    for label, goal_val in nutrient_goals.items():
+                        if goal_val > 0 and label not in all_goals:
+                            key_map = {"Calorieen": "energy-kcal_100g", "Koolhydraten": "carbohydrates_100g", "Vet": "fat_100g"}
+                            key = key_map.get(label, "")
+                            avg = sum(d["totals"].get(key, 0) for d in period) / max(len(period), 1) if key else 0
+                            all_goals[label] = {"goal": goal_val, "average": round(avg, 1), "status": "op limiet" if avg >= goal_val * 0.9 else "ok"}
+                    break
+
+        # Build product details with nutrients
+        product_details = []
+        for g in gaps:
+            for s in g["suggestions"][:3]:
+                product_details.append(f"  - {s['name']}: {s['value_per_100g']} {g['nutrient_label'].lower()}/100g")
+
+        goals_text = "\n".join(
+            f"  - {k}: doel {v['goal']}, huidig gemiddeld {v['average']}"
+            + (f", tekort {v['deficit']}" if 'deficit' in v else f" ({v.get('status', 'ok')})")
+            for k, v in all_goals.items()
         )
-        product_names = ", ".join(
-            s["name"] for g in gaps for s in g["suggestions"][:3]
-        )
+
+        products_text = "\n".join(product_details) if product_details else "  (geen geschikte producten in de lokale database)"
+
         try:
             result = await hass.services.async_call(
                 "ai_task",
@@ -370,24 +402,37 @@ async def ws_get_suggestions(hass, connection, msg):
                     "task_name": "nutrition_advice",
                     "entity_id": ai_entity,
                     "instructions": (
-                        f"Een persoon heeft de volgende voedingstekorten (gemiddeld per dag): {gap_text}. "
-                        f"Beschikbare producten: {product_names}. "
-                        "Geef een kort, praktisch advies in het Nederlands (max 3 zinnen) "
-                        "over hoe deze tekorten aan te vullen met de beschikbare producten. "
-                        "Wees specifiek over hoeveelheden."
+                        "Je bent een voedingsadviseur. Analyseer de voedingstekorten en geef advies.\n\n"
+                        f"DOELEN EN HUIDIGE INTAKE (gemiddeld per dag, afgelopen 7 dagen):\n{goals_text}\n\n"
+                        f"BESCHIKBARE PRODUCTEN UIT DE LOKALE DATABASE:\n{products_text}\n\n"
+                        "BELANGRIJK:\n"
+                        "- Suggesties mogen NIET leiden tot overschrijding van andere doelen (let op calorieen en koolhydraten!)\n"
+                        "- Geef eerst suggesties uit de lokale database (als die goed genoeg zijn)\n"
+                        "- Geef daarna een 'Anders' sectie met makkelijk te bereiden producten die niet in de database staan\n"
+                        "- Antwoord in het Nederlands als bullet points\n"
+                        "- Wees specifiek over hoeveelheden (gram)\n"
+                        "- Houd het kort en praktisch (max 6 bullets totaal)"
                     ),
                     "structure": {
-                        "advice": {
-                            "description": "Kort praktisch voedingsadvies in het Nederlands",
+                        "from_database": {
+                            "description": "Bullet points met suggesties uit de lokale productdatabase. Elke bullet begint met '- '. Leeg als er geen goede matches zijn.",
                             "required": True,
                             "selector": {"text": {"multiline": True}},
-                        }
+                        },
+                        "other_suggestions": {
+                            "description": "Bullet points met andere makkelijk te bereiden suggesties die niet in de database staan. Elke bullet begint met '- '.",
+                            "required": True,
+                            "selector": {"text": {"multiline": True}},
+                        },
                     },
                 },
                 blocking=True,
                 return_response=True,
             )
-            ai_advice = (result or {}).get("data", {}).get("advice")
+            data = (result or {}).get("data", {})
+            from_db = data.get("from_database", "").strip()
+            other = data.get("other_suggestions", "").strip()
+            ai_advice = {"from_database": from_db, "other_suggestions": other}
         except Exception as e:
             _LOGGER.debug("AI nutrition advice failed: %s", e)
 

@@ -341,7 +341,9 @@ export const panelStyles = css`
   .ai-advice span { flex: 1; }
   .suggestions-section { margin-top: 4px; }
   .suggestion-group { margin-top: 8px; }
-  .suggestion-label { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); margin-bottom: 2px; }
+  .suggestion-label { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); margin-bottom: 2px; display: flex; align-items: center; gap: 4px; }
+  .suggestion-bullets { margin: 4px 0 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6; }
+  .suggestion-bullets li { margin-bottom: 2px; }
   .nutrient-gap-badge { background: #ff9800; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; vertical-align: middle; }
   .detail-category { margin-top: 8px; }
   .detail-category-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); padding: 4px 0; }

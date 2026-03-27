@@ -44,7 +44,7 @@ export class ExportController {
   /** Anchor date for the current period (start of week/month, or the selected day). */
   private _periodAnchor: string = "";
   // Nutrient suggestions
-  private _suggestions: { gaps: any[]; ai_advice: string | null } | null = null;
+  private _suggestions: { gaps: any[]; ai_advice: { from_database: string; other_suggestions: string } | null } | null = null;
   private _suggestionsLoading = false;
 
   constructor(host: ExportControllerHost) {
@@ -228,7 +228,7 @@ export class ExportController {
     this._suggestionsLoading = true;
     this.host.requestUpdate();
     try {
-      const res = await this.host.hass.callWS<{ gaps: any[]; ai_advice: string | null }>({
+      const res = await this.host.hass.callWS<{ gaps: any[]; ai_advice: { from_database: string; other_suggestions: string } | null }>({
         type: "voedingslog/get_suggestions",
         person: this.host._selectedPerson,
       });
@@ -244,25 +244,47 @@ export class ExportController {
   private _renderSuggestions(): TemplateResult {
     if (!this._suggestions) return html``;
     const { gaps, ai_advice } = this._suggestions;
+
+    const parseBullets = (text: string): string[] =>
+      text.split("\n").map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter((l) => l.length > 0);
+
     return html`
       <div class="suggestions-section">
-        ${ai_advice ? html`
-          <div class="ai-advice">
-            <ha-icon icon="mdi:robot-outline" style="--mdc-icon-size:16px;vertical-align:middle;color:var(--primary-color)"></ha-icon>
-            <span>${ai_advice}</span>
+        ${ai_advice?.from_database ? html`
+          <div class="suggestion-group">
+            <div class="suggestion-label">
+              <ha-icon icon="mdi:food-variant" style="--mdc-icon-size:14px;vertical-align:middle"></ha-icon>
+              Uit je producten
+            </div>
+            <ul class="suggestion-bullets">
+              ${parseBullets(ai_advice.from_database).map((b) => html`<li>${b}</li>`)}
+            </ul>
           </div>
         ` : nothing}
-        ${gaps.map((g: any) => g.suggestions?.length > 0 ? html`
+        ${ai_advice?.other_suggestions ? html`
           <div class="suggestion-group">
-            <div class="suggestion-label">${g.nutrient_label} aanvullen:</div>
-            ${g.suggestions.slice(0, 3).map((s: any) => html`
-              <div class="detail-row">
-                <span>${s.name}</span>
-                <span style="color:#4caf50">${s.value_per_100g}/100g</span>
-              </div>
-            `)}
+            <div class="suggestion-label">
+              <ha-icon icon="mdi:lightbulb-outline" style="--mdc-icon-size:14px;vertical-align:middle"></ha-icon>
+              Anders
+            </div>
+            <ul class="suggestion-bullets">
+              ${parseBullets(ai_advice.other_suggestions).map((b) => html`<li>${b}</li>`)}
+            </ul>
           </div>
-        ` : nothing)}
+        ` : nothing}
+        ${!ai_advice ? html`
+          ${gaps.map((g: any) => g.suggestions?.length > 0 ? html`
+            <div class="suggestion-group">
+              <div class="suggestion-label">${g.nutrient_label} aanvullen:</div>
+              ${g.suggestions.slice(0, 3).map((s: any) => html`
+                <div class="detail-row">
+                  <span>${s.name}</span>
+                  <span style="color:#4caf50">${s.value_per_100g}/100g</span>
+                </div>
+              `)}
+            </div>
+          ` : nothing)}
+        ` : nothing}
       </div>
     `;
   }
