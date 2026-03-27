@@ -7,11 +7,11 @@ import type {
   MealCategory,
   MealIngredient,
   Product,
-  Portion,
   IndexedLogItem,
   VoedingslogConfig,
 } from "../types.js";
 import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory, NUTRIENTS_META } from "../helpers.js";
+import { renderWeightView } from "../views/weight-view.js";
 
 export interface EntryControllerHost {
   hass: HomeAssistant;
@@ -45,131 +45,25 @@ export class EntryController {
     if (!p) return nothing;
 
     const isComponent = !!p.components?.length;
-
-    // Lazily initialize mutable component copy
     if (isComponent && !this._pendingComponents) {
       this._pendingComponents = p.components!.map((c) => ({ ...c }));
     }
 
-    return html`
-      <div class="dialog-header">
-        <h2>${p.name}</h2>
-        <button class="close-btn" @click=${() => { this._pendingComponents = null; h._navigateBack(); }}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${isComponent
-          ? this._renderComponentWeightSection()
-          : this._renderSimpleWeightSection(p)}
-
-        <div class="form-field">
-          <label>Maaltijd</label>
-          <select id="category-select">
-            ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-              (cat) => html`
-                <option value=${cat} ?selected=${cat === defaultCategory()}>
-                  ${(h._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
-                </option>
-              `
-            )}
-          </select>
-        </div>
-
-        <div class="form-field">
-          <label>Datum</label>
-          <input type="date" id="log-date-input" .value=${h._selectedDate} />
-        </div>
-
-        <button class="btn-primary btn-confirm" @click=${() => this.confirmLog()}>
-          <ha-icon icon="mdi:plus"></ha-icon>
-          Toevoegen
-        </button>
-      </div>
-    `;
-  }
-
-  private _renderSimpleWeightSection(p: Product): TemplateResult {
-    const h = this.host;
-    const weightInput = h.shadowRoot?.getElementById("weight-input") as HTMLInputElement | null;
-    const grams = parseFloat(weightInput?.value || "") || p.serving_grams || 100;
-    const factor = grams / 100;
-
-    return html`
-      <div class="form-field">
-        <label>Gewicht (gram)</label>
-        ${this._renderPortionChips(p.portions || [])}
-        <input type="number" id="weight-input"
-          .value=${String(p.serving_grams || 100)}
-          min="1" step="1" inputmode="numeric"
-          @input=${() => h.requestUpdate()} />
-      </div>
-
-      <div class="nutrient-preview">
-        <div class="preview-title">Voedingswaarden (${Math.round(grams)}g)</div>
-        <div class="nutrient-grid">
-          ${KEY_NUTRIENTS_DISPLAY.map(
-            (n) => html`
-              <div class="nutrient-row">
-                <span>${n.label}</span>
-                <span>${((p.nutrients?.[n.key] || 0) * factor).toFixed(n.decimals)} ${n.unit}</span>
-              </div>
-            `
-          )}
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderComponentWeightSection(): TemplateResult {
-    const h = this.host;
-    const components = this._pendingComponents || [];
-    const totalGrams = components.reduce((sum, c) => sum + c.grams, 0);
-
-    return html`
-      <div class="component-list">
-        <div class="preview-title">Onderdelen</div>
-        ${components.map(
-          (c, idx) => html`
-            <div class="component-row">
-              <span class="component-name">${c.name}</span>
-              <input type="number" class="component-grams-input"
-                .value=${String(c.grams)} min="0" step="1" inputmode="numeric"
-                @change=${(e: Event) => {
-                  const val = parseFloat((e.target as HTMLInputElement).value) || 0;
-                  components[idx] = { ...components[idx], grams: val };
-                  this._pendingComponents = [...components];
-                  h.requestUpdate();
-                }} />
-              <span class="ingredient-unit">g</span>
-            </div>
-          `
-        )}
-        <div class="component-total">
-          <span>Totaal</span>
-          <span>${Math.round(totalGrams)}g</span>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderPortionChips(portions: Portion[]): TemplateResult | typeof nothing {
-    if (!portions || portions.length === 0) return nothing;
-    const h = this.host;
-    return html`
-      <div class="portion-chips">
-        ${portions.map(
-          (p) => html`
-            <button class="portion-chip" @click=${() => {
-              const input = h.shadowRoot?.getElementById("weight-input") as HTMLInputElement | null;
-              if (input) { input.value = String(p.grams); h.requestUpdate(); }
-            }}>
-              ${p.label}
-            </button>
-          `
-        )}
-      </div>
-    `;
+    return renderWeightView({
+      product: p,
+      components: this._pendingComponents,
+      config: h._config,
+      selectedDate: h._selectedDate,
+      shadow: h.shadowRoot,
+      onClose: () => { this._pendingComponents = null; h._navigateBack(); },
+      onConfirm: () => this.confirmLog(),
+      onComponentChange: (idx, grams) => {
+        if (!this._pendingComponents) return;
+        this._pendingComponents[idx] = { ...this._pendingComponents[idx], grams };
+        this._pendingComponents = [...this._pendingComponents];
+      },
+      requestUpdate: () => h.requestUpdate(),
+    });
   }
 
   async confirmLog(): Promise<void> {

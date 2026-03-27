@@ -20,6 +20,7 @@ import {
   sumNutrients,
   formatDateLabel,
 } from "./helpers.js";
+import { GestureHandler } from "./helpers/gestures.js";
 import { panelStyles } from "./styles.js";
 import { AiController } from "./controllers/ai-controller.js";
 import { ProductsController } from "./controllers/products-controller.js";
@@ -68,65 +69,27 @@ export class VoedingslogPanel extends LitElement {
   private _popStateHandler = () => this._handleBackButton();
   private _dialogHistoryDepth = 0;
 
+  private _gestures = new GestureHandler({
+    isDialogOpen: () => !!this._dialogMode,
+    onSwipe: (delta) => this._changeDate(delta),
+    onRefresh: () => this._loadLog(),
+    requestUpdate: () => this.requestUpdate(),
+  });
+
   async connectedCallback(): Promise<void> {
     super.connectedCallback();
     window.addEventListener("popstate", this._popStateHandler);
-    this.addEventListener("touchstart", this._onTouchStart, { passive: true });
-    this.addEventListener("touchmove", this._onTouchMove, { passive: true });
-    this.addEventListener("touchend", this._onTouchEnd, { passive: true });
+    this._gestures.attach(this);
     await this._loadConfig();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("popstate", this._popStateHandler);
-    this.removeEventListener("touchstart", this._onTouchStart);
-    this.removeEventListener("touchmove", this._onTouchMove);
-    this.removeEventListener("touchend", this._onTouchEnd);
+    this._gestures.detach(this);
     this._barcodeCamera.stop();
     this._photoCamera.stop();
   }
-
-  // ── Touch gestures (swipe + pull to refresh) ─────────────────────
-  private _touchStartX = 0;
-  private _touchStartY = 0;
-  @state() private _pullDistance = 0;
-  private _pulling = false;
-
-  private _onTouchStart = (e: TouchEvent) => {
-    this._touchStartX = e.touches[0].clientX;
-    this._touchStartY = e.touches[0].clientY;
-    // Start pull-to-refresh tracking if at top of page
-    this._pulling = !this._dialogMode && window.scrollY <= 0;
-  };
-
-  private _onTouchMove = (e: TouchEvent) => {
-    if (!this._pulling) return;
-    const dy = e.touches[0].clientY - this._touchStartY;
-    if (dy > 0 && dy < 120) {
-      this._pullDistance = dy;
-    }
-  };
-
-  private _onTouchEnd = (e: TouchEvent) => {
-    // Pull to refresh
-    if (this._pulling && this._pullDistance > 60) {
-      this._pullDistance = 0;
-      this._pulling = false;
-      this._loadLog();
-      return;
-    }
-    this._pullDistance = 0;
-    this._pulling = false;
-
-    if (this._dialogMode) return;
-    const dx = e.changedTouches[0].clientX - this._touchStartX;
-    const dy = e.changedTouches[0].clientY - this._touchStartY;
-    // Require horizontal swipe > 60px and mostly horizontal
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) {
-      this._changeDate(dx < 0 ? 1 : -1);
-    }
-  };
 
   private _pushDialogHistory(): void {
     this._dialogHistoryDepth++;
@@ -239,9 +202,9 @@ export class VoedingslogPanel extends LitElement {
       const groups = groupByCategory(this._items);
 
       return html`
-        ${this._pullDistance > 10 ? html`
-          <div class="pull-indicator" style="height:${Math.min(this._pullDistance, 60)}px">
-            <ha-icon icon=${this._pullDistance > 60 ? "mdi:refresh" : "mdi:arrow-down"} style="opacity:${Math.min(1, this._pullDistance / 60)}"></ha-icon>
+        ${this._gestures.pullDistance > 10 ? html`
+          <div class="pull-indicator" style="height:${Math.min(this._gestures.pullDistance, 60)}px">
+            <ha-icon icon=${this._gestures.pullDistance > 60 ? "mdi:refresh" : "mdi:arrow-down"} style="opacity:${Math.min(1, this._gestures.pullDistance / 60)}"></ha-icon>
           </div>
         ` : nothing}
         <div class="panel">
