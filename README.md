@@ -109,9 +109,25 @@ Na installatie verschijnt **Voedingslog** automatisch in de sidebar.
 
 ---
 
+## Dag-, week- en maandoverzicht
+
+Tik op de dagtotalen om het overzicht te openen. Schakel tussen **Dag**, **Week** en **Maand**:
+
+- **Dag** — taartdiagram met macro-verdeling, alle voedingswaarden, gelogde items, exporteren als afbeelding
+- **Week** — staafdiagrammen per doelnutrient (calorieen, eiwit, etc.) met doellijn. Week begint op maandag.
+- **Maand** — zelfde staafdiagrammen over de hele maand (1e tot laatste dag)
+
+Elke modus heeft navigatiepijltjes om door periodes te bladeren. Dagnavigatie synchroniseert met het hoofdscherm.
+
+Staven zijn groen als je onder je doel zit, rood als je erover gaat. Gemiddeld per dag wordt onder de grafieken getoond. Exporteer elke weergave als PNG afbeelding.
+
+---
+
 ## Sensoren
 
 Per persoon worden automatisch deze sensoren aangemaakt:
+
+### Dagsensoren
 
 | Sensor | Eenheid |
 |--------|---------|
@@ -129,6 +145,17 @@ Per persoon worden automatisch deze sensoren aangemaakt:
 | `sensor.voedingslog_jan_log_vandaag` | items |
 
 Sensoren voor `doel`, `resterend` en `percentage` zitten als attribuut op calorieen en natrium.
+
+### Weeksensoren
+
+Per nutrient ook een 7-daags gemiddelde en totaal:
+
+| Sensor | Eenheid | Beschrijving |
+|--------|---------|--------------|
+| `sensor.voedingslog_jan_week_avg_calorieen` | kcal | Gemiddeld per dag (laatste 7 dagen) |
+| `sensor.voedingslog_jan_week_total_calorieen` | kcal | Totaal (laatste 7 dagen) |
+
+Dit geldt voor alle 12 nutrienten (calorieen, vetten, koolhydraten, eiwitten, etc.).
 
 ---
 
@@ -158,42 +185,13 @@ data:
   category: "breakfast"      # optioneel
 ```
 
-### `voedingslog.reset_dag`
-Wis de log voor vandaag (of een specifieke dag).
-
-```yaml
-service: voedingslog.reset_dag
-data:
-  persoon: "Jan"
-  dag: "2026-03-25"          # optioneel
-```
-
-### `voedingslog.verwijder_laatste`
+### `voedingslog.delete_last`
 Verwijder het laatst gelogde item.
 
 ```yaml
-service: voedingslog.verwijder_laatste
+service: voedingslog.delete_last
 data:
   persoon: "Jan"
-```
-
----
-
-## Automatisch resetten om middernacht
-
-```yaml
-automation:
-  alias: "Voedingslog reset om middernacht"
-  trigger:
-    - platform: time
-      at: "00:00:00"
-  action:
-    - service: voedingslog.reset_dag
-      data:
-        persoon: "Jan"
-    - service: voedingslog.reset_dag
-      data:
-        persoon: "Lisa"
 ```
 
 ---

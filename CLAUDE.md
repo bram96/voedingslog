@@ -96,7 +96,7 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 
 | File | What it tests |
 |------|---------------|
-| `tests/test_coordinator.py` | Nutrient computation, product CRUD, search, favorites, aliases, barcode, component editing, recipe product refs, cleanup |
+| `tests/test_coordinator.py` | Nutrient computation, product CRUD, search, favorites, aliases, barcode, component editing, recipe product refs, cleanup, period totals |
 | `tests/test_open_food_facts.py` | OFF product processing, serving parsing, portion building |
 | `frontend-src/src/helpers.test.ts` | Nutrient calculation, grouping, display constants |
 
@@ -121,6 +121,8 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 - **Local-first search**: Products are cached on first use. Search checks local products (name + aliases) first, "Zoek online" button for OFF API.
 - **AI structured output**: AI uses `ai_task.generate_data` with the `structure` parameter for typed responses. Photo attachments use `media-source://` URIs via temp files in `/media`.
 - **AI text/handwriting → product lookup**: AI only identifies product names + estimated grams. Real nutrients come from local cache / OFF search, not AI guessing. Matched names are stored as aliases for future instant matching.
+- **Period view with navigation**: Day detail dialog has Dag/Week/Maand toggle. Week snaps to Monday, month to 1st. Each mode has back/forward arrows. Day navigation syncs with the main panel date.
+- **Week sensors**: Per person per nutrient — both 7-day average and 7-day total. Computed from coordinator's `get_period_totals()` on each refresh.
 
 ## Data Model
 
@@ -168,6 +170,7 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 |---------|---------|
 | `voedingslog/get_config` | Panel initialization data (persons from all entries, per-person goals) |
 | `voedingslog/get_log` | Day's log for a person |
+| `voedingslog/get_period` | Daily totals for a date range (person, start_date, end_date) |
 | `voedingslog/lookup_barcode` | Barcode lookup — local first, then OFF (no logging) |
 | `voedingslog/search_products` | Search local products (name + aliases) or online (OFF) |
 | `voedingslog/log_product` | Log a product with full nutrient data (optional `components`) |
