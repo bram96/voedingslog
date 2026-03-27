@@ -3,9 +3,11 @@
  */
 import { html, nothing, type TemplateResult } from "lit";
 import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
-import { NUTRIENTS_META, EDITABLE_NUTRIENTS } from "../helpers.js";
 import { ProductSearch } from "../product-search.js";
 import { renderPhotoPicker, readFileAsBase64 } from "../photo-capture.js";
+import { readNutrientFields } from "../ui/nutrient-fields.js";
+import { renderBarcodeView } from "../views/barcode-view.js";
+import { renderManualEntryView } from "../views/manual-entry-view.js";
 
 export interface SearchControllerHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
@@ -110,41 +112,14 @@ export class SearchController {
 
   renderBarcodeDialog(): TemplateResult {
     const h = this.host;
-    return html`
-      <div class="dialog-header">
-        <h2>Scan barcode</h2>
-        <button class="close-btn" @click=${() => h._setDialogMode("search")}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${h._scanFailed
-          ? html`
-            <input type="file" accept="image/*" id="file-input-barcode"
-              @change=${(e: Event) => h._handleBarcodePhoto(e)} style="display:none" />
-            <button class="btn-primary photo-btn" @click=${() => h._openFileInput("file-input-barcode")}>
-              <ha-icon icon="mdi:image"></ha-icon>
-              Foto van barcode
-            </button>
-          `
-          : html`
-            <div id="barcode-scanner-placeholder" class="scanner-area">
-              ${h._scanning
-                ? nothing
-                : html`<p class="scanner-hint">Camera wordt gestart...</p>`}
-            </div>
-          `}
-        <div class="manual-barcode">
-          <span>Of voer handmatig in:</span>
-          <div class="input-row">
-            <input type="text" id="manual-barcode" placeholder="Barcode nummer"
-              inputmode="numeric"
-              @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this.lookupManualBarcode(); }} />
-            <button class="btn-primary" @click=${() => this.lookupManualBarcode()}>Zoek</button>
-          </div>
-        </div>
-      </div>
-    `;
+    return renderBarcodeView({
+      scanning: h._scanning,
+      scanFailed: h._scanFailed,
+      onClose: () => h._setDialogMode("search"),
+      onBarcodePhoto: (e) => h._handleBarcodePhoto(e),
+      onOpenFileInput: (id) => h._openFileInput(id),
+      onLookup: () => this.lookupManualBarcode(),
+    });
   }
 
   // ── Photo label dialog ───────────────────────────────────────
@@ -174,52 +149,13 @@ export class SearchController {
 
   renderManualEntryDialog(): TemplateResult {
     const h = this.host;
-    const pre = h._prefillProduct;
-    const fields = EDITABLE_NUTRIENTS.map((n) => ({ id: `manual-${n.key}`, label: n.label, key: n.key }));
-
-    return html`
-      <div class="dialog-header">
-        <h2>${pre ? "Controleer voedingswaarden" : "Handmatig toevoegen"}</h2>
-        <button class="close-btn" @click=${() => h._setDialogMode(this.returnToMode as string)}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${pre ? html`<p class="manual-hint">Door AI herkend. Controleer en pas aan indien nodig.</p>` : nothing}
-        <div class="form-field">
-          <label>Productnaam</label>
-          <input type="text" id="manual-name"
-            placeholder="Bijv. Zelfgemaakte soep"
-            .value=${pre?.name || ""} />
-        </div>
-        <p class="manual-hint">Voedingswaarden per 100g:</p>
-        <div class="manual-fields">
-          ${fields.map(
-            (f) => {
-              const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
-              const displayVal = (pre?.nutrients?.[f.key] ?? 0) * factor;
-              return html`
-                <div class="manual-field-row">
-                  <label>${f.label}</label>
-                  <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
-                    .value=${String(displayVal)} />
-                </div>
-              `;
-            }
-          )}
-        </div>
-        ${!pre && !!h._config?.ai_task_entity ? html`
-          <button class="btn-secondary btn-confirm" @click=${() => this.openPhotoCapture()}>
-            <ha-icon icon="mdi:camera"></ha-icon>
-            Foto van etiket (AI)
-          </button>
-        ` : nothing}
-        <button class="btn-primary btn-confirm" @click=${() => this.confirmManualEntry(fields)}>
-          <ha-icon icon="mdi:arrow-right"></ha-icon>
-          Verder
-        </button>
-      </div>
-    `;
+    return renderManualEntryView({
+      prefill: h._prefillProduct,
+      config: h._config,
+      onClose: () => h._setDialogMode(this.returnToMode as string),
+      onConfirm: () => this.confirmManualEntry(),
+      onPhoto: () => this.openPhotoCapture(),
+    });
   }
 
   // ── Actions ──────────────────────────────────────────────────
@@ -340,20 +276,13 @@ export class SearchController {
     }
   }
 
-  confirmManualEntry(fields: { id: string; key: string }[]): void {
+  confirmManualEntry(): void {
     const h = this.host;
     const nameInput = h.shadowRoot?.getElementById("manual-name") as HTMLInputElement | null;
     const name = nameInput?.value?.trim();
     if (!name) { alert("Vul een productnaam in."); return; }
 
-    const nutrients: Record<string, number> = {};
-    for (const f of fields) {
-      const input = h.shadowRoot?.getElementById(f.id) as HTMLInputElement | null;
-      const displayVal = parseFloat(input?.value || "0") || 0;
-      const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
-      nutrients[f.key] = displayVal / factor;
-    }
-
+    const nutrients = readNutrientFields("manual", h.shadowRoot);
     const product: Product = { name, serving_grams: 100, nutrients };
     this._onSelected(product);
   }

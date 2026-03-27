@@ -2,7 +2,7 @@
  * AI features controller — text parsing, handwriting OCR, validation dialog.
  * Used via composition: the panel creates an instance and delegates to it.
  */
-import { html, nothing, type TemplateResult } from "lit";
+import type { TemplateResult } from "lit";
 import type {
   MealCategory,
   MealIngredient,
@@ -12,8 +12,10 @@ import type {
   SearchProductsResponse,
   VoedingslogConfig,
 } from "../types.js";
-import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory } from "../helpers.js";
-import { renderPhotoPicker, readFileAsBase64, type PhotoCaptureHost } from "../photo-capture.js";
+import { defaultCategory } from "../helpers/categories.js";
+import { readFileAsBase64, type PhotoCaptureHost } from "../photo-capture.js";
+import { renderBatchAddView } from "../views/batch-add-view.js";
+import { renderValidateView } from "../views/validate-view.js";
 
 export interface AiControllerHost extends PhotoCaptureHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
@@ -59,190 +61,39 @@ export class AiController {
   renderBatchAddDialog(mode: ValidateMode = "log"): TemplateResult {
     const h = this.host;
     const isRecipe = mode === "recipe";
-    const title = isRecipe ? "AI ingrediënten invoer" : "Batch toevoegen";
-    const closeAction = isRecipe ? () => h._setDialogMode("product-edit") : () => h._closeDialog();
-    const placeholder = isRecipe
-      ? "Bijv. 200g kipfilet, 100g rijst, 150g broccoli, scheutje olijfolie"
-      : "Bijv. 2 boterhammen met kaas, een appel, kop koffie met melk";
-
-    return html`
-      <div class="dialog-header">
-        <h2>${title}</h2>
-        <button class="close-btn" @click=${closeAction}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        ${this.batchMode === "text"
-          ? html`
-            <p style="font-size:13px;color:var(--secondary-text-color);margin-top:0">
-              Beschrijf wat je gegeten hebt. AI herkent de producten en zoekt voedingswaarden op.
-            </p>
-            <textarea
-              id="ai-text-input"
-              class="ai-textarea"
-              placeholder=${placeholder}
-            ></textarea>
-            ${h._analyzing
-              ? html`<div class="analyzing"><ha-icon icon="mdi:loading" class="spin"></ha-icon> Bezig met analyseren...</div>`
-              : html`
-                <button class="btn-primary btn-confirm" @click=${() => this.submitText(mode)}>
-                  <ha-icon icon="mdi:auto-fix"></ha-icon>
-                  Analyseren
-                </button>
-                <button class="btn-secondary btn-confirm" @click=${() => { this.batchMode = "photo"; h.requestUpdate(); }}>
-                  <ha-icon icon="mdi:camera"></ha-icon>
-                  Foto van handgeschreven lijst
-                </button>
-              `}
-          `
-          : html`
-            <button class="btn-secondary" style="margin-bottom:12px;width:100%;padding:8px" @click=${() => { this.batchMode = "text"; h.requestUpdate(); }}>
-              <ha-icon icon="mdi:keyboard"></ha-icon> Terug naar tekst invoer
-            </button>
-            ${renderPhotoPicker(
-              h,
-              "file-input-handwriting",
-              (e: Event) => this.handleHandwritingPhoto(e),
-              () => this._captureForHandwriting(),
-              "Maak een foto van je handgeschreven lijst.",
-            )}
-          `}
-      </div>
-    `;
+    return renderBatchAddView({
+      mode: isRecipe ? "recipe" : "log",
+      batchMode: this.batchMode,
+      analyzing: h._analyzing,
+      host: h,
+      onClose: isRecipe ? () => h._setDialogMode("product-edit") : () => h._closeDialog(),
+      onSubmitText: () => this.submitText(mode),
+      onSwitchToPhoto: () => { this.batchMode = "photo"; h.requestUpdate(); },
+      onSwitchToText: () => { this.batchMode = "text"; h.requestUpdate(); },
+      onHandwritingPhoto: (e) => this.handleHandwritingPhoto(e),
+      onCaptureHandwriting: () => this._captureForHandwriting(),
+    });
   }
 
-  renderValidateDialog(): TemplateResult | typeof nothing {
+  renderValidateDialog(): TemplateResult {
     const h = this.host;
-    if (!this.parsedProducts.length) return nothing;
-    const idx = this.validateIndex;
-    if (idx >= this.parsedProducts.length) {
-      return html`
-        <div class="dialog-header">
-          <h2>Klaar!</h2>
-          <button class="close-btn" @click=${() => h._closeDialog()}>
-            <ha-icon icon="mdi:close"></ha-icon>
-          </button>
-        </div>
-        <div class="dialog-body">
-          <p>Alle producten zijn verwerkt.</p>
-          <button class="btn-primary btn-confirm" @click=${() => { h._closeDialog(); h._loadLog(); }}>
-            Sluiten
-          </button>
-        </div>
-      `;
-    }
-
-    const product = this.parsedProducts[idx];
-    const pct = Math.round(((idx) / this.parsedProducts.length) * 100);
-
-    return html`
-      <div class="dialog-header">
-        <h2>Product ${idx + 1} van ${this.parsedProducts.length}</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="ai-validate-progress">
-          <div class="ai-validate-bar">
-            <div class="ai-validate-fill" style="width:${pct}%"></div>
-          </div>
-          <span>${idx + 1}/${this.parsedProducts.length}</span>
-        </div>
-
-        <div class="ai-context">AI herkende: <strong>${product.ai_name || product.name}</strong></div>
-
-        ${!product.matched
-          ? html`
-            <div class="ai-warning">Niet gevonden in database — zoek een product of sla over</div>
-            ${(product as any).suggested_product ? html`
-              <button class="btn-secondary btn-confirm" style="margin-top:4px" @click=${() => this._acceptSuggestion()}>
-                <ha-icon icon="mdi:lightbulb-outline"></ha-icon>
-                Bedoel je "${(product as any).suggested_product}"?
-              </button>
-            ` : nothing}
-          `
-          : nothing}
-
-        <div class="ai-validate-search">
-          <input
-            type="text"
-            placeholder="Zoek ander product..."
-            .value=${this.validateSearch}
-            @input=${(e: Event) => { this.validateSearch = (e.target as HTMLInputElement).value; h.requestUpdate(); }}
-            @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this.searchValidate(); }}
-          />
-          <div style="display:flex;gap:4px;margin-top:4px">
-            <button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${() => this.searchValidate()}>
-              Zoek lokaal
-            </button>
-            <button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${() => this.searchValidate(true)}>
-              Zoek online
-            </button>
-          </div>
-          ${this.validateSearchResults.length > 0
-            ? html`
-              <div class="search-results">
-                ${this.validateSearchResults.map(
-                  (r) => html`
-                    <div class="search-result">
-                      <div class="search-result-main" @click=${() => this.selectProduct(r)}>
-                        <span class="result-name">${r.name}</span>
-                        <span class="result-meta">${Math.round(r.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
-                      </div>
-                    </div>
-                  `
-                )}
-              </div>
-            ` : nothing}
-        </div>
-
-        <div class="nutrient-preview">
-          <div class="preview-title">${product.name}</div>
-          <div class="nutrient-grid">
-            ${KEY_NUTRIENTS_DISPLAY.map(
-              (n) => html`
-                <div class="nutrient-row">
-                  <span>${n.label}</span>
-                  <span>${(product.nutrients?.[n.key] || 0).toFixed(n.decimals)} ${n.unit}</span>
-                </div>
-              `
-            )}
-          </div>
-        </div>
-
-        <div class="form-field">
-          <label>Gewicht (gram)</label>
-          <input type="number" id="ai-validate-grams" .value=${String(product.serving_grams || 100)}
-            min="1" step="1" inputmode="numeric" />
-        </div>
-
-        ${this._validateMode === "log" ? html`
-          <div class="form-field">
-            <label>Maaltijd</label>
-            <select id="ai-validate-category">
-              ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-                (cat) => html`
-                  <option value=${cat} ?selected=${cat === defaultCategory()}>
-                    ${(h._config?.category_labels || DEFAULT_CATEGORY_LABELS)[cat]}
-                  </option>
-                `
-              )}
-            </select>
-          </div>
-        ` : nothing}
-
-        <div class="ai-validate-actions">
-          <button class="btn-secondary btn-confirm" @click=${() => this.skip()}>
-            Overslaan
-          </button>
-          <button class="btn-primary btn-confirm" @click=${() => this.confirm()} ?disabled=${!product.matched}>
-            ${this._validateMode === "recipe" ? "Ingrediënt toevoegen" : "Bevestigen"}
-          </button>
-        </div>
-      </div>
-    `;
+    return renderValidateView({
+      products: this.parsedProducts,
+      index: this.validateIndex,
+      validateMode: this._validateMode,
+      validateSearch: this.validateSearch,
+      validateSearchResults: this.validateSearchResults,
+      config: h._config,
+      onClose: () => h._closeDialog(),
+      onDone: () => { h._closeDialog(); h._loadLog(); },
+      onSkip: () => this.skip(),
+      onConfirm: () => this.confirm(),
+      onSearchInput: (v) => { this.validateSearch = v; h.requestUpdate(); },
+      onSearchLocal: () => this.searchValidate(),
+      onSearchOnline: () => this.searchValidate(true),
+      onSelectProduct: (p) => this.selectProduct(p),
+      onAcceptSuggestion: () => this._acceptSuggestion(),
+    });
   }
 
   // ── Actions ──────────────────────────────────────────────────
