@@ -58,7 +58,8 @@ export const panelStyles = css`
   .date-picker-btn:hover { background: var(--divider-color); }
   .date-text { font-size: 15px; font-weight: 500; }
 
-  .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto; }
+  .container { padding: var(--panel-padding); display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto; animation: fade-in 0.15s ease-out; }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
   /* Actions */
   .actions { display: flex; gap: 8px; }
@@ -122,8 +123,10 @@ export const panelStyles = css`
   .item-delete ha-icon, .item-edit ha-icon { --mdc-icon-size: 18px; }
 
   /* Dialog */
-  .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
-  .dialog { background: var(--card-background-color); border-radius: 16px 16px 0 0; width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto; padding: 0; }
+  .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: flex-end; justify-content: center; animation: overlay-in 0.15s ease-out; }
+  @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+  .dialog { background: var(--card-background-color); border-radius: 16px 16px 0 0; width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto; padding: 0; animation: dialog-slide-up 0.2s ease-out; }
+  @keyframes dialog-slide-up { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--divider-color); }
   .dialog-header h2 { margin: 0; font-size: 18px; font-weight: 500; }
   .close-btn { background: none; border: none; color: var(--secondary-text-color); cursor: pointer; padding: 4px; display: flex; }
@@ -268,6 +271,25 @@ export const panelStyles = css`
   .add-ingredient { margin-top: 12px; }
   .ingredient-nutrients { padding: 8px 0 8px 12px; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); border-radius: 0 0 8px 8px; margin-bottom: 4px; }
 
+  /* Pull to refresh */
+  .pull-indicator { display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--secondary-text-color); }
+  .pull-indicator ha-icon { --mdc-icon-size: 24px; }
+
+  /* Snackbar */
+  .snackbar {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--primary-text-color, #333); color: var(--primary-background-color, #fff);
+    padding: 12px 16px; border-radius: 8px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000;
+    animation: snackbar-in 0.2s ease-out;
+    font-size: 14px;
+  }
+  .snackbar button {
+    background: none; border: none; color: var(--primary-color); cursor: pointer;
+    font-weight: 600; font-size: 14px; padding: 4px 8px; white-space: nowrap;
+  }
+  @keyframes snackbar-in { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
   /* Period toggle */
   .period-toggle { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden; }
   .period-toggle button { flex: 1; padding: 8px; border: none; background: var(--card-background-color); cursor: pointer; font-size: 14px; color: var(--primary-text-color); transition: background 0.2s; }
@@ -311,6 +333,7 @@ export const panelStyles = css`
   }
   .detail-row:last-child { border-bottom: none; }
   .detail-row span:last-child { color: var(--secondary-text-color); white-space: nowrap; }
+  .nutrient-gap-badge { background: #ff9800; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; vertical-align: middle; }
   .detail-category { margin-top: 8px; }
   .detail-category-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); padding: 4px 0; }
 `;

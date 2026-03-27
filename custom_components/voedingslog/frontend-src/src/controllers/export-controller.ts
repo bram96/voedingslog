@@ -380,14 +380,40 @@ export class ExportController {
         <div class="detail-table-header">Gemiddeld per dag</div>
         ${goals.map((g) => {
           const avg = days.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / days.length;
+          const pct = g.goal > 0 ? Math.round(avg / g.goal * 100) : 0;
           return html`
             <div class="detail-row">
-              <span>${g.label}</span>
-              <span>${Math.round(avg)} / ${g.goal} ${g.unit}</span>
+              <span>${g.label} ${pct < 80 ? html`<span class="nutrient-gap-badge">laag</span>` : nothing}</span>
+              <span>${Math.round(avg)} / ${g.goal} ${g.unit} (${pct}%)</span>
             </div>
           `;
         })}
       </div>
+
+      ${(() => {
+        const gaps = goals.filter((g) => {
+          const avg = days.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / days.length;
+          return g.goal > 0 && avg / g.goal < 0.8;
+        });
+        return gaps.length > 0 ? html`
+          <div class="nutrient-gaps" style="margin-top:8px">
+            <div class="detail-table-header">
+              <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:16px;color:#ff9800;vertical-align:middle"></ha-icon>
+              Aandachtspunten
+            </div>
+            ${gaps.map((g) => {
+              const avg = days.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / days.length;
+              const deficit = Math.round(g.goal - avg);
+              return html`
+                <div class="detail-row">
+                  <span>${g.label}</span>
+                  <span style="color:#ff9800">${deficit} ${g.unit}/dag tekort</span>
+                </div>
+              `;
+            })}
+          </div>
+        ` : nothing;
+      })()}
 
       ${this.exportImageUrl
         ? html`

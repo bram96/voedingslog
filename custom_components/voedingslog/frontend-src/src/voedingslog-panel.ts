@@ -71,6 +71,7 @@ export class VoedingslogPanel extends LitElement {
     super.connectedCallback();
     window.addEventListener("popstate", this._popStateHandler);
     this.addEventListener("touchstart", this._onTouchStart, { passive: true });
+    this.addEventListener("touchmove", this._onTouchMove, { passive: true });
     this.addEventListener("touchend", this._onTouchEnd, { passive: true });
     await this._loadConfig();
   }
@@ -79,25 +80,48 @@ export class VoedingslogPanel extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener("popstate", this._popStateHandler);
     this.removeEventListener("touchstart", this._onTouchStart);
+    this.removeEventListener("touchmove", this._onTouchMove);
     this.removeEventListener("touchend", this._onTouchEnd);
     this._barcodeCamera.stop();
     this._photoCamera.stop();
   }
 
-  // ── Swipe navigation ─────────────────────────────────────────────
+  // ── Touch gestures (swipe + pull to refresh) ─────────────────────
   private _touchStartX = 0;
   private _touchStartY = 0;
+  @state() private _pullDistance = 0;
+  private _pulling = false;
 
   private _onTouchStart = (e: TouchEvent) => {
     this._touchStartX = e.touches[0].clientX;
     this._touchStartY = e.touches[0].clientY;
+    // Start pull-to-refresh tracking if at top of page
+    this._pulling = !this._dialogMode && window.scrollY <= 0;
+  };
+
+  private _onTouchMove = (e: TouchEvent) => {
+    if (!this._pulling) return;
+    const dy = e.touches[0].clientY - this._touchStartY;
+    if (dy > 0 && dy < 120) {
+      this._pullDistance = dy;
+    }
   };
 
   private _onTouchEnd = (e: TouchEvent) => {
-    if (this._dialogMode) return; // don't swipe when dialog is open
+    // Pull to refresh
+    if (this._pulling && this._pullDistance > 60) {
+      this._pullDistance = 0;
+      this._pulling = false;
+      this._loadLog();
+      return;
+    }
+    this._pullDistance = 0;
+    this._pulling = false;
+
+    if (this._dialogMode) return;
     const dx = e.changedTouches[0].clientX - this._touchStartX;
     const dy = e.changedTouches[0].clientY - this._touchStartY;
-    // Require horizontal swipe > 60px and mostly horizontal (not scrolling)
+    // Require horizontal swipe > 60px and mostly horizontal
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) {
       this._changeDate(dx < 0 ? 1 : -1);
     }
@@ -214,6 +238,11 @@ export class VoedingslogPanel extends LitElement {
       const groups = groupByCategory(this._items);
 
       return html`
+        ${this._pullDistance > 10 ? html`
+          <div class="pull-indicator" style="height:${Math.min(this._pullDistance, 60)}px">
+            <ha-icon icon=${this._pullDistance > 60 ? "mdi:refresh" : "mdi:arrow-down"} style="opacity:${Math.min(1, this._pullDistance / 60)}"></ha-icon>
+          </div>
+        ` : nothing}
         <div class="panel">
           ${this._renderHeader()}
           <div class="container">
@@ -225,6 +254,12 @@ export class VoedingslogPanel extends LitElement {
           </div>
         </div>
         ${this._renderDialog()}
+        ${this._snackbar ? html`
+          <div class="snackbar">
+            <span>${this._snackbar.name} verwijderd</span>
+            <button @click=${() => this._undoDelete()}>Ongedaan maken</button>
+          </div>
+        ` : nothing}
       `;
     } catch (e) {
       console.error("Render error:", e);
@@ -607,11 +642,12 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
+  // ── Undo snackbar ────────────────────────────────────────────────
+  @state() private _snackbar: { name: string; item: LogItem; timer: number } | null = null;
+
   private async _deleteItem(index: number): Promise<void> {
-    const items = this._items;
-    const item = items[index];
-    const name = item?.name || "dit item";
-    if (!confirm(`${name} verwijderen?`)) return;
+    const item = this._items[index];
+    if (!item) return;
 
     try {
       await this.hass.callWS({
@@ -621,8 +657,35 @@ export class VoedingslogPanel extends LitElement {
         date: this._selectedDate,
       });
       await this._loadLog();
+
+      // Show undo snackbar
+      if (this._snackbar) clearTimeout(this._snackbar.timer);
+      const timer = window.setTimeout(() => { this._snackbar = null; }, 5000);
+      this._snackbar = { name: item.name, item, timer };
     } catch (e) {
       console.error("Failed to delete item:", e);
+    }
+  }
+
+  private async _undoDelete(): Promise<void> {
+    if (!this._snackbar) return;
+    const { item } = this._snackbar;
+    clearTimeout(this._snackbar.timer);
+    this._snackbar = null;
+    try {
+      await this.hass.callWS({
+        type: "voedingslog/log_product",
+        person: this._selectedPerson,
+        name: item.name,
+        grams: item.grams,
+        nutrients: item.nutrients,
+        category: item.category,
+        date: this._selectedDate,
+        ...(item.components ? { components: item.components } : {}),
+      });
+      await this._loadLog();
+    } catch (e) {
+      console.error("Failed to undo delete:", e);
     }
   }
 
