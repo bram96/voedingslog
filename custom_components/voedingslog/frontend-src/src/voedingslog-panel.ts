@@ -18,6 +18,7 @@ import {
   KEY_NUTRIENTS_DISPLAY,
   calcItemNutrients,
   sumNutrients,
+  formatDateLabel,
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
 import { AiController } from "./controllers/ai-controller.js";
@@ -293,12 +294,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   _formatDateLabel(dateStr: string): string {
-    const today = new Date().toISOString().split("T")[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-    if (dateStr === today) return "Vandaag";
-    if (dateStr === yesterday) return "Gisteren";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+    return formatDateLabel(dateStr);
   }
 
   private _renderHeader(): TemplateResult {

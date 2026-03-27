@@ -93,3 +93,30 @@ export function sumNutrients(items: LogItem[]): NutrientMap {
   }
   return totals;
 }
+
+/** Editable nutrient fields used in manual entry and product editor forms. */
+export interface EditableNutrientField {
+  key: string;
+  label: string;
+}
+
+export const EDITABLE_NUTRIENTS: EditableNutrientField[] = [
+  { key: "energy-kcal_100g", label: "Calorieën (kcal)" },
+  { key: "fat_100g", label: "Vetten (g)" },
+  { key: "saturated-fat_100g", label: "Verzadigd vet (g)" },
+  { key: "carbohydrates_100g", label: "Koolhydraten (g)" },
+  { key: "sugars_100g", label: "Waarvan suikers (g)" },
+  { key: "fiber_100g", label: "Vezels (g)" },
+  { key: "proteins_100g", label: "Eiwitten (g)" },
+  { key: "sodium_100g", label: "Natrium (mg)" },
+];
+
+/** Format a date string for display. */
+export function formatDateLabel(dateStr: string): string {
+  const today = new Date().toISOString().split("T")[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  if (dateStr === today) return "Vandaag";
+  if (dateStr === yesterday) return "Gisteren";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+}

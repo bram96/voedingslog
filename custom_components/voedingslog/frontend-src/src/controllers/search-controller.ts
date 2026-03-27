@@ -3,7 +3,7 @@
  */
 import { html, nothing, type TemplateResult } from "lit";
 import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
-import { NUTRIENTS_META } from "../helpers.js";
+import { NUTRIENTS_META, EDITABLE_NUTRIENTS } from "../helpers.js";
 import { ProductSearch } from "../product-search.js";
 import { renderPhotoPicker, readFileAsBase64 } from "../photo-capture.js";
 
@@ -175,16 +175,7 @@ export class SearchController {
   renderManualEntryDialog(): TemplateResult {
     const h = this.host;
     const pre = h._prefillProduct;
-    const fields = [
-      { id: "manual-kcal", label: "Calorieën (kcal)", key: "energy-kcal_100g" },
-      { id: "manual-fat", label: "Vetten (g)", key: "fat_100g" },
-      { id: "manual-satfat", label: "Verzadigd vet (g)", key: "saturated-fat_100g" },
-      { id: "manual-carbs", label: "Koolhydraten (g)", key: "carbohydrates_100g" },
-      { id: "manual-sugars", label: "Waarvan suikers (g)", key: "sugars_100g" },
-      { id: "manual-fiber", label: "Vezels (g)", key: "fiber_100g" },
-      { id: "manual-protein", label: "Eiwitten (g)", key: "proteins_100g" },
-      { id: "manual-sodium", label: "Natrium (mg)", key: "sodium_100g" },
-    ];
+    const fields = EDITABLE_NUTRIENTS.map((n) => ({ id: `manual-${n.key}`, label: n.label, key: n.key }));
 
     return html`
       <div class="dialog-header">

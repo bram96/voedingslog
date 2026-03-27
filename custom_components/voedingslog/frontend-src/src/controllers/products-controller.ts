@@ -6,7 +6,7 @@
  * - "manage": product list for editing (click → editor), create/delete/cleanup
  */
 import { html, nothing, type TemplateResult } from "lit";
-import { NUTRIENTS_META } from "../helpers.js";
+import { NUTRIENTS_META, EDITABLE_NUTRIENTS } from "../helpers.js";
 import type {
   MealIngredient,
   Product,
@@ -292,16 +292,7 @@ export class ProductsController {
 
   private _renderBaseEditDialog(product: BaseProduct): TemplateResult {
     const h = this.host;
-    const fields = [
-      { id: "product-kcal", label: "Calorieën (kcal)", key: "energy-kcal_100g" },
-      { id: "product-fat", label: "Vetten (g)", key: "fat_100g" },
-      { id: "product-satfat", label: "Verzadigd vet (g)", key: "saturated-fat_100g" },
-      { id: "product-carbs", label: "Koolhydraten (g)", key: "carbohydrates_100g" },
-      { id: "product-sugars", label: "Waarvan suikers (g)", key: "sugars_100g" },
-      { id: "product-fiber", label: "Vezels (g)", key: "fiber_100g" },
-      { id: "product-protein", label: "Eiwitten (g)", key: "proteins_100g" },
-      { id: "product-sodium", label: "Natrium (mg)", key: "sodium_100g" },
-    ];
+    const fields = EDITABLE_NUTRIENTS.map((n) => ({ id: `product-${n.key}`, label: n.label, key: n.key }));
 
     return html`
       <div class="dialog-header">
