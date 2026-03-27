@@ -17,6 +17,9 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 - **Handmatig invoeren** — voer zelf een product in met alle voedingswaarden
 - **Snel portie aanpassen** — tik op de grammen van een gelogd item om direct het gewicht aan te passen zonder het bewerkscherm te openen
 - **Swipe navigatie** — veeg links/rechts op mobiel om tussen dagen te navigeren
+- **Pull to refresh** — trek omlaag op mobiel om het daglog te verversen
+- **Ongedaan maken** — verwijderde items tonen een undo-snackbar in plaats van een bevestigingsdialoog
+- **Geanimeerde overgangen** — vloeiende animaties bij wisselen van dag en openen/sluiten van dialogen
 
 ### Producten en recepten
 - **Unified product database** — alle producten en recepten in een beheerbaar overzicht met zoeken, favorieten en type filters
@@ -28,6 +31,8 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 - **Ververs vanuit OFF** — haal bijgewerkte voedingswaarden op van Open Food Facts
 - **Duplicaten samenvoegen** — voeg twee producten samen, aliassen en barcode worden overgenomen, recepten bijgewerkt
 - **Gedeelde recepten** — recepten zijn beschikbaar voor alle personen (zichtbaar als "gedeeld" bij meerdere personen)
+- **Volledigheid indicator** — producten tonen hoe compleet de voedingswaarden zijn ingevuld
+- **Verouderde producten** — producten die 90+ dagen niet gebruikt zijn worden gemarkeerd als "oud"
 - **Opruimen** — verwijder producten die niet in logs of recepten voorkomen
 
 ### Overzichten en inzichten
@@ -35,6 +40,9 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 - **Staafdiagrammen met doellijnen** — per doelnutrient een grafiek met dagelijkse waarden, doellijn en trendlijn (3-daags gemiddelde)
 - **Streak tracker** — toont het aantal opeenvolgende dagen dat je hebt gelogd
 - **Live voedingswaarden** — het gewichtscherm toont berekende voedingswaarden die meebewegen terwijl je het gewicht aanpast
+- **Macro ratio balk** — visuele balk met verdeling eiwit/koolhydraten/vet/vezels als percentages
+- **Nutrient gaps en suggesties** — AI-gestuurde aanbevelingen ("Wat kan ik eten?") op basis van resterende doelen
+- **Gemiddelden** — lege dagen en de huidige dag (incompleet) worden uitgesloten van gemiddelden
 - **Exporteren** — exporteer dag of periode als PNG afbeelding, download of deel via je telefoon
 
 ### Personen en doelen

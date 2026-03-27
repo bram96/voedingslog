@@ -96,7 +96,7 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 
 | File | What it tests |
 |------|---------------|
-| `tests/test_coordinator.py` | Nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items, input sanitization |
+| `tests/test_coordinator.py` | ~103 tests — nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items, input sanitization, suggestions, stale detection |
 | `tests/test_open_food_facts.py` | OFF product processing, serving parsing, portion building |
 | `frontend-src/src/helpers.test.ts` | Nutrient calculation, grouping, display constants |
 
@@ -128,6 +128,14 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 - **Product merge**: Absorbs aliases, barcode, and recipe ingredient references from the removed product into the kept product. Uses search dialog to pick the duplicate.
 - **Period view with navigation**: Day detail dialog has Dag/Week/Maand toggle. Week snaps to Monday, month to 1st. Each mode has back/forward arrows. Day navigation syncs with the main panel date.
 - **Week sensors**: Per person per nutrient — both 7-day average and 7-day total. Computed from coordinator's `get_period_totals()` on each refresh.
+- **Undo snackbar**: Delete actions show a temporary undo snackbar instead of a confirmation dialog. Item is removed immediately but can be restored within the snackbar timeout.
+- **Pull to refresh**: Touch pull-down gesture on mobile triggers a log refresh. Uses touch start/move/end tracking with a threshold distance.
+- **Nutrient gap suggestions**: "Wat kan ik eten?" uses AI to suggest foods that fill remaining nutrient goals. Sends current day's totals and goals to AI, returns product suggestions from cache/OFF.
+- **Today exclusion from averages**: Period averages (week/month) exclude today (incomplete data) and days with zero logged items to avoid skewing the average downward.
+- **Nutrient completeness indicator**: Products show a completeness score based on how many nutrient fields are filled in. Helps users identify products with incomplete data.
+- **Stale product detection**: Products unused for 90+ days are flagged as stale in the product manager to help with cleanup.
+- **Macro ratio bar**: Visual percentage bar showing protein/carbs/fat/fiber distribution in day and period views.
+- **Animated transitions**: Day transitions and dialog open/close use CSS animations for a polished mobile experience.
 
 ## Data Model
 
@@ -178,6 +186,7 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 | `voedingslog/get_recent` | Recently logged unique products (last 7 days, deduped) |
 | `voedingslog/get_streak` | Consecutive days with logged items |
 | `voedingslog/get_period` | Daily totals for a date range (person, start_date, end_date) |
+| `voedingslog/get_suggestions` | AI-powered nutrient gap suggestions based on remaining goals |
 | `voedingslog/lookup_barcode` | Barcode lookup — local first, then OFF (no logging) |
 | `voedingslog/search_products` | Fuzzy search (name + aliases + barcode), tracks recent queries |
 | `voedingslog/log_product` | Log a product with full nutrient data (optional `components`) |
