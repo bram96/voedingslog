@@ -232,6 +232,10 @@ export class SearchController {
     }
   }
 
+  handleBarcodeResult(product: Product): void {
+    this._onSelected(product);
+  }
+
   private _onSelected(product: Product): void {
     if (this._callback) {
       this._callback(product);
@@ -241,7 +245,7 @@ export class SearchController {
         this._returnMode = null;
       }
     } else {
-      this.host._selectProduct(product);
+      this.host._selectProduct(product, "products");
     }
   }
 
@@ -283,7 +287,7 @@ export class SearchController {
     try {
       const res = await h.hass.callWS<LookupBarcodeResponse>({ type: "voedingslog/lookup_barcode", barcode });
       if (res.product) {
-        h._selectProduct(res.product, "products");
+        this._onSelected(res.product);
       } else {
         alert("Barcode niet gevonden.");
       }
@@ -348,6 +352,6 @@ export class SearchController {
     }
 
     const product: Product = { name, serving_grams: 100, nutrients };
-    h._selectProduct(product, "products");
+    this._onSelected(product);
   }
 }

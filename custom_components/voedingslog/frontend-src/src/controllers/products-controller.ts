@@ -532,6 +532,7 @@ export class ProductsController {
     );
   }
 
+
   addIngredient(product: Product): void {
     if (!this.editingProduct || this.editingProduct.type !== "recipe") return;
     const grams = product.serving_grams || 100;

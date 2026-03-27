@@ -409,13 +409,12 @@ export class VoedingslogPanel extends LitElement {
 
   _lookupBarcode(barcode: string): void {
     this.hass.callWS<import("./types.js").LookupBarcodeResponse>({ type: "voedingslog/lookup_barcode", barcode }).then((res) => {
-      if (res.product) this._selectProduct(res.product, "products");
+      if (res.product) this._searchCtrl.handleBarcodeResult(res.product);
       else alert("Barcode niet gevonden.");
     }).catch(() => alert("Fout bij opzoeken barcode."));
   }
 
   _handleBarcodePhoto(_e: Event): void {
-    // Delegate to file-based barcode decode - for now alert
     alert("Barcode foto wordt niet ondersteund. Voer de barcode handmatig in.");
   }
 
