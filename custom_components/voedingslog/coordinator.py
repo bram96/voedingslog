@@ -99,14 +99,26 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
     async def _load_or_migrate_products(self) -> None:
         """Load unified product store, or migrate from old meals + products stores."""
         products_data = await self._products_store.async_load()
-        if products_data and isinstance(products_data, list):
+
+        # Check if old stores still exist and should be re-migrated
+        old_products_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_PRODUCTS)
+        old_meals_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_MEALS)
+        old_products = await old_products_store.async_load() or []
+        old_meals = await old_meals_store.async_load() or []
+        has_old_data = bool(old_products or old_meals)
+
+        if products_data and isinstance(products_data, list) and not has_old_data:
+            # New store exists and old stores are gone — normal load
             self._products = products_data
             _LOGGER.info("Loaded %d products", len(self._products))
             return
 
-        # Check if another coordinator already migrated
+        if products_data and isinstance(products_data, list) and not has_old_data:
+            self._products = products_data
+            return
+
+        # Check if another coordinator already migrated this run
         if self.hass.data.get(_MIGRATION_FLAG):
-            # Re-load — the first coordinator saved it
             products_data = await self._products_store.async_load()
             if products_data and isinstance(products_data, list):
                 self._products = products_data
@@ -115,44 +127,30 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         # Mark migration as in progress
         self.hass.data[_MIGRATION_FLAG] = True
 
-        # Load old stores
-        old_products_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_PRODUCTS)
-        old_meals_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_MEALS)
-        old_products = await old_products_store.async_load() or []
-        old_meals = await old_meals_store.async_load() or []
-
-        if not old_products and not old_meals:
+        if not has_old_data:
+            if products_data and isinstance(products_data, list):
+                self._products = products_data
             _LOGGER.info("No old products or meals to migrate")
             return
 
-        # Collect all product names from logs across ALL coordinators
-        logged_names: set[str] = set()
-        entries = self.hass.data.get(DOMAIN, {})
-        for coord in entries.values():
-            if not isinstance(coord, VoedingslogCoordinator):
-                continue
-            for person_logs in coord._logs.values():
-                for day_items in person_logs.values():
-                    for item in day_items:
-                        logged_names.add(item.get("name", ""))
-
-        # Prune old products: keep if in logs OR favorite
+        # Migrate ALL old products (no pruning — other entries may not be loaded yet)
         migrated: list[dict] = []
         if isinstance(old_products, list):
             for p in old_products:
                 name = p.get("name", "")
-                if name in logged_names or p.get("favorite"):
-                    migrated.append({
-                        "id": str(uuid.uuid4())[:8],
-                        "type": "base",
-                        "name": name,
-                        "serving_grams": p.get("serving_grams", 100),
-                        "nutrients": p.get("nutrients", {}),
-                        "portions": p.get("portions", []),
-                        "favorite": p.get("favorite", False),
-                    })
+                if not name:
+                    continue
+                migrated.append({
+                    "id": str(uuid.uuid4())[:8],
+                    "type": "base",
+                    "name": name,
+                    "serving_grams": p.get("serving_grams", 100),
+                    "nutrients": p.get("nutrients", {}),
+                    "portions": p.get("portions", []),
+                    "favorite": p.get("favorite", False),
+                })
 
-        # Convert old meals to recipes
+        # Migrate ALL old meals as recipes
         if isinstance(old_meals, list):
             for m in old_meals:
                 migrated.append({
@@ -169,11 +167,14 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
 
         self._products = migrated
         await self._async_save_products()
-        pruned = len(old_products) - sum(1 for p in migrated if p["type"] == "base") if isinstance(old_products, list) else 0
+
+        # Remove old store files now that migration is complete
+        await old_products_store.async_remove()
+        await old_meals_store.async_remove()
+
         _LOGGER.info(
-            "Migrated products: %d base (%d pruned), %d recipes",
+            "Migrated products: %d base, %d recipes (old stores removed)",
             sum(1 for p in migrated if p["type"] == "base"),
-            pruned,
             sum(1 for p in migrated if p["type"] == "recipe"),
         )
 
@@ -364,6 +365,33 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 await self._async_save_products()
                 return p["favorite"]
         return False
+
+    async def cleanup_unused_products(self) -> int:
+        """Remove base products not referenced in any log. Returns number removed."""
+        # Collect all product names from logs across ALL coordinators
+        logged_names: set[str] = set()
+        entries = self.hass.data.get(DOMAIN, {})
+        for coord in entries.values():
+            if not isinstance(coord, VoedingslogCoordinator):
+                continue
+            for person_logs in coord._logs.values():
+                for day_items in person_logs.values():
+                    for item in day_items:
+                        logged_names.add(item.get("name", ""))
+
+        # Keep: recipes (always), favorites, and products found in logs
+        before = len(self._products)
+        self._products = [
+            p for p in self._products
+            if p.get("type") == "recipe"
+            or p.get("favorite")
+            or p.get("name", "") in logged_names
+        ]
+        removed = before - len(self._products)
+        if removed > 0:
+            await self._async_save_products()
+            _LOGGER.info("Cleaned up %d unused products", removed)
+        return removed
 
     def _cache_product(self, product: dict) -> None:
         """Add a product to the unified store when it's actually logged."""

@@ -222,6 +222,44 @@ class TestCacheProduct:
         assert len(coord._products) == 0
 
 
+class TestCleanupUnusedProducts:
+    @pytest.mark.asyncio
+    async def test_removes_unused_base_products(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {"2024-01-01": [
+            {"name": "Used Product", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"},
+        ]}}
+        # Register this coordinator in hass.data so cleanup can find logs
+        coord.hass.data["voedingslog"] = {"entry1": coord}
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Used Product", "favorite": False},
+            {"id": "2", "type": "base", "name": "Unused Product", "favorite": False},
+            {"id": "3", "type": "base", "name": "Fav Unused", "favorite": True},
+            {"id": "4", "type": "recipe", "name": "Recipe Always Kept", "favorite": False},
+        ]
+        removed = await coord.cleanup_unused_products()
+        assert removed == 1  # only "Unused Product" removed
+        names = [p["name"] for p in coord._products]
+        assert "Used Product" in names
+        assert "Fav Unused" in names  # favorites kept
+        assert "Recipe Always Kept" in names  # recipes kept
+        assert "Unused Product" not in names
+
+    @pytest.mark.asyncio
+    async def test_no_removal_when_all_used(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {"2024-01-01": [
+            {"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"},
+        ]}}
+        coord.hass.data["voedingslog"] = {"entry1": coord}
+        coord._products = [
+            {"id": "1", "type": "base", "name": "A", "favorite": False},
+        ]
+        removed = await coord.cleanup_unused_products()
+        assert removed == 0
+        assert len(coord._products) == 1
+
+
 class TestEditItemWithComponents:
     @pytest.mark.asyncio
     async def test_edit_components_recalculates(self):

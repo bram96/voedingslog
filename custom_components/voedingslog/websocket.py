@@ -23,6 +23,7 @@ from .const import (
     WS_GET_PRODUCTS,
     WS_SAVE_PRODUCT,
     WS_DELETE_PRODUCT,
+    WS_CLEANUP_PRODUCTS,
     WS_GET_FAVORITES,
     WS_TOGGLE_FAVORITE,
 )
@@ -63,6 +64,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_products)
     websocket_api.async_register_command(hass, ws_save_product)
     websocket_api.async_register_command(hass, ws_delete_product)
+    websocket_api.async_register_command(hass, ws_cleanup_products)
     websocket_api.async_register_command(hass, ws_get_favorites)
     websocket_api.async_register_command(hass, ws_toggle_favorite)
 
@@ -352,6 +354,20 @@ async def ws_delete_product(hass, connection, msg):
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Product not found")
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_CLEANUP_PRODUCTS}
+)
+@websocket_api.async_response
+async def ws_cleanup_products(hass, connection, msg):
+    """Remove base products not referenced in any log."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    removed = await coordinator.cleanup_unused_products()
+    connection.send_result(msg["id"], {"removed": removed})
 
 
 # ── Favorites ─────────────────────────────────────────────────────

@@ -148,6 +148,10 @@ export class ProductsController {
             Nieuw recept
           </button>
         </div>
+        <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => this.cleanupProducts()}>
+          <ha-icon icon="mdi:broom"></ha-icon>
+          Ongebruikte producten opruimen
+        </button>
       </div>
     `;
   }
@@ -545,6 +549,21 @@ export class ProductsController {
       this.host.requestUpdate();
     } catch (e) {
       console.error("Failed to delete product:", e);
+    }
+  }
+
+  async cleanupProducts(): Promise<void> {
+    if (!confirm("Producten die niet in logs voorkomen verwijderen? Recepten en favorieten blijven bewaard.")) return;
+    try {
+      const res = await this.host.hass.callWS<{ removed: number }>({ type: "voedingslog/cleanup_products" });
+      if (res.removed > 0) {
+        await this.loadProducts();
+      } else {
+        alert("Geen ongebruikte producten gevonden.");
+      }
+    } catch (e) {
+      console.error("Failed to cleanup products:", e);
+      alert("Fout bij opruimen.");
     }
   }
 }
