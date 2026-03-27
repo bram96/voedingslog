@@ -1,61 +1,48 @@
 # Voedingslog — Home Assistant Custom Component
 
-Houd calorieeen, macronutrienten, vezels, zout en vitamines bij per persoon.
-Data komt van **Open Food Facts** — gratis, open database met miljoenen producten inclusief Nederlandse supermarktproducten.
+Een uitgebreide voedingstracker die draait als sidebar panel in Home Assistant. Houd calorieen, macronutrienten, vezels, vitamines en mineralen bij voor meerdere personen. Producten komen uit **Open Food Facts** — een gratis, open database met miljoenen producten inclusief Nederlandse supermarktproducten.
+
+De app combineert slimme zoekfuncties, barcode scanning, AI-gestuurde herkenning en persoonlijke voedingsanalyse in een mobiel-vriendelijke interface die naadloos integreert met je Home Assistant setup.
 
 ---
 
-## Features
+## Wat kan het?
 
-### Dagelijks loggen
-- **Sidebar panel** — eigen pagina met dagoverzicht per maaltijd (ontbijt, lunch, avondeten, tussendoor)
-- **Slim zoeken** — fuzzy multi-word search ("brood kaas" vindt producten met beide woorden), barcode zoeken in de zoekbalk, recent gezochte termen
-- **Recent en favorieten** — recent gelogde producten bovenaan het toevoeg-scherm voor snel opnieuw loggen
-- **Barcode scanner** — scan producten met je camera of voer de barcode handmatig in. Barcodes worden lokaal opgeslagen
-- **Foto-analyse** — maak een foto van het voedingsetiket, AI leest de waarden uit en je kunt ze controleren
-- **Bulk toevoegen** — beschrijf wat je gegeten hebt in tekst, of maak een foto van een handgeschreven lijst. AI herkent de producten en zoekt voedingswaarden op
-- **Handmatig invoeren** — voer zelf een product in met alle voedingswaarden
-- **Snel portie aanpassen** — tik op de grammen van een gelogd item om direct het gewicht aan te passen zonder het bewerkscherm te openen
-- **Swipe navigatie** — veeg links/rechts op mobiel om tussen dagen te navigeren
-- **Pull to refresh** — trek omlaag op mobiel om het daglog te verversen
-- **Ongedaan maken** — verwijderde items tonen een undo-snackbar in plaats van een bevestigingsdialoog
-- **Geanimeerde overgangen** — vloeiende animaties bij wisselen van dag en openen/sluiten van dialogen
+### Snel en slim loggen
 
-### Producten en recepten
-- **Unified product database** — alle producten en recepten in een beheerbaar overzicht met zoeken, favorieten en type filters
-- **Twee soorten recepten**:
-  - **Vast recept** (bijv. pasta bolognese) — ingredienten worden gemengd, je logt een portie van het geheel
-  - **Samengesteld recept** (bijv. ontbijt) — losse onderdelen met standaard hoeveelheden, per keer aanpasbaar
-- **Ingredienten refereren naar producten** — wijzig voedingswaarden van een basisproduct en alle recepten worden automatisch bijgewerkt
-- **Aliassen** — alternatieve namen voor producten. AI-herkenning slaat automatisch aliassen op voor snellere matching
-- **Ververs vanuit OFF** — haal bijgewerkte voedingswaarden op van Open Food Facts
-- **Duplicaten samenvoegen** — voeg twee producten samen, aliassen en barcode worden overgenomen, recepten bijgewerkt
-- **Gedeelde recepten** — recepten zijn beschikbaar voor alle personen (zichtbaar als "gedeeld" bij meerdere personen)
-- **Volledigheid indicator** — producten tonen hoe compleet de voedingswaarden zijn ingevuld
-- **Verouderde producten** — producten die 90+ dagen niet gebruikt zijn worden gemarkeerd als "oud"
-- **Opruimen** — verwijder producten die niet in logs of recepten voorkomen
+Log je maaltijden op meerdere manieren. Zoek producten met fuzzy search ("brood kaas" vindt producten met beide woorden), scan een barcode met je camera, of laat AI je tekst interpreteren ("2 boterhammen met kaas, een appel"). Recent gelogde producten staan bovenaan voor snel opnieuw loggen. Tik op de grammen van een gelogd item om direct het gewicht aan te passen — geen extra schermen nodig.
 
-### Overzichten en inzichten
-- **Dag/Week/Maand overzicht** — schakel tussen dagdetails (taartdiagram), weekoverzicht en maandoverzicht met navigatiepijltjes
-- **Staafdiagrammen met doellijnen** — per doelnutrient een grafiek met dagelijkse waarden, doellijn en trendlijn (3-daags gemiddelde)
-- **Streak tracker** — toont het aantal opeenvolgende dagen dat je hebt gelogd
-- **Live voedingswaarden** — het gewichtscherm toont berekende voedingswaarden die meebewegen terwijl je het gewicht aanpast
-- **Macro ratio balk** — visuele balk met verdeling eiwit/koolhydraten/vet/vezels als percentages
-- **Nutrient gaps en suggesties** — AI-gestuurde aanbevelingen ("Wat kan ik eten?") op basis van resterende doelen
-- **Gemiddelden** — lege dagen en de huidige dag (incompleet) worden uitgesloten van gemiddelden
-- **Exporteren** — exporteer dag of periode als PNG afbeelding, download of deel via je telefoon
+Op mobiel veeg je links en rechts om tussen dagen te navigeren, of trek je omlaag om te verversen. Verwijder je per ongeluk iets? Een undo-knop verschijnt onderaan het scherm.
 
-### Personen en doelen
-- **Meerdere personen** — elke persoon is een aparte integratie-instantie met eigen doelen en data
-- **Persoon wisselen** — schakel tussen personen via tabs (HA dashboard-stijl)
-- **Calorie- en macrodoelen** — stel per persoon doelen in voor calorieen, eiwit, koolhydraten, vet en vezels
+### Producten en recepten beheren
 
-### Technisch
-- **HA Sensoren** — dagwaarden en weekgemiddelden/-totalen als sensoren voor automations en dashboards
-- **Inputvalidatie** — voedingswaarden worden altijd gevalideerd voor opslag
-- **Error boundary** — een fout in de UI blankt niet het hele scherm, maar toont een herstelbericht
-- **Dark mode** — volledig compatibel met HA donker thema
-- **Persistentie** — alle data wordt meegenomen in HA backups
+Alle producten en recepten zitten in een overzicht met zoeken, favorieten en type filters. Er zijn twee soorten recepten: **vast** (zoals pasta bolognese — je logt een portie van het geheel) en **samengesteld** (zoals je standaard ontbijt — losse onderdelen waarvan je per keer het gewicht aanpast).
+
+Ingredienten in recepten verwijzen naar producten. Wijzig je de voedingswaarden van een basisproduct, dan worden alle recepten die het gebruiken automatisch bijgewerkt. Producten kunnen aliassen hebben voor betere zoekresultaten, en ongebruikte producten worden gemarkeerd zodat je ze kunt opruimen.
+
+### Inzichten en trends
+
+Tik op de dagtotalen voor een gedetailleerd overzicht. Schakel tussen dag (taartdiagram met macroverdeling), week en maand (staafdiagrammen met doellijnen en trendlijnen). Elke modus heeft navigatiepijltjes. Een macro ratio balk toont de verhouding eiwit/koolhydraten/vet/vezels als percentages, en een streak tracker laat zien hoeveel dagen je achter elkaar hebt gelogd.
+
+Gemiddelden worden berekend over afgeronde dagen — lege dagen en de huidige (onvolledige) dag worden uitgesloten zodat je een eerlijk beeld krijgt.
+
+### AI-gestuurde functies
+
+Met een AI Task integratie (OpenAI, Google AI of Claude) krijg je extra mogelijkheden:
+
+- **Foto van etiket** — AI leest voedingswaarden van een etiketfoto
+- **Bulk toevoegen** — typ wat je gegeten hebt of maak een foto van een handgeschreven lijst
+- **Daganalyse** — persoonlijke review die trends over de afgelopen week analyseert en verbeteringen voorstelt voor terugkerende maaltijden ("Je eet elke ochtend alleen brood — voeg yoghurt toe voor extra eiwit")
+- **Voedingsadvies** — bij tekorten suggereert AI producten uit je database die passen binnen je doelen, plus aanvullende ideeen
+- **Slimme aliassen** — AI-herkende namen worden automatisch opgeslagen, en bij onbekende producten stelt AI het dichtstbijzijnde product voor
+
+### Meerdere personen
+
+Elke persoon is een aparte integratie-instantie met eigen doelen en data. Schakel tussen personen via tabs in de header (zoals HA dashboard tabs). Recepten worden gedeeld tussen alle personen.
+
+### Home Assistant integratie
+
+Alle voedingswaarden zijn beschikbaar als HA sensoren (dagwaarden en weekgemiddelden) voor gebruik in automations en dashboards. Alle data zit in `.storage/` en is onderdeel van HA backups.
 
 ---
 
@@ -84,130 +71,45 @@ Data komt van **Open Food Facts** — gratis, open database met miljoenen produc
 
 ---
 
-## Sidebar Panel
-
-Na installatie verschijnt **Voedingslog** automatisch in de sidebar.
-
-### Actieknoppen
-
-| Knop | Functie |
-|------|---------|
-| **Producten** | Beheer je producten en recepten — bewerken, verwijderen, aanmaken, opruimen |
-| **Bulk toevoegen** | AI-gestuurde batch invoer via tekst of foto (vereist AI Task entity) |
-| **Toevoegen** | Zoek en log een product — toont je opgeslagen producten met zoeken, favorieten, barcode, handmatig invoeren en online OFF zoeken |
-
-### Producten beheren
-
-- Tik op **Producten** voor het beheeroverzicht
-- Filter op type (Alle / Producten / Recepten) en zoek op naam of alias
-- Tik op een product om het te bewerken — pas naam, portie, voedingswaarden en aliassen aan
-- Maak nieuwe producten of recepten aan
-- **Opruimen** verwijdert producten die niet in logs of recepten voorkomen (favorieten en recepten blijven bewaard)
-
-### Recepten
-
-1. Tik op **Producten** → **Nieuw recept**
-2. Kies het type:
-   - **Vast recept** — ingredienten gemengd, log een portie van het geheel
-   - **Samengesteld** — losse onderdelen met standaard hoeveelheden, per keer aanpasbaar
-3. Voeg ingredienten toe via **Ingrediënt zoeken** (opent het zoekscherm met barcode en handmatig invoeren) of **AI ingrediënten invoer**
-4. Stel een standaard portie in en sla op
-5. Log het recept vanuit **Toevoegen** — bij samengestelde recepten kun je per onderdeel het gewicht aanpassen
-
-### AI instellen
+## AI instellen
 
 1. Zorg dat je een AI integratie hebt met AI Task support (bijv. OpenAI, Google AI, Claude)
 2. Ga naar **Instellingen → Apparaten & Diensten → Voedingslog → Opties**
 3. Kies je AI Task entity in de dropdown
-4. De AI-functies worden nu actief:
-   - **Foto etiket** — AI leest voedingswaarden van een etiketfoto (gestructureerde output)
-   - **Bulk toevoegen (tekst)** — typ "2 boterhammen met kaas, een appel" → AI herkent producten → voedingswaarden uit Open Food Facts
-   - **Bulk toevoegen (foto)** — maak een foto van een handgeschreven lijst → OCR + productherkenning
-   - **AI ingrediënten** — in de recepteditor, typ ingredienten en AI zoekt ze op
-   - **Automatische aliassen** — AI-herkende namen worden opgeslagen als alias voor snellere herkenning
 
----
-
-## Dag-, week- en maandoverzicht
-
-Tik op de dagtotalen om het overzicht te openen. Schakel tussen **Dag**, **Week** en **Maand**:
-
-- **Dag** — taartdiagram met macro-verdeling, alle voedingswaarden, gelogde items, exporteren als afbeelding
-- **Week** — staafdiagrammen per doelnutrient (calorieen, eiwit, etc.) met doellijn. Week begint op maandag.
-- **Maand** — zelfde staafdiagrammen over de hele maand (1e tot laatste dag)
-
-Elke modus heeft navigatiepijltjes om door periodes te bladeren. Dagnavigatie synchroniseert met het hoofdscherm.
-
-Staven zijn groen als je onder je doel zit, rood als je erover gaat. Gemiddeld per dag wordt onder de grafieken getoond. Exporteer elke weergave als PNG afbeelding.
+Alle AI-functies werken ook zonder — je kunt altijd handmatig zoeken, scannen en invoeren.
 
 ---
 
 ## Sensoren
 
-Per persoon worden automatisch deze sensoren aangemaakt:
+Per persoon worden automatisch sensoren aangemaakt voor alle 12 nutrienten (calorieen, vetten, koolhydraten, eiwitten, suikers, vezels, natrium, vitamine C, calcium, ijzer, vitamine D) plus een logoverzicht.
 
-### Dagsensoren
+Daarnaast weekgemiddelden en -totalen per nutrient (bijv. `sensor.voedingslog_jan_week_avg_calorieen`).
 
-| Sensor | Eenheid |
-|--------|---------|
-| `sensor.voedingslog_jan_calorieen` | kcal |
-| `sensor.voedingslog_jan_vetten` | g |
-| `sensor.voedingslog_jan_koolhydraten` | g |
-| `sensor.voedingslog_jan_eiwitten` | g |
-| `sensor.voedingslog_jan_suikers` | g |
-| `sensor.voedingslog_jan_vezels` | g |
-| `sensor.voedingslog_jan_natrium_zout` | mg |
-| `sensor.voedingslog_jan_vitamine_c` | mg |
-| `sensor.voedingslog_jan_calcium` | mg |
-| `sensor.voedingslog_jan_ijzer` | mg |
-| `sensor.voedingslog_jan_vitamine_d` | ug |
-| `sensor.voedingslog_jan_log_vandaag` | items |
-
-Sensoren voor `doel`, `resterend` en `percentage` zitten als attribuut op calorieen en natrium.
-
-### Weeksensoren
-
-Per nutrient ook een 7-daags gemiddelde en totaal:
-
-| Sensor | Eenheid | Beschrijving |
-|--------|---------|--------------|
-| `sensor.voedingslog_jan_week_avg_calorieen` | kcal | Gemiddeld per dag (laatste 7 dagen) |
-| `sensor.voedingslog_jan_week_total_calorieen` | kcal | Totaal (laatste 7 dagen) |
-
-Dit geldt voor alle 12 nutrienten (calorieen, vetten, koolhydraten, eiwitten, etc.).
+Sensoren voor `doel`, `resterend` en `percentage` zitten als attribuut op calorieen.
 
 ---
 
 ## Services
 
-### `voedingslog.log_barcode`
-Scan een barcode en log automatisch.
-
 ```yaml
+# Log een product via barcode
 service: voedingslog.log_barcode
 data:
   persoon: "Jan"
   barcode: "8710400301929"
   gram: 30                   # optioneel
-  category: "breakfast"      # optioneel (breakfast/lunch/dinner/snack)
-```
+  category: "breakfast"      # optioneel
 
-### `voedingslog.log_product`
-Zoek op naam en log het eerste resultaat.
-
-```yaml
+# Log een product via naam (zoekt in Open Food Facts)
 service: voedingslog.log_product
 data:
   persoon: "Lisa"
   naam: "hagelslag melk"
   gram: 20
-  category: "breakfast"      # optioneel
-```
 
-### `voedingslog.delete_last`
-Verwijder het laatst gelogde item.
-
-```yaml
+# Verwijder het laatst gelogde item
 service: voedingslog.delete_last
 data:
   persoon: "Jan"
@@ -215,7 +117,7 @@ data:
 
 ---
 
-## Dashboard voorbeeld (Lovelace)
+## Dashboard voorbeeld
 
 ```yaml
 type: entities
@@ -227,7 +129,6 @@ entities:
   - entity: sensor.voedingslog_jan_koolhydraten
   - entity: sensor.voedingslog_jan_eiwitten
   - entity: sensor.voedingslog_jan_vezels
-  - entity: sensor.voedingslog_jan_natrium_zout
   - entity: sensor.voedingslog_jan_log_vandaag
     name: Gelogde items
 ```
@@ -241,12 +142,24 @@ Alle data wordt bewaard in de HA `.storage/` map en is onderdeel van HA backups:
 | Bestand | Inhoud |
 |---------|--------|
 | `.storage/voedingslog.logs.<entry_id>` | Dagelijkse voedingslogs per persoon |
-| `.storage/voedingslog.products_v2` | Unified product store — producten, recepten, aliassen, barcodes |
+| `.storage/voedingslog.products_v2` | Producten, recepten, aliassen, barcodes |
+
+---
+
+## Ontwikkeling
+
+```bash
+make setup    # venv + deps + pre-commit hook
+make test     # 165 tests (Python + TypeScript + E2E)
+make build    # frontend bundlen
+```
+
+De codebase heeft 165 geautomatiseerde tests: 99 Python backend tests, 21 TypeScript unit tests voor berekeningen, en 45 E2E component tests die het daadwerkelijke panel renderen in jsdom en gebruikersinteracties simuleren. Een pre-commit hook runt alle tests automatisch voor elke commit.
 
 ---
 
 ## Vereisten
 
 - Home Assistant 2024.5.0 of hoger
-- **HTTPS vereist** voor barcode scanner en camera (anders werkt getUserMedia niet)
-- Optioneel: AI Task integratie voor foto-analyse, bulk toevoegen en AI ingredienten (OpenAI, Google AI, Claude)
+- **HTTPS vereist** voor barcode scanner en camera
+- Optioneel: AI Task integratie (OpenAI, Google AI, Claude) voor foto-analyse, bulk toevoegen, daganalyse en voedingsadvies

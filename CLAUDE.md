@@ -92,13 +92,22 @@ make typecheck  # TypeScript type check only
 
 The `.githooks/pre-commit` hook runs all tests before every commit. Activated via `git config core.hooksPath .githooks` (done by `make setup`).
 
-### Test files
+### Test files (165 tests total)
 
-| File | What it tests |
-|------|---------------|
-| `tests/test_coordinator.py` | ~103 tests — nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items, input sanitization, suggestions, stale detection |
-| `tests/test_open_food_facts.py` | OFF product processing, serving parsing, portion building |
-| `frontend-src/src/helpers.test.ts` | Nutrient calculation, grouping, display constants |
+| File | Tests | What it covers |
+|------|-------|----------------|
+| `tests/test_coordinator.py` | 82 | Nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items/searches, input sanitization, log/delete/reset operations |
+| `tests/test_open_food_facts.py` | 17 | OFF product processing, serving parsing, portion building, micronutrient conversion, completeness |
+| `frontend-src/src/helpers.test.ts` | 21 | Nutrient calculation (all keys), grouping, display constants, NUTRIENTS_META |
+| `frontend-src/src/voedingslog-panel.test.ts` | 45 | E2E component tests — renders actual LitElement in jsdom, tests dialogs, navigation, products add/manage, weight dialog, day detail, period toggle, delete/undo, loading/empty states, narrow mode |
+
+### Test coverage
+
+| Layer | Coverage | Notes |
+|-------|----------|-------|
+| Python overall | 41% | Core coordinator logic 70%, const 100%. Low areas: WS handlers (23%), sensors (0%), config flow (0%) — need HA runtime mocking |
+| TypeScript overall | 31% | Helpers 82%, panel 59%, styles 100%. Low areas: AI controller (9%), search controller (7%) — camera/AI/file APIs hard to mock |
+| Realistic ceiling | ~60% / ~50% | Without a full HA test harness, WS handlers, sensors, AI calls, and camera APIs are hard to unit test |
 
 ### IMPORTANT: Test change policy
 
@@ -136,6 +145,9 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 - **Stale product detection**: Products unused for 90+ days are flagged as stale in the product manager to help with cleanup.
 - **Macro ratio bar**: Visual percentage bar showing protein/carbs/fat/fiber distribution in day and period views.
 - **Animated transitions**: Day transitions and dialog open/close use CSS animations for a polished mobile experience.
+- **Shared constants**: `EDITABLE_NUTRIENTS` is the single source of truth for nutrient editor fields. `_calculate_totals()` and `_get_person_goals()` eliminate backend duplication. `formatDateLabel()` is shared across panel and controllers.
+- **AI daily review**: Sends today's meals by category, 7-day averages vs goals, and recurring meal patterns to AI. Gets personalized advice about trends and structural changes to recurring meals.
+- **E2E component testing**: Actual LitElement rendered in jsdom with mocked `hass.callWS`. Tests verify shadow DOM content, dialog flows, user interactions, and state transitions.
 
 ## Data Model
 
@@ -187,6 +199,7 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 | `voedingslog/get_streak` | Consecutive days with logged items |
 | `voedingslog/get_period` | Daily totals for a date range (person, start_date, end_date) |
 | `voedingslog/get_suggestions` | AI-powered nutrient gap suggestions based on remaining goals |
+| `voedingslog/daily_review` | AI daily review with trend analysis and recurring meal patterns |
 | `voedingslog/lookup_barcode` | Barcode lookup — local first, then OFF (no logging) |
 | `voedingslog/search_products` | Fuzzy search (name + aliases + barcode), tracks recent queries |
 | `voedingslog/log_product` | Log a product with full nutrient data (optional `components`) |
