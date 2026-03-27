@@ -457,6 +457,78 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Merged product '%s' into '%s'", remove_name, keep.get("name"))
         return keep
 
+    def get_daily_review_context(self, person: str) -> dict:
+        """Build rich context for an AI daily review."""
+        today_str = str(date.today())
+        today_items = self._logs.get(person, {}).get(today_str, [])
+
+        # Today's totals by category
+        by_category: dict[str, list[str]] = {}
+        for item in today_items:
+            cat = item.get("category", "snack")
+            by_category.setdefault(cat, []).append(
+                f"{item['name']} ({item['grams']}g)"
+            )
+
+        # Today's nutrient totals
+        today_totals: dict[str, float] = {}
+        for item in today_items:
+            factor = item["grams"] / 100.0
+            for key in NUTRIENTS:
+                today_totals[key] = today_totals.get(key, 0) + item["nutrients"].get(key, 0) * factor
+
+        # Last 7 completed days (excluding today)
+        period_start = date.today() - timedelta(days=7)
+        period = self.get_period_totals(person, str(period_start), str(date.today() - timedelta(days=1)))
+        logged_days = [d for d in period if d["item_count"] > 0]
+
+        # Recurring patterns: find items that appear 3+ times in the last 7 days
+        item_counts: dict[str, dict] = {}
+        for day_data in period:
+            day_items = self._logs.get(person, {}).get(day_data["date"], [])
+            for item in day_items:
+                name = item["name"]
+                if name not in item_counts:
+                    item_counts[name] = {"count": 0, "categories": set()}
+                item_counts[name]["count"] += 1
+                item_counts[name]["categories"].add(item.get("category", "snack"))
+
+        recurring = {
+            name: {"count": info["count"], "categories": list(info["categories"])}
+            for name, info in item_counts.items()
+            if info["count"] >= 3
+        }
+
+        # Goals
+        goals: dict[str, float] = {}
+        for e in self.hass.config_entries.async_entries(DOMAIN):
+            merged = {**e.data, **e.options}
+            for p in merged.get("personen", []):
+                if p == person:
+                    goals = {
+                        "energy-kcal_100g": merged.get("doel_calorieen", 0),
+                        "proteins_100g": merged.get("protein_goal", 0),
+                        "carbohydrates_100g": merged.get("carbs_goal", 0),
+                        "fat_100g": merged.get("fat_goal", 0),
+                        "fiber_100g": merged.get("fiber_goal", 0),
+                    }
+                    break
+
+        # Weekly averages (completed days only)
+        week_avgs: dict[str, float] = {}
+        if logged_days:
+            for key in goals:
+                week_avgs[key] = sum(d["totals"].get(key, 0) for d in logged_days) / len(logged_days)
+
+        return {
+            "today_meals": by_category,
+            "today_totals": {k: round(v, 1) for k, v in today_totals.items()},
+            "goals": goals,
+            "week_averages": {k: round(v, 1) for k, v in week_avgs.items()},
+            "logged_days_count": len(logged_days),
+            "recurring_items": recurring,
+        }
+
     def get_nutrient_suggestions(self, person: str, days: int = 7) -> list[dict]:
         """Find products that could fill nutrient gaps based on recent intake.
         Returns [{nutrient_key, nutrient_label, deficit, suggestions: [{name, value_per_100g}]}]."""

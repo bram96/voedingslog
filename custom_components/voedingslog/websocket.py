@@ -22,6 +22,7 @@ from .const import (
     WS_EDIT_ITEM,
     WS_RESET_DAY,
     WS_GET_SUGGESTIONS,
+    WS_DAILY_REVIEW,
     WS_GET_RECENT,
     WS_GET_STREAK,
     WS_GET_PERIOD,
@@ -70,6 +71,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_reset_day)
     register_ai_commands(hass, _get_coordinator)
     websocket_api.async_register_command(hass, ws_get_suggestions)
+    websocket_api.async_register_command(hass, ws_daily_review)
     websocket_api.async_register_command(hass, ws_get_recent)
     websocket_api.async_register_command(hass, ws_get_streak)
     websocket_api.async_register_command(hass, ws_get_period)
@@ -441,6 +443,101 @@ async def ws_get_suggestions(hass, connection, msg):
             _LOGGER.debug("AI nutrition advice failed: %s", e)
 
     connection.send_result(msg["id"], {"gaps": gaps, "ai_advice": ai_advice})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_DAILY_REVIEW,
+        vol.Required("person"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_daily_review(hass, connection, msg):
+    """Get an AI-powered daily nutrition review with trend analysis."""
+    coordinator = _get_coordinator(hass, msg["person"])
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+
+    ai_entity = ""
+    for e in hass.config_entries.async_entries(DOMAIN):
+        merged = {**e.data, **e.options}
+        ai_entity = merged.get("ai_task_entity", "")
+        if ai_entity:
+            break
+
+    if not ai_entity:
+        connection.send_error(msg["id"], "no_ai_entity", "Geen AI Task entity geconfigureerd.")
+        return
+
+    ctx = coordinator.get_daily_review_context(msg["person"])
+
+    # Build today's meals text
+    cat_labels = {"breakfast": "Ontbijt", "lunch": "Lunch", "dinner": "Avondeten", "snack": "Tussendoor"}
+    meals_text = ""
+    for cat in ["breakfast", "lunch", "dinner", "snack"]:
+        items = ctx["today_meals"].get(cat, [])
+        if items:
+            meals_text += f"  {cat_labels[cat]}: {', '.join(items)}\n"
+    if not meals_text:
+        meals_text = "  (nog niets gelogd)\n"
+
+    # Today's totals vs goals
+    totals_text = ""
+    for key, goal in ctx["goals"].items():
+        if goal <= 0:
+            continue
+        label = {"energy-kcal_100g": "Calorieen", "proteins_100g": "Eiwit", "carbohydrates_100g": "Koolhydraten", "fat_100g": "Vet", "fiber_100g": "Vezels"}.get(key, key)
+        current = ctx["today_totals"].get(key, 0)
+        week_avg = ctx["week_averages"].get(key, 0)
+        totals_text += f"  {label}: vandaag {round(current)}, weekgemiddelde {round(week_avg)}, doel {round(goal)}\n"
+
+    # Recurring patterns
+    patterns_text = ""
+    if ctx["recurring_items"]:
+        for name, info in list(ctx["recurring_items"].items())[:5]:
+            cats = ", ".join(cat_labels.get(c, c) for c in info["categories"])
+            patterns_text += f"  - {name}: {info['count']}x in 7 dagen ({cats})\n"
+    else:
+        patterns_text = "  (geen duidelijke patronen)\n"
+
+    try:
+        result = await hass.services.async_call(
+            "ai_task",
+            "generate_data",
+            {
+                "task_name": "daily_nutrition_review",
+                "entity_id": ai_entity,
+                "instructions": (
+                    "Je bent een persoonlijke voedingscoach. Geef een korte dagelijkse review in het Nederlands.\n\n"
+                    f"VANDAAG GEGETEN:\n{meals_text}\n"
+                    f"VOEDINGSWAARDEN (vandaag vs weekgemiddelde vs doel):\n{totals_text}\n"
+                    f"TERUGKERENDE PATRONEN (afgelopen 7 dagen):\n{patterns_text}\n"
+                    f"CONTEXT: {ctx['logged_days_count']} van de afgelopen 7 dagen gelogd.\n\n"
+                    "INSTRUCTIES:\n"
+                    "- Geef een review van vandaag (wat gaat goed, wat kan beter)\n"
+                    "- Kijk of er trends zijn over de afgelopen week (consistent te laag/hoog ergens?)\n"
+                    "- Als er terugkerende maaltijden zijn (bijv. elke dag brood als ontbijt), "
+                    "overweeg of een kleine aanpassing daarvan een structureel tekort kan oplossen\n"
+                    "- Wees positief en praktisch, max 4 bullet points\n"
+                    "- Gebruik concrete suggesties met hoeveelheden waar mogelijk"
+                ),
+                "structure": {
+                    "review": {
+                        "description": "Dagelijkse voedingsreview als bullet points in het Nederlands. Elke bullet begint met '- '.",
+                        "required": True,
+                        "selector": {"text": {"multiline": True}},
+                    }
+                },
+            },
+            blocking=True,
+            return_response=True,
+        )
+        review = (result or {}).get("data", {}).get("review", "")
+        connection.send_result(msg["id"], {"review": review})
+    except Exception as e:
+        _LOGGER.error("AI daily review failed: %s", e)
+        connection.send_error(msg["id"], "ai_error", str(e))
 
 
 # ── Recent items ─────────────────────────────────────────────────

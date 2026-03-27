@@ -46,6 +46,9 @@ export class ExportController {
   // Nutrient suggestions
   private _suggestions: { gaps: any[]; ai_advice: { from_database: string; other_suggestions: string } | null } | null = null;
   private _suggestionsLoading = false;
+  // Daily review
+  private _dailyReview: string | null = null;
+  private _reviewLoading = false;
 
   constructor(host: ExportControllerHost) {
     this.host = host;
@@ -59,6 +62,8 @@ export class ExportController {
     this._periodAnchor = "";
     this._suggestions = null;
     this._suggestionsLoading = false;
+    this._dailyReview = null;
+    this._reviewLoading = false;
   }
 
   private _getGoalNutrients(): GoalNutrient[] {
@@ -224,6 +229,23 @@ export class ExportController {
 
   // ── Day view (existing pie chart) ─────────────────────────────
 
+  private async _loadDailyReview(): Promise<void> {
+    this._reviewLoading = true;
+    this.host.requestUpdate();
+    try {
+      const res = await this.host.hass.callWS<{ review: string }>({
+        type: "voedingslog/daily_review",
+        person: this.host._selectedPerson,
+      });
+      this._dailyReview = res.review || null;
+    } catch (e) {
+      console.error("Failed to load daily review:", e);
+      this._dailyReview = null;
+    }
+    this._reviewLoading = false;
+    this.host.requestUpdate();
+  }
+
   private async _loadSuggestions(): Promise<void> {
     this._suggestionsLoading = true;
     this.host.requestUpdate();
@@ -368,6 +390,30 @@ export class ExportController {
           `;
         })}
       </div>
+
+      ${h._config?.ai_task_entity ? html`
+        <div style="margin-top:12px">
+          ${this._reviewLoading
+            ? html`<div class="period-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Analyse laden...</div>`
+            : this._dailyReview
+              ? html`
+                <div class="ai-advice">
+                  <ha-icon icon="mdi:robot-outline" style="--mdc-icon-size:16px;color:var(--primary-color);flex-shrink:0"></ha-icon>
+                  <div>
+                    <ul class="suggestion-bullets" style="margin:0;padding-left:16px">
+                      ${this._dailyReview.split("\n").map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter((l) => l).map((l) => html`<li>${l}</li>`)}
+                    </ul>
+                  </div>
+                </div>
+              `
+              : html`
+                <button class="btn-secondary btn-confirm" @click=${() => this._loadDailyReview()}>
+                  <ha-icon icon="mdi:robot-outline"></ha-icon>
+                  Daganalyse
+                </button>
+              `}
+        </div>
+      ` : nothing}
 
       <div style="margin-top:12px">
         <div class="detail-table-header">Gelogde items (${h._items.length})</div>
