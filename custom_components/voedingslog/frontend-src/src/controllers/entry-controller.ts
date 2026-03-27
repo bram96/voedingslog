@@ -23,6 +23,7 @@ export interface EntryControllerHost {
   _editingItem: IndexedLogItem | null;
   requestUpdate(): void;
   _closeDialog(): void;
+  _navigateBack(): void;
   _setDialogMode(mode: string): void;
   _loadLog(): Promise<void>;
 }
@@ -53,7 +54,7 @@ export class EntryController {
     return html`
       <div class="dialog-header">
         <h2>${p.name}</h2>
-        <button class="close-btn" @click=${() => { this._pendingComponents = null; h._closeDialog(); }}>
+        <button class="close-btn" @click=${() => { this._pendingComponents = null; h._navigateBack(); }}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>

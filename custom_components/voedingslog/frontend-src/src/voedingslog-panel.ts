@@ -49,6 +49,9 @@ export class VoedingslogPanel extends LitElement {
   @state() _analyzing = false;
   @state() _editingItem: IndexedLogItem | null = null;
 
+  /** Tracks which dialog to return to when the weight dialog closes. */
+  private _weightReturnMode: DialogMode = null;
+
   private _searchCtrl = new SearchController(this);
   private _entry = new EntryController(this);
   private _ai = new AiController(this);
@@ -88,14 +91,24 @@ export class VoedingslogPanel extends LitElement {
     }
   }
 
-  private _navigateBack(): void {
+  _navigateBack(): void {
     // Mirror the X button logic for each dialog
     switch (this._dialogMode) {
       case "barcode": this._setDialogMode("search"); break;
       case "photo": this._setDialogMode("manual"); break;
-      case "manual": this._setDialogMode("search"); break;
+      case "manual": this._setDialogMode("products"); break;
       case "search": this._searchCtrl.closeSearch(); break;
       case "product-edit": this._setDialogMode("products"); break;
+      case "weight":
+        if (this._weightReturnMode) {
+          const ret = this._weightReturnMode;
+          this._weightReturnMode = null;
+          this._pendingProduct = null;
+          this._setDialogMode(ret as string);
+        } else {
+          this._closeDialog();
+        }
+        break;
       case "batch-add":
         if (this._ai.currentMode === "recipe") this._setDialogMode("product-edit");
         else this._closeDialog();
@@ -270,15 +283,22 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _renderActions(): TemplateResult {
+    const hasAI = !!this._config?.ai_task_entity;
     return html`
       <div class="actions">
-        <button class="action-btn action-btn-primary" @click=${() => this._setDialogMode("add-chooser")}>
-          <ha-icon icon="mdi:plus"></ha-icon>
-          <span>Toevoegen</span>
-        </button>
-        <button class="action-btn" @click=${() => this._products.loadProducts()}>
+        <button class="action-btn" @click=${() => this._products.open("manage")}>
           <ha-icon icon="mdi:food-variant"></ha-icon>
           <span>Producten</span>
+        </button>
+        ${hasAI ? html`
+          <button class="action-btn" @click=${() => this._openBatchAdd("log")}>
+            <ha-icon icon="mdi:text-box-outline"></ha-icon>
+            <span>Bulk toevoegen</span>
+          </button>
+        ` : nothing}
+        <button class="action-btn action-btn-primary" @click=${() => this._products.open("add")}>
+          <ha-icon icon="mdi:plus"></ha-icon>
+          <span>Toevoegen</span>
         </button>
       </div>
     `;
@@ -358,7 +378,6 @@ export class VoedingslogPanel extends LitElement {
     return html`
       <div class="dialog-overlay" @click=${() => this._navigateBack()}>
         <div class="dialog" @click=${(e: Event) => e.stopPropagation()}>
-          ${this._dialogMode === "add-chooser" ? this._renderAddChooser() : nothing}
           ${this._dialogMode === "search" ? this._searchCtrl.renderSearchDialog() : nothing}
           ${this._dialogMode === "barcode" ? this._searchCtrl.renderBarcodeDialog() : nothing}
           ${this._dialogMode === "photo" ? this._searchCtrl.renderPhotoDialog() : nothing}
@@ -377,29 +396,6 @@ export class VoedingslogPanel extends LitElement {
 
 
 
-  private _renderAddChooser(): TemplateResult {
-    const hasAI = !!this._config?.ai_task_entity;
-    return html`
-      <div class="dialog-header">
-        <h2>Toevoegen voor ${this._selectedPerson}</h2>
-        <button class="close-btn" @click=${() => this._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="chooser-grid">
-          <button class="chooser-item" @click=${() => this._openSearch()}>
-            <ha-icon icon="mdi:magnify"></ha-icon>
-            <span>Zoek product</span>
-          </button>
-          <button class="chooser-item" @click=${() => this._openBatchAdd("log")} ?disabled=${!hasAI}>
-            <ha-icon icon="mdi:text-box-outline"></ha-icon>
-            <span>Batch toevoegen</span>
-          </button>
-        </div>
-      </div>
-    `;
-  }
 
 
 
@@ -413,7 +409,7 @@ export class VoedingslogPanel extends LitElement {
 
   _lookupBarcode(barcode: string): void {
     this.hass.callWS<import("./types.js").LookupBarcodeResponse>({ type: "voedingslog/lookup_barcode", barcode }).then((res) => {
-      if (res.product) this._selectProduct(res.product);
+      if (res.product) this._selectProduct(res.product, "products");
       else alert("Barcode niet gevonden.");
     }).catch(() => alert("Fout bij opzoeken barcode."));
   }
@@ -443,10 +439,6 @@ export class VoedingslogPanel extends LitElement {
     this._ai.currentMode = mode;
     this._ai.batchMode = "text";
     this._setDialogMode("batch-add");
-  }
-
-  private async _openSearch(): Promise<void> {
-    await this._searchCtrl.open();
   }
 
   async _openSearchDialog(callback?: (p: Product) => void, returnMode?: DialogMode): Promise<void> {
@@ -489,8 +481,9 @@ export class VoedingslogPanel extends LitElement {
     this._products.addIngredientFromAi(ingredient);
   }
 
-  _selectProduct(product: Product): void {
+  _selectProduct(product: Product, returnMode?: DialogMode): void {
     this._pendingProduct = product;
+    this._weightReturnMode = returnMode || null;
     this._barcodeCamera.stop();
     this._setDialogMode("weight");
   }
@@ -506,6 +499,7 @@ export class VoedingslogPanel extends LitElement {
     }
     this._dialogMode = null;
     this._pendingProduct = null;
+    this._weightReturnMode = null;
     this._editingItem = null;
     this._analyzing = false;
     this._scanning = false;

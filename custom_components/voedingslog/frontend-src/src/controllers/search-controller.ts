@@ -19,7 +19,7 @@ export interface SearchControllerHost {
   requestUpdate(): void;
   _closeDialog(): void;
   _setDialogMode(mode: string): void;
-  _selectProduct(product: Product): void;
+  _selectProduct(product: Product, returnMode?: DialogMode): void;
   _openFileInput(id: string): void;
   _startPhotoCamera(): Promise<void>;
   _stopPhotoCamera(): void;
@@ -183,7 +183,7 @@ export class SearchController {
     return html`
       <div class="dialog-header">
         <h2>${pre ? "Controleer voedingswaarden" : "Handmatig toevoegen"}</h2>
-        <button class="close-btn" @click=${() => h._setDialogMode("search")}>
+        <button class="close-btn" @click=${() => h._setDialogMode("products")}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>
@@ -283,7 +283,7 @@ export class SearchController {
     try {
       const res = await h.hass.callWS<LookupBarcodeResponse>({ type: "voedingslog/lookup_barcode", barcode });
       if (res.product) {
-        h._selectProduct(res.product);
+        h._selectProduct(res.product, "products");
       } else {
         alert("Barcode niet gevonden.");
       }
@@ -348,6 +348,6 @@ export class SearchController {
     }
 
     const product: Product = { name, serving_grams: 100, nutrients };
-    h._selectProduct(product);
+    h._selectProduct(product, "products");
   }
 }

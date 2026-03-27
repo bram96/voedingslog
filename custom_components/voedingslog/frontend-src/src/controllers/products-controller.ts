@@ -1,5 +1,9 @@
 /**
- * Products controller — unified product/recipe management.
+ * Products controller — unified product/recipe management and add-to-log flow.
+ *
+ * Two modes:
+ * - "add": product list for logging (click → weight dialog), online OFF fallback
+ * - "manage": product list for editing (click → editor), create/delete/cleanup
  */
 import { html, nothing, type TemplateResult } from "lit";
 import type {
@@ -12,6 +16,7 @@ import type {
   VoedingslogConfig,
   GetProductsResponse,
   SaveProductResponse,
+  SearchProductsResponse,
   DialogMode,
 } from "../types.js";
 
@@ -23,11 +28,13 @@ export interface ProductsControllerHost {
   requestUpdate(): void;
   _closeDialog(): void;
   _setDialogMode(mode: string): void;
-  _selectProduct(product: Product): void;
+  _selectProduct(product: Product, returnMode?: DialogMode): void;
   _openSearchDialog(callback: (p: Product) => void, returnMode?: DialogMode): Promise<void>;
   _openBatchAdd(mode: "log" | "recipe"): void;
+  _openBarcodeScanner(): void;
 }
 
+export type ProductsMode = "add" | "manage";
 type TypeFilter = "all" | "base" | "recipe";
 
 export class ProductsController {
@@ -38,6 +45,11 @@ export class ProductsController {
   searchQuery = "";
   showFavoritesOnly = false;
   typeFilter: TypeFilter = "all";
+  mode: ProductsMode = "manage";
+
+  // Online search state
+  private _onlineResults: Product[] = [];
+  private _onlineSearching = false;
 
   constructor(host: ProductsControllerHost) {
     this.host = host;
@@ -47,7 +59,11 @@ export class ProductsController {
     this.editingProduct = null;
     this.editingIngredientIndex = null;
     this.searchQuery = "";
+    this._onlineResults = [];
+    this._onlineSearching = false;
   }
+
+  // ── Shared filtering ──────────────────────────────────────────
 
   private _filteredProducts(): UnifiedProduct[] {
     let result = this.products;
@@ -79,12 +95,50 @@ export class ProductsController {
     return `${recipe.ingredients.length} ingrediënten · ${Math.round(recipe.total_grams)}g · ${kcal} kcal`;
   }
 
+  // ── Shared product item rendering ─────────────────────────────
+
+  private _renderProductItem(product: UnifiedProduct): TemplateResult {
+    const isAdd = this.mode === "add";
+    return html`
+      <div class="product-item">
+        <div class="product-info" @click=${() => isAdd ? this.logProduct(product) : this.openEditor(product)}>
+          <div class="product-name-row">
+            <ha-icon icon=${this._typeIcon(product)} style="--mdc-icon-size:18px;margin-right:6px;opacity:0.6"></ha-icon>
+            <span class="product-name">${product.name}</span>
+          </div>
+          <span class="product-meta">${this._typeMeta(product)}</span>
+        </div>
+        <button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this.toggleFavorite(product); }}>
+          <ha-icon icon=${product.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
+        </button>
+        ${!isAdd ? html`
+          <button class="item-edit" @click=${() => this.openEditor(product)}>
+            <ha-icon icon="mdi:pencil"></ha-icon>
+          </button>
+          <button class="item-delete" @click=${() => this.deleteProduct(product.id)}>
+            <ha-icon icon="mdi:close"></ha-icon>
+          </button>
+        ` : nothing}
+      </div>
+    `;
+  }
+
+  // ── Products dialog (both modes) ──────────────────────────────
+
   renderProductsDialog(): TemplateResult {
     const h = this.host;
+    const isAdd = this.mode === "add";
     const filtered = this._filteredProducts();
+    const q = this.searchQuery.trim();
+    const hasAI = !!h._config?.ai_task_entity;
+
+    // In add mode, show favorites when search is empty
+    const showFavorites = isAdd && !q && !this.showFavoritesOnly;
+    const favoriteProducts = showFavorites ? this.products.filter((p) => p.favorite) : [];
+
     return html`
       <div class="dialog-header">
-        <h2>Producten</h2>
+        <h2>${isAdd ? "Toevoegen" : "Producten"}</h2>
         <button class="close-btn" @click=${() => h._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
@@ -93,7 +147,9 @@ export class ProductsController {
         <div class="input-row" style="margin-bottom:8px">
           <input type="text" placeholder="Zoek product of recept..."
             .value=${this.searchQuery}
-            @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; h.requestUpdate(); }} />
+            @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; this._onlineResults = []; h.requestUpdate(); }}
+            @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" && this.searchQuery.trim()) h.requestUpdate(); }}
+          />
           <button class="btn-secondary ${this.showFavoritesOnly ? "active" : ""}" style="padding:8px 12px"
             @click=${() => { this.showFavoritesOnly = !this.showFavoritesOnly; h.requestUpdate(); }}>
             <ha-icon icon=${this.showFavoritesOnly ? "mdi:star" : "mdi:star-outline"}></ha-icon>
@@ -111,47 +167,87 @@ export class ProductsController {
           )}
         </div>
 
-        ${filtered.length === 0
+        ${/* Favorites section in add mode when no search query */""}
+        ${favoriteProducts.length > 0 ? html`
+          <div class="favorites-section">
+            <div class="section-label"><ha-icon icon="mdi:star" style="--mdc-icon-size:16px;vertical-align:middle;color:#ff9800"></ha-icon> Favorieten</div>
+            ${favoriteProducts.map((p) => this._renderProductItem(p))}
+          </div>
+        ` : nothing}
+
+        ${/* Local results */""}
+        ${filtered.length === 0 && !showFavorites
           ? html`<p class="empty-hint">${this.products.length === 0
-              ? "Nog geen producten. Voeg een product of recept toe."
+              ? isAdd ? "Nog geen producten opgeslagen." : "Nog geen producten. Voeg een product of recept toe."
               : "Geen producten gevonden."}</p>`
-          : filtered.map(
-              (product) => html`
-                <div class="product-item">
-                  <div class="product-info" @click=${() => this.logProduct(product)}>
-                    <div class="product-name-row">
-                      <ha-icon icon=${this._typeIcon(product)} style="--mdc-icon-size:18px;margin-right:6px;opacity:0.6"></ha-icon>
-                      <span class="product-name">${product.name}</span>
-                    </div>
-                    <span class="product-meta">${this._typeMeta(product)}</span>
-                  </div>
-                  <button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this.toggleFavorite(product); }}>
-                    <ha-icon icon=${product.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
-                  </button>
-                  <button class="item-edit" @click=${() => this.openEditor(product)}>
-                    <ha-icon icon="mdi:pencil"></ha-icon>
-                  </button>
-                  <button class="item-delete" @click=${() => this.deleteProduct(product.id)}>
-                    <ha-icon icon="mdi:close"></ha-icon>
-                  </button>
-                </div>
-              `
+          : (!showFavorites ? filtered : filtered.filter((p) => !p.favorite)).map(
+              (product) => this._renderProductItem(product)
             )}
 
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn-primary btn-confirm" style="flex:1" @click=${() => this.openEditor(null, "base")}>
-            <ha-icon icon="mdi:plus"></ha-icon>
-            Nieuw product
+        ${/* Online search results (add mode) */""}
+        ${isAdd && this._onlineResults.length > 0 ? html`
+          <div class="section-label" style="margin-top:12px">
+            <ha-icon icon="mdi:cloud-search" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon> Online resultaten
+          </div>
+          ${this._onlineResults.map((p) => html`
+            <div class="product-item">
+              <div class="product-info" @click=${() => this._selectOnlineProduct(p)}>
+                <div class="product-name-row">
+                  <ha-icon icon="mdi:food-variant" style="--mdc-icon-size:18px;margin-right:6px;opacity:0.6"></ha-icon>
+                  <span class="product-name">${p.name}</span>
+                </div>
+                <span class="product-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
+              </div>
+            </div>
+          `)}
+        ` : nothing}
+
+        ${/* Online search button (add mode, when local search has query) */""}
+        ${isAdd && q && this._onlineResults.length === 0 ? html`
+          ${this._onlineSearching
+            ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Online zoeken...</div>`
+            : html`<button class="btn-secondary search-online-btn" @click=${() => this._searchOnline()}>
+                <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
+              </button>`}
+        ` : nothing}
+
+        ${/* Add mode: extra action buttons */""}
+        ${isAdd ? html`
+          <div class="ai-validate-actions" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
+            <button class="btn-secondary btn-confirm" @click=${() => h._openBarcodeScanner()}>
+              <ha-icon icon="mdi:barcode-scan"></ha-icon>
+              Barcode
+            </button>
+            <button class="btn-secondary btn-confirm" @click=${() => h._setDialogMode("manual")}>
+              <ha-icon icon="mdi:pencil-plus"></ha-icon>
+              Handmatig
+            </button>
+            ${hasAI ? html`
+              <button class="btn-secondary btn-confirm" @click=${() => h._openBatchAdd("log")}>
+                <ha-icon icon="mdi:text-box-outline"></ha-icon>
+                AI batch
+              </button>
+            ` : nothing}
+          </div>
+        ` : nothing}
+
+        ${/* Manage mode: create/cleanup buttons */""}
+        ${!isAdd ? html`
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn-primary btn-confirm" style="flex:1" @click=${() => this.openEditor(null, "base")}>
+              <ha-icon icon="mdi:plus"></ha-icon>
+              Nieuw product
+            </button>
+            <button class="btn-primary btn-confirm" style="flex:1" @click=${() => this.openEditor(null, "recipe")}>
+              <ha-icon icon="mdi:plus"></ha-icon>
+              Nieuw recept
+            </button>
+          </div>
+          <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => this.cleanupProducts()}>
+            <ha-icon icon="mdi:broom"></ha-icon>
+            Ongebruikte producten opruimen
           </button>
-          <button class="btn-primary btn-confirm" style="flex:1" @click=${() => this.openEditor(null, "recipe")}>
-            <ha-icon icon="mdi:plus"></ha-icon>
-            Nieuw recept
-          </button>
-        </div>
-        <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => this.cleanupProducts()}>
-          <ha-icon icon="mdi:broom"></ha-icon>
-          Ongebruikte producten opruimen
-        </button>
+        ` : nothing}
       </div>
     `;
   }
@@ -317,7 +413,11 @@ export class ProductsController {
 
   // ── Actions ──────────────────────────────────────────────────
 
-  async loadProducts(): Promise<void> {
+  async open(mode: ProductsMode): Promise<void> {
+    this.mode = mode;
+    this.searchQuery = "";
+    this.showFavoritesOnly = false;
+    this._onlineResults = [];
     try {
       const res = await this.host.hass.callWS<GetProductsResponse>({ type: "voedingslog/get_products" });
       this.products = res.products || [];
@@ -325,6 +425,34 @@ export class ProductsController {
       console.error("Failed to load products:", e);
     }
     this.host._setDialogMode("products");
+  }
+
+  /** @deprecated Use open() instead */
+  async loadProducts(): Promise<void> {
+    await this.open("manage");
+  }
+
+  private async _searchOnline(): Promise<void> {
+    const q = this.searchQuery.trim();
+    if (!q) return;
+    this._onlineSearching = true;
+    this.host.requestUpdate();
+    try {
+      const res = await this.host.hass.callWS<SearchProductsResponse>({
+        type: "voedingslog/search_products",
+        query: q,
+        online: true,
+      });
+      this._onlineResults = res.products || [];
+    } catch (e) {
+      console.error("Online search failed:", e);
+    }
+    this._onlineSearching = false;
+    this.host.requestUpdate();
+  }
+
+  private _selectOnlineProduct(product: Product): void {
+    this.host._selectProduct(product, "products");
   }
 
   openEditor(product: UnifiedProduct | null, newType?: "base" | "recipe"): void {
@@ -357,7 +485,7 @@ export class ProductsController {
         portions: product.portions,
         nutrients: product.nutrients,
       };
-      this.host._selectProduct(p);
+      this.host._selectProduct(p, "products");
       return;
     }
 
@@ -386,7 +514,7 @@ export class ProductsController {
       p.components = recipe.ingredients.map((i) => ({ ...i }));
     }
 
-    this.host._selectProduct(p);
+    this.host._selectProduct(p, "products");
   }
 
   openAiIngredients(): void {
@@ -468,7 +596,6 @@ export class ProductsController {
   }
 
   private _openPhotoForBase(): void {
-    // Navigate to photo capture via the search controller's manual flow
     this.host._setDialogMode("photo");
   }
 
@@ -500,7 +627,7 @@ export class ProductsController {
           nutrients,
         },
       });
-      await this.loadProducts();
+      await this.open(this.mode);
     } catch (e) {
       console.error("Failed to save product:", e);
       alert("Fout bij opslaan.");
@@ -534,7 +661,7 @@ export class ProductsController {
           preferred_portion: preferredPortion,
         },
       });
-      await this.loadProducts();
+      await this.open(this.mode);
     } catch (e) {
       console.error("Failed to save recipe:", e);
       alert("Fout bij opslaan.");
@@ -557,7 +684,7 @@ export class ProductsController {
     try {
       const res = await this.host.hass.callWS<{ removed: number }>({ type: "voedingslog/cleanup_products" });
       if (res.removed > 0) {
-        await this.loadProducts();
+        await this.open(this.mode);
       } else {
         alert("Geen ongebruikte producten gevonden.");
       }
