@@ -271,7 +271,7 @@ export class ProductsController {
       { id: "product-sugars", label: "Waarvan suikers (g)", key: "sugars_100g" },
       { id: "product-fiber", label: "Vezels (g)", key: "fiber_100g" },
       { id: "product-protein", label: "Eiwitten (g)", key: "proteins_100g" },
-      { id: "product-sodium", label: "Natrium/zout (g)", key: "sodium_100g" },
+      { id: "product-sodium", label: "Natrium (g, niet zout)", key: "sodium_100g" },
     ];
 
     return html`

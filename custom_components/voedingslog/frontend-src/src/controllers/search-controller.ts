@@ -182,7 +182,7 @@ export class SearchController {
       { id: "manual-sugars", label: "Waarvan suikers (g)", key: "sugars_100g" },
       { id: "manual-fiber", label: "Vezels (g)", key: "fiber_100g" },
       { id: "manual-protein", label: "Eiwitten (g)", key: "proteins_100g" },
-      { id: "manual-sodium", label: "Natrium/zout (g)", key: "sodium_100g" },
+      { id: "manual-sodium", label: "Natrium (g, niet zout)", key: "sodium_100g" },
     ];
 
     return html`

@@ -618,7 +618,7 @@ var bo=Object.create;var Ji=Object.defineProperty;var Xr=Object.getOwnPropertyDe
           </button>
         `}
       </div>
-    `}renderEditDialog(){let o=this.editingProduct;return o?o.type==="recipe"?this._renderRecipeEditDialog(o):this._renderBaseEditDialog(o):P``}_renderBaseEditDialog(o){let l=this.host,d=[{id:"product-kcal",label:"Calorie\xEBn (kcal)",key:"energy-kcal_100g"},{id:"product-fat",label:"Vetten (g)",key:"fat_100g"},{id:"product-satfat",label:"Verzadigd vet (g)",key:"saturated-fat_100g"},{id:"product-carbs",label:"Koolhydraten (g)",key:"carbohydrates_100g"},{id:"product-sugars",label:"Waarvan suikers (g)",key:"sugars_100g"},{id:"product-fiber",label:"Vezels (g)",key:"fiber_100g"},{id:"product-protein",label:"Eiwitten (g)",key:"proteins_100g"},{id:"product-sodium",label:"Natrium/zout (g)",key:"sodium_100g"}];return P`
+    `}renderEditDialog(){let o=this.editingProduct;return o?o.type==="recipe"?this._renderRecipeEditDialog(o):this._renderBaseEditDialog(o):P``}_renderBaseEditDialog(o){let l=this.host,d=[{id:"product-kcal",label:"Calorie\xEBn (kcal)",key:"energy-kcal_100g"},{id:"product-fat",label:"Vetten (g)",key:"fat_100g"},{id:"product-satfat",label:"Verzadigd vet (g)",key:"saturated-fat_100g"},{id:"product-carbs",label:"Koolhydraten (g)",key:"carbohydrates_100g"},{id:"product-sugars",label:"Waarvan suikers (g)",key:"sugars_100g"},{id:"product-fiber",label:"Vezels (g)",key:"fiber_100g"},{id:"product-protein",label:"Eiwitten (g)",key:"proteins_100g"},{id:"product-sodium",label:"Natrium (g, niet zout)",key:"sodium_100g"}];return P`
       <div class="dialog-header">
         <h2>${o.id?"Product bewerken":"Nieuw product"}</h2>
         <button class="close-btn" @click=${()=>{l._setDialogMode("products"),this.editingProduct=null,l.requestUpdate()}}>
@@ -853,7 +853,7 @@ var bo=Object.create;var Ji=Object.defineProperty;var Xr=Object.getOwnPropertyDe
       <div class="dialog-body">
         ${Ei(o,"file-input-photo",l=>this.handlePhotoCapture(l),()=>this.capturePhotoFrame(),"Maak een foto van het voedingsetiket op de verpakking.")}
       </div>
-    `}renderManualEntryDialog(){let o=this.host,l=o._prefillProduct,d=[{id:"manual-kcal",label:"Calorie\xEBn (kcal)",key:"energy-kcal_100g"},{id:"manual-fat",label:"Vetten (g)",key:"fat_100g"},{id:"manual-satfat",label:"Verzadigd vet (g)",key:"saturated-fat_100g"},{id:"manual-carbs",label:"Koolhydraten (g)",key:"carbohydrates_100g"},{id:"manual-sugars",label:"Waarvan suikers (g)",key:"sugars_100g"},{id:"manual-fiber",label:"Vezels (g)",key:"fiber_100g"},{id:"manual-protein",label:"Eiwitten (g)",key:"proteins_100g"},{id:"manual-sodium",label:"Natrium/zout (g)",key:"sodium_100g"}];return P`
+    `}renderManualEntryDialog(){let o=this.host,l=o._prefillProduct,d=[{id:"manual-kcal",label:"Calorie\xEBn (kcal)",key:"energy-kcal_100g"},{id:"manual-fat",label:"Vetten (g)",key:"fat_100g"},{id:"manual-satfat",label:"Verzadigd vet (g)",key:"saturated-fat_100g"},{id:"manual-carbs",label:"Koolhydraten (g)",key:"carbohydrates_100g"},{id:"manual-sugars",label:"Waarvan suikers (g)",key:"sugars_100g"},{id:"manual-fiber",label:"Vezels (g)",key:"fiber_100g"},{id:"manual-protein",label:"Eiwitten (g)",key:"proteins_100g"},{id:"manual-sodium",label:"Natrium (g, niet zout)",key:"sodium_100g"}];return P`
       <div class="dialog-header">
         <h2>${l?"Controleer voedingswaarden":"Handmatig toevoegen"}</h2>
         <button class="close-btn" @click=${()=>o._setDialogMode(this.returnToMode)}>
