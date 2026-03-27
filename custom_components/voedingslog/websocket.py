@@ -376,7 +376,8 @@ async def ws_get_suggestions(hass, connection, msg):
                         if goal_val > 0 and label not in all_goals:
                             key_map = {"Calorieen": "energy-kcal_100g", "Koolhydraten": "carbohydrates_100g", "Vet": "fat_100g"}
                             key = key_map.get(label, "")
-                            avg = sum(d["totals"].get(key, 0) for d in period) / max(len(period), 1) if key else 0
+                            logged_p = [d for d in period if d["item_count"] > 0]
+                            avg = sum(d["totals"].get(key, 0) for d in logged_p) / max(len(logged_p), 1) if key else 0
                             all_goals[label] = {"goal": goal_val, "average": round(avg, 1), "status": "op limiet" if avg >= goal_val * 0.9 else "ok"}
                     break
 

@@ -1273,25 +1273,25 @@ var bo=Object.create;var er=Object.defineProperty;var Xr=Object.getOwnPropertyDe
       ${o.map(d=>this._renderChart(d,l))}
 
       <div class="detail-table" style="margin-top:8px">
-        <div class="detail-table-header">Gemiddeld per dag</div>
-        ${o.map(d=>{let g=l.reduce((A,_)=>A+(_.totals[d.key]||0),0)/l.length,f=d.goal>0?Math.round(g/d.goal*100):0;return O`
+        <div class="detail-table-header">Gemiddeld per dag${(()=>{let d=l.filter(g=>g.item_count>0).length;return d<l.length?` (${d}/${l.length} dagen)`:""})()}</div>
+        ${o.map(d=>{let g=l.filter(_=>_.item_count>0),f=g.length>0?g.reduce((_,E)=>_+(E.totals[d.key]||0),0)/g.length:0,A=d.goal>0?Math.round(f/d.goal*100):0;return O`
             <div class="detail-row">
-              <span>${d.label} ${f<80?O`<span class="nutrient-gap-badge">laag</span>`:j}</span>
-              <span>${Math.round(g)} / ${d.goal} ${d.unit} (${f}%)</span>
+              <span>${d.label} ${A<80?O`<span class="nutrient-gap-badge">laag</span>`:j}</span>
+              <span>${Math.round(f)} / ${d.goal} ${d.unit} (${A}%)</span>
             </div>
           `})}
       </div>
 
-      ${(()=>{let d=o.filter(g=>{let f=l.reduce((A,_)=>A+(_.totals[g.key]||0),0)/l.length;return g.goal>0&&f/g.goal<.8});return d.length>0?O`
+      ${(()=>{let d=l.filter(f=>f.item_count>0),g=o.filter(f=>{let A=d.length>0?d.reduce((_,E)=>_+(E.totals[f.key]||0),0)/d.length:0;return f.goal>0&&A/f.goal<.8});return g.length>0?O`
           <div class="nutrient-gaps" style="margin-top:8px">
             <div class="detail-table-header">
               <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:16px;color:#ff9800;vertical-align:middle"></ha-icon>
               Aandachtspunten
             </div>
-            ${d.map(g=>{let f=l.reduce((_,E)=>_+(E.totals[g.key]||0),0)/l.length,A=Math.round(g.goal-f);return O`
+            ${g.map(f=>{let A=d.length>0?d.reduce((E,x)=>E+(x.totals[f.key]||0),0)/d.length:0,_=Math.round(f.goal-A);return O`
                 <div class="detail-row">
-                  <span>${g.label}</span>
-                  <span style="color:#ff9800">${A} ${g.unit}/dag tekort</span>
+                  <span>${f.label}</span>
+                  <span style="color:#ff9800">${_} ${f.unit}/dag tekort</span>
                 </div>
               `})}
             ${this._suggestionsLoading?O`<div class="period-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Suggesties laden...</div>`:this._suggestions?this._renderSuggestions():O`<button class="btn-secondary btn-confirm" style="margin-top:8px" @click=${()=>this._loadSuggestions()}>

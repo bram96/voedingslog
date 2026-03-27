@@ -479,11 +479,16 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                     goals["fiber_100g"] = merged.get("fiber_goal", 0)
                     break
 
+        # Only count days that have logged items (skip empty days)
+        logged_days = [d for d in period if d["item_count"] > 0]
+        if not logged_days:
+            return []
+
         results = []
         for key, goal in goals.items():
             if goal <= 0:
                 continue
-            avg = sum(d["totals"].get(key, 0) for d in period) / len(period)
+            avg = sum(d["totals"].get(key, 0) for d in logged_days) / len(logged_days)
             if avg >= goal * 0.8:
                 continue  # Not a gap
 

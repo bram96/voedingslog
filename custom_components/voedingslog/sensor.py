@@ -138,11 +138,12 @@ class WeekAverageSensor(CoordinatorEntity, SensorEntity):
         end = str(date.today())
         start = str(date.today() - timedelta(days=6))
         days = self.coordinator.get_period_totals(self._person, start, end)
-        if not days:
+        logged = [d for d in days if d["item_count"] > 0]
+        if not logged:
             return 0
         factor = self._meta.get("factor", 1)
-        total = sum(d["totals"].get(self._nutrient_key, 0.0) for d in days)
-        return round(total / len(days) * factor, 1)
+        total = sum(d["totals"].get(self._nutrient_key, 0.0) for d in logged)
+        return round(total / len(logged) * factor, 1)
 
     @property
     def device_info(self):
