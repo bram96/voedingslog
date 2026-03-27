@@ -16,11 +16,11 @@ NUTRIENTS = {
     "sugars_100g":          {"label": "Waarvan suikers",   "unit": "g",    "icon": "mdi:cube-outline"},
     "fiber_100g":           {"label": "Vezels",            "unit": "g",    "icon": "mdi:leaf"},
     "proteins_100g":        {"label": "Eiwitten",          "unit": "g",    "icon": "mdi:food-steak"},
-    "sodium_100g":          {"label": "Natrium",            "unit": "mg",   "icon": "mdi:shaker-outline", "factor": 1000},
-    "vitamin-c_100g":       {"label": "Vitamine C",        "unit": "mg",   "icon": "mdi:pill",           "factor": 1000},
-    "calcium_100g":         {"label": "Calcium",           "unit": "mg",   "icon": "mdi:bone",           "factor": 1000},
-    "iron_100g":            {"label": "IJzer",             "unit": "mg",   "icon": "mdi:pill",           "factor": 1000},
-    "vitamin-d_100g":       {"label": "Vitamine D",        "unit": "µg",   "icon": "mdi:white-balance-sunny", "factor": 1000000},
+    "sodium_100g":          {"label": "Natrium",            "unit": "mg",   "icon": "mdi:shaker-outline"},
+    "vitamin-c_100g":       {"label": "Vitamine C",        "unit": "mg",   "icon": "mdi:pill"},
+    "calcium_100g":         {"label": "Calcium",           "unit": "mg",   "icon": "mdi:bone"},
+    "iron_100g":            {"label": "IJzer",             "unit": "mg",   "icon": "mdi:pill"},
+    "vitamin-d_100g":       {"label": "Vitamine D",        "unit": "µg",   "icon": "mdi:white-balance-sunny"},
 }
 
 # Meal categories

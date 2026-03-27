@@ -6,7 +6,6 @@
  * - "manage": product list for editing (click → editor), create/delete/cleanup
  */
 import { html, nothing, type TemplateResult } from "lit";
-import { NUTRIENTS_META } from "../helpers.js";
 import type {
   MealIngredient,
   Product,
@@ -299,17 +298,13 @@ export class ProductsController {
         <p class="manual-hint">Voedingswaarden per 100g:</p>
         <div class="manual-fields">
           ${fields.map(
-            (f) => {
-              const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
-              const displayVal = (product.nutrients?.[f.key] ?? 0) * factor;
-              return html`
-                <div class="manual-field-row">
-                  <label>${f.label}</label>
-                  <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
-                    .value=${String(displayVal)} />
-                </div>
-              `;
-            }
+            (f) => html`
+              <div class="manual-field-row">
+                <label>${f.label}</label>
+                <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
+                  .value=${String(product.nutrients?.[f.key] ?? 0)} />
+              </div>
+            `
           )}
         </div>
 
@@ -386,17 +381,14 @@ export class ProductsController {
                       @change=${(e: Event) => this.updateIngredientName(idx, (e.target as HTMLInputElement).value)} />
                   </div>
                   ${Object.entries(h._config?.nutrients || {}).map(
-                    ([key, meta]) => {
-                      const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
-                      const displayVal = ((ing.nutrients?.[key] || 0) * factor).toFixed(2);
-                      return html`
+                    ([key, meta]) => html`
                       <div class="form-field form-field-inline">
                         <label>${meta.label} (${meta.unit}/100g)</label>
-                        <input type="number" .value=${displayVal}
+                        <input type="number" .value=${String((ing.nutrients?.[key] || 0).toFixed(2))}
                           min="0" step="0.01" inputmode="decimal"
-                          @change=${(e: Event) => this.updateIngredientNutrient(idx, key, parseFloat((e.target as HTMLInputElement).value) / factor)} />
+                          @change=${(e: Event) => this.updateIngredientNutrient(idx, key, parseFloat((e.target as HTMLInputElement).value))} />
                       </div>
-                    `;}
+                    `
                   )}
                 </div>
               ` : nothing}
@@ -680,9 +672,7 @@ export class ProductsController {
     const nutrients: Record<string, number> = {};
     for (const f of fields) {
       const input = h.shadowRoot?.getElementById(f.id) as HTMLInputElement | null;
-      const displayVal = parseFloat(input?.value || "0") || 0;
-      const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
-      nutrients[f.key] = displayVal / factor;
+      nutrients[f.key] = parseFloat(input?.value || "0") || 0;
     }
 
     try {

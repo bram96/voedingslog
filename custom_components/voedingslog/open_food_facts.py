@@ -79,11 +79,11 @@ def _process_product(product: dict) -> dict:
             "sugars_100g":        _to_float(nm.get("sugars_100g", 0)),
             "fiber_100g":         _to_float(nm.get("fiber_100g", 0)),
             "proteins_100g":      _to_float(nm.get("proteins_100g", 0)),
-            "sodium_100g":        _to_float(nm.get("sodium_100g", 0)),
-            "vitamin-c_100g":     _to_float(nm.get("vitamin-c_100g", 0)),
-            "calcium_100g":       _to_float(nm.get("calcium_100g", 0)),
-            "iron_100g":          _to_float(nm.get("iron_100g", 0)),
-            "vitamin-d_100g":     _to_float(nm.get("vitamin-d_100g", 0)),
+            "sodium_100g":        _to_float(nm.get("sodium_100g", 0)) * 1000,       # OFF: g → store: mg
+            "vitamin-c_100g":     _to_float(nm.get("vitamin-c_100g", 0)) * 1000,  # OFF: g → store: mg
+            "calcium_100g":       _to_float(nm.get("calcium_100g", 0)) * 1000,    # OFF: g → store: mg
+            "iron_100g":          _to_float(nm.get("iron_100g", 0)) * 1000,       # OFF: g → store: mg
+            "vitamin-d_100g":     _to_float(nm.get("vitamin-d_100g", 0)) * 1000000, # OFF: g → store: µg
         },
     }
 

@@ -16,8 +16,8 @@ function makeItem(overrides: Partial<LogItem> = {}): LogItem {
     nutrients: {
       "energy-kcal_100g": 200, "proteins_100g": 10, "carbohydrates_100g": 30,
       "fat_100g": 8, "fiber_100g": 3, "saturated-fat_100g": 2, "sugars_100g": 5,
-      "sodium_100g": 0.4, "vitamin-c_100g": 0.01, "calcium_100g": 0.05,
-      "iron_100g": 0.002, "vitamin-d_100g": 0.000001,
+      "sodium_100g": 400, "vitamin-c_100g": 10, "calcium_100g": 50,
+      "iron_100g": 2, "vitamin-d_100g": 1,
     },
     time: "12:00",
     category: "lunch",
@@ -91,7 +91,7 @@ describe("calcItemNutrients", () => {
     const result = calcItemNutrients(item);
     expect(result["saturated-fat_100g"]).toBe(2);
     expect(result["sugars_100g"]).toBe(5);
-    expect(result["sodium_100g"]).toBe(0.4);
+    expect(result["sodium_100g"]).toBe(400);
   });
 
   it("handles missing nutrients gracefully", () => {
@@ -133,7 +133,7 @@ describe("sumNutrients", () => {
     const items = [makeItem({ grams: 100 }), makeItem({ grams: 100 })];
     const totals = sumNutrients(items);
     expect(totals["saturated-fat_100g"]).toBe(4);  // 2 + 2
-    expect(totals["sodium_100g"]).toBeCloseTo(0.8);
+    expect(totals["sodium_100g"]).toBe(800);
   });
 
   it("returns empty object for empty list", () => {
@@ -153,16 +153,10 @@ describe("sumNutrients", () => {
 });
 
 describe("NUTRIENTS_META", () => {
-  it("has conversion factor for sodium", () => {
-    expect(NUTRIENTS_META["sodium_100g"]).toBe(1000);
-  });
-
-  it("has identity factor for kcal", () => {
-    expect(NUTRIENTS_META["energy-kcal_100g"]).toBe(1);
-  });
-
-  it("has high factor for vitamin D", () => {
-    expect(NUTRIENTS_META["vitamin-d_100g"]).toBe(1000000);
+  it("has factor 1 for all nutrients (stored in display units)", () => {
+    for (const key of Object.keys(NUTRIENTS_META)) {
+      expect(NUTRIENTS_META[key]).toBe(1);
+    }
   });
 });
 

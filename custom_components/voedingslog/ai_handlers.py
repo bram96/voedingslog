@@ -244,7 +244,7 @@ async def ws_analyze_photo(hass, connection, msg):
                     "sugars_100g": float(data.get("sugars", 0)),
                     "fiber_100g": float(data.get("fiber", 0)),
                     "proteins_100g": float(data.get("proteins", 0)),
-                    "sodium_100g": float(data.get("sodium", 0)),
+                    "sodium_100g": float(data.get("sodium", 0)) * 1000,  # AI returns g, store mg
                 },
             }
         })
