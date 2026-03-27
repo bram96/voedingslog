@@ -102,7 +102,7 @@ _FOOD_PARSE_STRUCTURE = {
 
 
 async def lookup_parsed_items(hass: HomeAssistant, get_coordinator, items: list[dict]) -> list[dict]:
-    """Look up parsed food items in product cache and OFF."""
+    """Look up parsed food items in product cache (including aliases) and OFF."""
     coordinator = get_coordinator(hass)
     if not coordinator:
         return []
@@ -112,13 +112,17 @@ async def lookup_parsed_items(hass: HomeAssistant, get_coordinator, items: list[
         ai_name = item.get("name", "Onbekend")
         grams = float(item.get("estimated_grams", 100))
 
-        # Search local cache first, then online
+        # Search local cache first (checks name + aliases), then online
         results = coordinator.search_products_local(ai_name)
         if not results:
             results = await coordinator.search_products_online(ai_name)
 
         if results:
             product = results[0]
+            # Store the AI name as alias on the matched product for future lookups
+            product_id = product.get("id")
+            if product_id and ai_name.lower() != product.get("name", "").lower():
+                await coordinator.add_alias(product_id, ai_name)
             products.append({
                 **product,
                 "serving_grams": grams,

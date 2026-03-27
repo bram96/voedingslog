@@ -361,8 +361,13 @@ export class AiController {
     const gramsInput = h.shadowRoot?.getElementById("ai-validate-grams") as HTMLInputElement | null;
     const grams = parseFloat(gramsInput?.value || "") || product.serving_grams || 100;
 
+    // Store AI name as alias on the matched product for future lookups
+    if (product.matched && product.id && product.ai_name && product.ai_name.toLowerCase() !== product.name.toLowerCase()) {
+      h.hass.callWS({ type: "voedingslog/add_alias", product_id: product.id, alias: product.ai_name }).catch(() => {});
+    }
+
     if (this._validateMode === "recipe") {
-      // Add as meal ingredient
+      // Add as recipe ingredient
       h._addRecipeIngredientFromAi({
         name: product.name,
         grams,

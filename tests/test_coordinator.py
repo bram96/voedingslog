@@ -202,6 +202,89 @@ class TestProductSearch:
         assert favs[0]["name"] == "Fav"
 
 
+class TestAliasSearch:
+    def test_search_finds_by_alias(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Volkoren brood", "aliases": ["brown bread", "tarwebrood"], "nutrients": {}},
+        ]
+        assert len(coord.search_products_local("tarwe")) == 1
+        assert len(coord.search_products_local("brown")) == 1
+        assert len(coord.search_products_local("volkoren")) == 1
+
+    def test_search_alias_case_insensitive(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Melk", "aliases": ["Whole Milk"], "nutrients": {}},
+        ]
+        assert len(coord.search_products_local("whole milk")) == 1
+        assert len(coord.search_products_local("WHOLE")) == 1
+
+    def test_no_duplicate_results(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Brood", "aliases": ["brood alias"], "nutrients": {}},
+        ]
+        # "brood" matches both name and alias — should only appear once
+        results = coord.search_products_local("brood")
+        assert len(results) == 1
+
+
+class TestAddAlias:
+    @pytest.mark.asyncio
+    async def test_add_alias(self):
+        coord = _make_coordinator()
+        coord._products = [{"id": "1", "type": "base", "name": "Melk", "aliases": [], "nutrients": {}}]
+        added = await coord.add_alias("1", "whole milk")
+        assert added is True
+        assert "whole milk" in coord._products[0]["aliases"]
+
+    @pytest.mark.asyncio
+    async def test_skip_duplicate_alias(self):
+        coord = _make_coordinator()
+        coord._products = [{"id": "1", "type": "base", "name": "Melk", "aliases": ["whole milk"], "nutrients": {}}]
+        added = await coord.add_alias("1", "whole milk")
+        assert added is False
+
+    @pytest.mark.asyncio
+    async def test_skip_alias_matching_name(self):
+        coord = _make_coordinator()
+        coord._products = [{"id": "1", "type": "base", "name": "Melk", "aliases": [], "nutrients": {}}]
+        added = await coord.add_alias("1", "melk")
+        assert added is False
+
+    @pytest.mark.asyncio
+    async def test_skip_empty_alias(self):
+        coord = _make_coordinator()
+        coord._products = [{"id": "1", "type": "base", "name": "Melk", "aliases": [], "nutrients": {}}]
+        added = await coord.add_alias("1", "  ")
+        assert added is False
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_product(self):
+        coord = _make_coordinator()
+        added = await coord.add_alias("nope", "test")
+        assert added is False
+
+
+class TestBarcodeLocalLookup:
+    def test_lookup_finds_local(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Chocomel", "barcode": "8712800100010", "nutrients": {"energy-kcal_100g": 80}},
+        ]
+        import asyncio
+        result = asyncio.get_event_loop().run_until_complete(coord.lookup_barcode("8712800100010"))
+        assert result is not None
+        assert result["name"] == "Chocomel"
+
+    def test_store_barcode_on_existing(self):
+        coord = _make_coordinator()
+        coord._products = [{"id": "1", "type": "base", "name": "Test", "nutrients": {}}]
+        coord._store_barcode("Test", "12345")
+        assert coord._products[0]["barcode"] == "12345"
+
+
 class TestCacheProduct:
     def test_caches_new_product(self):
         coord = _make_coordinator()

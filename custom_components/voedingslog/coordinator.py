@@ -281,14 +281,40 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         return True
 
     async def lookup_barcode(self, barcode: str) -> dict | None:
-        """Look up a product by barcode without logging it."""
+        """Look up a product by barcode — checks local products first, then OFF."""
+        # Check local products by barcode
+        for p in self._products:
+            if p.get("barcode") == barcode:
+                return p
+
+        # Fall back to OFF API
         session = await self._get_session()
-        return await lookup_by_barcode(session, barcode)
+        product = await lookup_by_barcode(session, barcode)
+        if product:
+            # Store barcode on existing product or cache as new
+            product["barcode"] = barcode
+            self._store_barcode(product["name"], barcode)
+        return product
+
+    def _store_barcode(self, product_name: str, barcode: str) -> None:
+        """Store barcode on an existing product if found by name."""
+        for p in self._products:
+            if p.get("name") == product_name:
+                if p.get("barcode") != barcode:
+                    p["barcode"] = barcode
 
     def search_products_local(self, query: str) -> list[dict]:
-        """Search the unified product list by name."""
+        """Search the unified product list by name and aliases."""
         q = query.lower()
-        return [p for p in self._products if q in p.get("name", "").lower()][:10]
+        results = []
+        for p in self._products:
+            if q in p.get("name", "").lower():
+                results.append(p)
+            elif any(q in a.lower() for a in p.get("aliases", [])):
+                results.append(p)
+            if len(results) >= 10:
+                break
+        return results
 
     async def search_products_online(self, query: str) -> list[dict]:
         """Search products via Open Food Facts API."""
@@ -310,6 +336,11 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         product_id = data.get("id") or str(uuid.uuid4())[:8]
         product_type = data.get("type", "base")
 
+        # Preserve existing aliases and barcode on update
+        existing = next((p for p in self._products if p["id"] == product_id), None)
+        aliases = data.get("aliases", existing.get("aliases", []) if existing else [])
+        barcode = data.get("barcode", existing.get("barcode") if existing else None)
+
         if product_type == "recipe":
             ingredients = data.get("ingredients", [])
             total_grams = sum(i.get("grams", 0) for i in ingredients)
@@ -323,6 +354,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 "total_grams": total_grams,
                 "nutrients": nutrients,
                 "preferred_portion": data.get("preferred_portion"),
+                "aliases": aliases,
                 "favorite": data.get("favorite", False),
             }
         else:
@@ -333,6 +365,8 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 "serving_grams": data.get("serving_grams", 100),
                 "nutrients": data.get("nutrients", {}),
                 "portions": data.get("portions", []),
+                "barcode": barcode,
+                "aliases": aliases,
                 "favorite": data.get("favorite", False),
             }
 
@@ -393,12 +427,35 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             _LOGGER.info("Cleaned up %d unused products", removed)
         return removed
 
+    async def add_alias(self, product_id: str, alias: str) -> bool:
+        """Add an alias to a product. Returns True if added."""
+        alias = alias.strip().lower()
+        if not alias:
+            return False
+        for p in self._products:
+            if p.get("id") == product_id:
+                aliases = p.get("aliases", [])
+                # Skip if alias matches the product name or already exists
+                if alias == p.get("name", "").lower():
+                    return False
+                if alias not in [a.lower() for a in aliases]:
+                    aliases.append(alias)
+                    p["aliases"] = aliases
+                    await self._async_save_products()
+                    return True
+                return False
+        return False
+
     def _cache_product(self, product: dict) -> None:
         """Add a product to the unified store when it's actually logged."""
         name = product.get("name", "")
         if not name:
             return
         if any(p.get("name") == name for p in self._products):
+            # Update barcode on existing product if provided
+            barcode = product.get("barcode")
+            if barcode:
+                self._store_barcode(name, barcode)
             return
         self._products.append({
             "id": str(uuid.uuid4())[:8],
@@ -407,6 +464,8 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             "serving_grams": product.get("serving_grams", 100),
             "nutrients": product.get("nutrients", {}),
             "portions": product.get("portions", []),
+            "barcode": product.get("barcode"),
+            "aliases": [],
             "favorite": False,
         })
 
