@@ -36,6 +36,11 @@ export class SearchController {
   private _callback: ((p: Product) => void) | null = null;
   private _returnMode: DialogMode = null;
 
+  /** The dialog to return to when closing sub-dialogs (barcode, manual, photo). */
+  get returnToMode(): DialogMode {
+    return this._returnMode || "products";
+  }
+
   constructor(host: SearchControllerHost) {
     this.host = host;
     this.search = new ProductSearch(host);
@@ -183,7 +188,7 @@ export class SearchController {
     return html`
       <div class="dialog-header">
         <h2>${pre ? "Controleer voedingswaarden" : "Handmatig toevoegen"}</h2>
-        <button class="close-btn" @click=${() => h._setDialogMode("products")}>
+        <button class="close-btn" @click=${() => h._setDialogMode(this.returnToMode as string)}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
       </div>

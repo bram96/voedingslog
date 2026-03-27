@@ -96,7 +96,7 @@ export class VoedingslogPanel extends LitElement {
     switch (this._dialogMode) {
       case "barcode": this._setDialogMode("search"); break;
       case "photo": this._setDialogMode("manual"); break;
-      case "manual": this._setDialogMode("products"); break;
+      case "manual": this._setDialogMode(this._searchCtrl.returnToMode as string); break;
       case "search": this._searchCtrl.closeSearch(); break;
       case "product-edit": this._setDialogMode("products"); break;
       case "weight":
