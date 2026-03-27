@@ -37,7 +37,7 @@ async def search_by_name(session: aiohttp.ClientSession, name: str) -> list[dict
         "action": "process",
         "json": 1,
         "page_size": 10,
-        "fields": "product_name,brands,nutriments,product_name_nl,serving_size,serving_quantity,product_quantity,product_quantity_unit,quantity",
+        "fields": "product_name,brands,nutriments,product_name_nl,serving_size,serving_quantity,product_quantity,product_quantity_unit,quantity,completeness",
     }
     try:
         async with session.get(
@@ -67,24 +67,35 @@ def _process_product(product: dict) -> dict:
     serving_grams = _parse_serving(product.get("serving_size", ""))
     portions = _build_portions(product)
 
+    nutrients = {
+        "energy-kcal_100g":   _to_float(nm.get("energy-kcal_100g") or nm.get("energy_100g", 0) / 4.184),
+        "fat_100g":           _to_float(nm.get("fat_100g", 0)),
+        "saturated-fat_100g": _to_float(nm.get("saturated-fat_100g", 0)),
+        "carbohydrates_100g": _to_float(nm.get("carbohydrates_100g", 0)),
+        "sugars_100g":        _to_float(nm.get("sugars_100g", 0)),
+        "fiber_100g":         _to_float(nm.get("fiber_100g", 0)),
+        "proteins_100g":      _to_float(nm.get("proteins_100g", 0)),
+        "sodium_100g":        _to_float(nm.get("sodium_100g", 0)),
+        "vitamin-c_100g":     _to_float(nm.get("vitamin-c_100g", 0)),
+        "calcium_100g":       _to_float(nm.get("calcium_100g", 0)),
+        "iron_100g":          _to_float(nm.get("iron_100g", 0)),
+        "vitamin-d_100g":     _to_float(nm.get("vitamin-d_100g", 0)),
+    }
+
+    # Nutrient completeness: count how many of the 5 key nutrients have values > 0
+    key_nutrients = ["energy-kcal_100g", "fat_100g", "carbohydrates_100g", "proteins_100g", "fiber_100g"]
+    filled = sum(1 for k in key_nutrients if nutrients.get(k, 0) > 0)
+    completeness = round(filled / len(key_nutrients) * 100)
+
+    # OFF completeness score (0-100 scale)
+    off_completeness = round(_to_float(product.get("completeness", 0)) * 100)
+
     return {
         "name": f"{name} ({brand})" if brand else name,
         "serving_grams": serving_grams or 100,
         "portions": portions,
-        "nutrients": {
-            "energy-kcal_100g":   _to_float(nm.get("energy-kcal_100g") or nm.get("energy_100g", 0) / 4.184),
-            "fat_100g":           _to_float(nm.get("fat_100g", 0)),
-            "saturated-fat_100g": _to_float(nm.get("saturated-fat_100g", 0)),
-            "carbohydrates_100g": _to_float(nm.get("carbohydrates_100g", 0)),
-            "sugars_100g":        _to_float(nm.get("sugars_100g", 0)),
-            "fiber_100g":         _to_float(nm.get("fiber_100g", 0)),
-            "proteins_100g":      _to_float(nm.get("proteins_100g", 0)),
-            "sodium_100g":        _to_float(nm.get("sodium_100g", 0)),
-            "vitamin-c_100g":     _to_float(nm.get("vitamin-c_100g", 0)),
-            "calcium_100g":       _to_float(nm.get("calcium_100g", 0)),
-            "iron_100g":          _to_float(nm.get("iron_100g", 0)),
-            "vitamin-d_100g":     _to_float(nm.get("vitamin-d_100g", 0)),
-        },
+        "nutrients": nutrients,
+        "completeness": max(completeness, off_completeness),
     }
 
 

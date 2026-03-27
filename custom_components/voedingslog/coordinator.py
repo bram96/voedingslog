@@ -538,7 +538,9 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             "portions": product.get("portions", []),
             "barcode": product.get("barcode"),
             "aliases": [],
+            "completeness": product.get("completeness"),
             "favorite": False,
+            "last_used": str(date.today()),
         })
 
     async def _async_save_products(self) -> None:
@@ -665,6 +667,12 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         self._logs[person][target_day].append(item)
         _LOGGER.info("Logged: %s (%.0fg) for %s [%s] on %s", product["name"], grams, person, cat, target_day)
         self._cache_product(product)
+        # Update last_used on the cached product
+        name_lower = product.get("name", "").lower()
+        for p in self._products:
+            if p.get("name", "").lower() == name_lower:
+                p["last_used"] = str(date.today())
+                break
         await self.async_refresh()
         await self._async_save()
         await self._async_save_products()

@@ -35,6 +35,7 @@ export interface Product {
   portions?: Portion[];
   nutrients: NutrientMap;
   favorite?: boolean;
+  completeness?: number;
   /** Passed through when logging a component recipe. */
   components?: MealIngredient[];
 }
@@ -101,6 +102,8 @@ export interface BaseProduct {
   nutrients: NutrientMap;
   barcode?: string;
   aliases?: string[];
+  completeness?: number;
+  last_used?: string;
   favorite?: boolean;
 }
 

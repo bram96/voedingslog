@@ -402,6 +402,27 @@ export class VoedingslogPanel extends LitElement {
             `
           )}
         </div>
+        ${(() => {
+          const p = totals["proteins_100g"] || 0;
+          const c = totals["carbohydrates_100g"] || 0;
+          const f = totals["fat_100g"] || 0;
+          const total = p + c + f;
+          if (total < 1) return nothing;
+          return html`
+            <div class="macro-ratio">
+              <div class="macro-ratio-bar">
+                <div style="width:${p/total*100}%;background:#4caf50" title="Eiwit"></div>
+                <div style="width:${c/total*100}%;background:var(--primary-color,#03a9f4)" title="Koolh."></div>
+                <div style="width:${f/total*100}%;background:#ff9800" title="Vet"></div>
+              </div>
+              <div class="macro-ratio-labels">
+                <span style="color:#4caf50">E ${Math.round(p/total*100)}%</span>
+                <span style="color:var(--primary-color,#03a9f4)">K ${Math.round(c/total*100)}%</span>
+                <span style="color:#ff9800">V ${Math.round(f/total*100)}%</span>
+              </div>
+            </div>
+          `;
+        })()}
         <div class="totals-hint">
           ${this._streak > 1
             ? html`<ha-icon icon="mdi:fire"></ha-icon><span>${this._streak} dagen streak</span><span style="margin:0 4px">·</span>`

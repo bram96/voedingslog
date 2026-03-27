@@ -89,6 +89,10 @@ export const panelStyles = css`
   .macro-bar { height: 4px; background: var(--divider-color); border-radius: 2px; margin: 3px 4px 1px; overflow: hidden; }
   .macro-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
 
+  .macro-ratio { margin-top: 8px; }
+  .macro-ratio-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; }
+  .macro-ratio-bar div { height: 100%; }
+  .macro-ratio-labels { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; margin-top: 2px; }
   .totals-hint { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; opacity: 0.7; }
   .totals-hint ha-icon { --mdc-icon-size: 14px; }
 

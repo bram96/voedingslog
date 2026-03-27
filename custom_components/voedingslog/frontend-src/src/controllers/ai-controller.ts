@@ -154,7 +154,15 @@ export class AiController {
         <div class="ai-context">AI herkende: <strong>${product.ai_name || product.name}</strong></div>
 
         ${!product.matched
-          ? html`<div class="ai-warning">Niet gevonden in database — zoek een product of sla over</div>`
+          ? html`
+            <div class="ai-warning">Niet gevonden in database — zoek een product of sla over</div>
+            ${(product as any).suggested_product ? html`
+              <button class="btn-secondary btn-confirm" style="margin-top:4px" @click=${() => this._acceptSuggestion()}>
+                <ha-icon icon="mdi:lightbulb-outline"></ha-icon>
+                Bedoel je "${(product as any).suggested_product}"?
+              </button>
+            ` : nothing}
+          `
           : nothing}
 
         <div class="ai-validate-search">
@@ -322,6 +330,29 @@ export class AiController {
     } catch (err) {
       console.error("AI validate search failed:", err);
     }
+  }
+
+  private async _acceptSuggestion(): Promise<void> {
+    const product = this.parsedProducts[this.validateIndex];
+    const suggestedId = (product as any).suggested_product_id;
+    const suggestedName = (product as any).suggested_product;
+    if (!suggestedId || !suggestedName) return;
+
+    // Search for the suggested product to get full data
+    try {
+      const res = await this.host.hass.callWS<SearchProductsResponse>({
+        type: "voedingslog/search_products",
+        query: suggestedName,
+      });
+      const match = res.products?.find((p) => p.id === suggestedId);
+      if (match) {
+        this.selectProduct(match);
+        // Add AI name as alias
+        if (product.ai_name) {
+          this.host.hass.callWS({ type: "voedingslog/add_alias", product_id: suggestedId, alias: product.ai_name }).catch(() => {});
+        }
+      }
+    } catch { /* ignore */ }
   }
 
   selectProduct(product: Product): void {

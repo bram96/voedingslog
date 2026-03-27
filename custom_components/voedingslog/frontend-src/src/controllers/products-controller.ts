@@ -92,7 +92,14 @@ export class ProductsController {
 
   private _typeMeta(product: UnifiedProduct): string {
     if (product.type === "base") {
-      return `${Math.round(product.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g`;
+      const kcal = `${Math.round(product.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g`;
+      const tags: string[] = [];
+      if (product.completeness !== undefined && product.completeness < 60) tags.push("onvolledig");
+      if (this.mode === "manage" && product.last_used) {
+        const days = Math.floor((Date.now() - new Date(product.last_used).getTime()) / 86400000);
+        if (days > 90) tags.push(`${days}d niet gebruikt`);
+      }
+      return tags.length > 0 ? `${kcal} · ${tags.join(" · ")}` : kcal;
     }
     const recipe = product as Recipe;
     const kcal = Math.round((recipe.nutrients?.["energy-kcal_100g"] || 0) * recipe.total_grams / 100);

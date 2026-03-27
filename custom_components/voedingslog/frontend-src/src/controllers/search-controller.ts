@@ -264,7 +264,7 @@ export class SearchController {
       <div class="search-result">
         <div class="search-result-main" @click=${() => this._onSelected(p)}>
           <span class="result-name">${p.name}</span>
-          <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
+          <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g${p.completeness !== undefined && p.completeness < 60 ? " · onvolledig" : ""}</span>
         </div>
         ${showFav && p.id
           ? html`<button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this.toggleFavorite(p); }}>

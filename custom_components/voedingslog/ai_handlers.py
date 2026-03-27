@@ -130,12 +130,24 @@ async def lookup_parsed_items(hass: HomeAssistant, get_coordinator, items: list[
                 "matched": True,
             })
         else:
+            # Try to find a close match by searching individual words
+            suggestion = None
+            words = ai_name.split()
+            if len(words) > 1:
+                for word in words:
+                    if len(word) >= 3:
+                        partial = coordinator.search_products_local(word)
+                        if partial:
+                            suggestion = partial[0]
+                            break
             products.append({
                 "name": ai_name,
                 "serving_grams": grams,
-                "nutrients": {k: 0.0 for k in NUTRIENTS},
+                "nutrients": suggestion.get("nutrients", {k: 0.0 for k in NUTRIENTS}) if suggestion else {k: 0.0 for k in NUTRIENTS},
                 "ai_name": ai_name,
                 "matched": False,
+                "suggested_product": suggestion.get("name") if suggestion else None,
+                "suggested_product_id": suggestion.get("id") if suggestion else None,
             })
 
     return products
