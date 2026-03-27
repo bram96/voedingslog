@@ -28,11 +28,7 @@ export const KEY_NUTRIENTS_DISPLAY: NutrientDisplayConfig[] = [
   { key: "fiber_100g", label: "Vezels", unit: "g", decimals: 1 },
 ];
 
-/**
- * Display factor is always 1 — nutrients are stored in their display unit
- * (mg for sodium/vitamins/minerals, µg for vitamin D).
- * OFF API returns grams, so open_food_facts.py converts on import.
- */
+/** Factor to convert raw nutrient values to display units (e.g. sodium g → mg) */
 export const NUTRIENTS_META: Record<string, number> = {
   "energy-kcal_100g": 1,
   "fat_100g": 1,
@@ -41,11 +37,11 @@ export const NUTRIENTS_META: Record<string, number> = {
   "sugars_100g": 1,
   "fiber_100g": 1,
   "proteins_100g": 1,
-  "sodium_100g": 1,
-  "vitamin-c_100g": 1,
-  "calcium_100g": 1,
-  "iron_100g": 1,
-  "vitamin-d_100g": 1,
+  "sodium_100g": 1000,
+  "vitamin-c_100g": 1000,
+  "calcium_100g": 1000,
+  "iron_100g": 1000,
+  "vitamin-d_100g": 1000000,
 };
 
 export function defaultCategory(): MealCategory {

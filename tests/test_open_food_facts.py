@@ -133,25 +133,6 @@ class TestProcessProduct:
         result = _process_product(raw)
         assert result["serving_grams"] == 35.0
 
-    def test_micronutrients_converted_to_display_units(self):
-        """OFF returns grams, we store mg (or µg for vitamin D)."""
-        raw = {
-            "product_name": "Milk",
-            "nutriments": {
-                "sodium_100g": 0.05,         # 0.05g = 50mg
-                "vitamin-c_100g": 0.001,     # 0.001g = 1mg
-                "calcium_100g": 0.12,        # 0.12g = 120mg
-                "iron_100g": 0.002,          # 0.002g = 2mg
-                "vitamin-d_100g": 0.0000075, # 7.5µg
-            },
-        }
-        result = _process_product(raw)
-        assert result["nutrients"]["sodium_100g"] == 50.0
-        assert result["nutrients"]["vitamin-c_100g"] == 1.0
-        assert result["nutrients"]["calcium_100g"] == 120.0
-        assert result["nutrients"]["iron_100g"] == 2.0
-        assert abs(result["nutrients"]["vitamin-d_100g"] - 7.5) < 0.01
-
     def test_missing_nutrients_default_zero(self):
         raw = {"product_name": "Empty", "nutriments": {}}
         result = _process_product(raw)

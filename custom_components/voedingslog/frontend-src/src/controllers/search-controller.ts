@@ -3,6 +3,7 @@
  */
 import { html, nothing, type TemplateResult } from "lit";
 import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
+import { NUTRIENTS_META } from "../helpers.js";
 import { ProductSearch } from "../product-search.js";
 import { renderPhotoPicker, readFileAsBase64 } from "../photo-capture.js";
 
@@ -203,13 +204,17 @@ export class SearchController {
         <p class="manual-hint">Voedingswaarden per 100g:</p>
         <div class="manual-fields">
           ${fields.map(
-            (f) => html`
-              <div class="manual-field-row">
-                <label>${f.label}</label>
-                <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
-                  .value=${String(pre?.nutrients?.[f.key] ?? 0)} />
-              </div>
-            `
+            (f) => {
+              const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
+              const displayVal = (pre?.nutrients?.[f.key] ?? 0) * factor;
+              return html`
+                <div class="manual-field-row">
+                  <label>${f.label}</label>
+                  <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
+                    .value=${String(displayVal)} />
+                </div>
+              `;
+            }
           )}
         </div>
         ${!pre && !!h._config?.ai_task_entity ? html`
@@ -353,7 +358,9 @@ export class SearchController {
     const nutrients: Record<string, number> = {};
     for (const f of fields) {
       const input = h.shadowRoot?.getElementById(f.id) as HTMLInputElement | null;
-      nutrients[f.key] = parseFloat(input?.value || "0") || 0;
+      const displayVal = parseFloat(input?.value || "0") || 0;
+      const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
+      nutrients[f.key] = displayVal / factor;
     }
 
     const product: Product = { name, serving_grams: 100, nutrients };
