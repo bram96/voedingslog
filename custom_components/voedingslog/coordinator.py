@@ -44,6 +44,16 @@ def _sanitize_nutrients(nutrients: dict) -> dict[str, float]:
     return result
 
 
+def _calculate_totals(items: list[dict]) -> dict[str, float]:
+    """Calculate nutrient totals for a list of log items."""
+    totals = {k: 0.0 for k in NUTRIENTS}
+    for item in items:
+        factor = item.get("grams", 0) / 100.0
+        for nutrient in NUTRIENTS:
+            totals[nutrient] += item.get("nutrients", {}).get(nutrient, 0.0) * factor
+    return totals
+
+
 def _compute_nutrients_from_components(components: list[dict]) -> dict[str, float]:
     """Compute nutrients per 100g from a list of components with grams + nutrients."""
     total_grams = sum(c.get("grams", 0) for c in components)
@@ -118,14 +128,8 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         result = {}
         for person in self.persons:
             items = self._logs[person].get(today, [])
-            totals = {k: 0.0 for k in NUTRIENTS}
-            for item in items:
-                gram_factor = item["grams"] / 100.0
-                for nutrient in NUTRIENTS:
-                    value = item["nutrients"].get(nutrient, 0.0)
-                    totals[nutrient] += value * gram_factor
             result[person] = {
-                "totals": totals,
+                "totals": _calculate_totals(items),
                 "log": items,
                 "date": today,
             }
@@ -457,6 +461,21 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Merged product '%s' into '%s'", remove_name, keep.get("name"))
         return keep
 
+    def _get_person_goals(self, person: str) -> dict[str, float]:
+        """Get nutrient goals for a person from config entries."""
+        for e in self.hass.config_entries.async_entries(DOMAIN):
+            merged = {**e.data, **e.options}
+            for p in merged.get("personen", []):
+                if p == person:
+                    return {
+                        "energy-kcal_100g": merged.get("doel_calorieen", 0),
+                        "proteins_100g": merged.get("protein_goal", 0),
+                        "carbohydrates_100g": merged.get("carbs_goal", 0),
+                        "fat_100g": merged.get("fat_goal", 0),
+                        "fiber_100g": merged.get("fiber_goal", 0),
+                    }
+        return {}
+
     def get_daily_review_context(self, person: str) -> dict:
         """Build rich context for an AI daily review."""
         today_str = str(date.today())
@@ -499,20 +518,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             if info["count"] >= 3
         }
 
-        # Goals
-        goals: dict[str, float] = {}
-        for e in self.hass.config_entries.async_entries(DOMAIN):
-            merged = {**e.data, **e.options}
-            for p in merged.get("personen", []):
-                if p == person:
-                    goals = {
-                        "energy-kcal_100g": merged.get("doel_calorieen", 0),
-                        "proteins_100g": merged.get("protein_goal", 0),
-                        "carbohydrates_100g": merged.get("carbs_goal", 0),
-                        "fat_100g": merged.get("fat_goal", 0),
-                        "fiber_100g": merged.get("fiber_goal", 0),
-                    }
-                    break
+        goals = self._get_person_goals(person)
 
         # Weekly averages (completed days only)
         week_avgs: dict[str, float] = {}
@@ -538,18 +544,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         if not period:
             return []
 
-        # Get config goals from hass
-        goals: dict[str, float] = {}
-        for e in self.hass.config_entries.async_entries(DOMAIN):
-            merged = {**e.data, **e.options}
-            for p in merged.get("personen", []):
-                if p == person:
-                    goals["energy-kcal_100g"] = merged.get("doel_calorieen", 0)
-                    goals["proteins_100g"] = merged.get("protein_goal", 0)
-                    goals["carbohydrates_100g"] = merged.get("carbs_goal", 0)
-                    goals["fat_100g"] = merged.get("fat_goal", 0)
-                    goals["fiber_100g"] = merged.get("fiber_goal", 0)
-                    break
+        goals = self._get_person_goals(person)
 
         # Only count completed days (skip empty days and today which is still in progress)
         today_str = str(date.today())
@@ -709,7 +704,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
     def get_log_for_date(self, person: str, day: str | None = None) -> list[dict]:
         """Return the log for a specific date."""
         day = day or str(date.today())
-        return self._logs[person].get(day, [])
+        return self._logs.get(person, {}).get(day, [])
 
     def get_log_today(self, person: str) -> list[dict]:
         """Return today's log for a person."""
@@ -759,12 +754,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         while current <= end:
             day_str = str(current)
             items = person_logs.get(day_str, [])
-            totals = {k: 0.0 for k in NUTRIENTS}
-            for item in items:
-                factor = item["grams"] / 100.0
-                for nutrient in NUTRIENTS:
-                    totals[nutrient] += item["nutrients"].get(nutrient, 0.0) * factor
-            days.append({"date": day_str, "totals": totals, "item_count": len(items)})
+            days.append({"date": day_str, "totals": _calculate_totals(items), "item_count": len(items)})
             current += timedelta(days=1)
         return days
 

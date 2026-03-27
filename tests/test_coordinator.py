@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from custom_components.voedingslog.coordinator import (
     _compute_nutrients_from_components,
+    _calculate_totals,
     _default_category,
     VoedingslogCoordinator,
 )
@@ -604,3 +605,136 @@ class TestEditItemWithComponents:
         # Nutrients recalculated: (60*200/100 + 600*30/100) / 230 * 100
         expected = (120 + 180) / 230 * 100
         assert abs(item["nutrients"]["energy-kcal_100g"] - expected) < 0.01
+
+
+# ── New tests for untested methods ───────────────────────────────
+
+
+class TestCalculateTotals:
+    def test_single_item(self):
+        items = [{"grams": 200, "nutrients": {"energy-kcal_100g": 100, "proteins_100g": 5}}]
+        totals = _calculate_totals(items)
+        assert totals["energy-kcal_100g"] == 200.0
+        assert totals["proteins_100g"] == 10.0
+
+    def test_empty_items(self):
+        totals = _calculate_totals([])
+        assert totals["energy-kcal_100g"] == 0.0
+
+    def test_missing_nutrient_keys(self):
+        items = [{"grams": 100, "nutrients": {}}]
+        totals = _calculate_totals(items)
+        assert totals["energy-kcal_100g"] == 0.0
+
+
+class TestLogManual:
+    @pytest.mark.asyncio
+    async def test_log_manual(self):
+        coord = _make_coordinator(["Jan"])
+        coord.async_refresh = AsyncMock()
+        await coord.log_manual("Jan", "Test", 150, {"energy-kcal_100g": 200})
+        today = str(date.today())
+        assert len(coord._logs["Jan"][today]) == 1
+        assert coord._logs["Jan"][today][0]["name"] == "Test"
+        assert coord._logs["Jan"][today][0]["grams"] == 150
+
+    @pytest.mark.asyncio
+    async def test_log_manual_with_components(self):
+        coord = _make_coordinator(["Jan"])
+        coord.async_refresh = AsyncMock()
+        components = [{"name": "A", "grams": 100, "nutrients": {"energy-kcal_100g": 50}}]
+        await coord.log_manual("Jan", "Combo", 100, {"energy-kcal_100g": 50}, components=components)
+        today = str(date.today())
+        assert coord._logs["Jan"][today][0]["components"] == components
+
+
+class TestDeleteOperations:
+    @pytest.mark.asyncio
+    async def test_delete_item(self):
+        coord = _make_coordinator(["Jan"])
+        coord.async_refresh = AsyncMock()
+        coord._logs = {"Jan": {"2024-01-01": [
+            {"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"},
+            {"name": "B", "grams": 200, "nutrients": {}, "time": "13:00", "category": "lunch"},
+        ]}}
+        await coord.delete_item("Jan", 0, "2024-01-01")
+        assert len(coord._logs["Jan"]["2024-01-01"]) == 1
+        assert coord._logs["Jan"]["2024-01-01"][0]["name"] == "B"
+
+    @pytest.mark.asyncio
+    async def test_delete_item_invalid_index(self):
+        coord = _make_coordinator(["Jan"])
+        coord.async_refresh = AsyncMock()
+        coord._logs = {"Jan": {"2024-01-01": [{"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}]}}
+        await coord.delete_item("Jan", 5, "2024-01-01")  # index out of range
+        assert len(coord._logs["Jan"]["2024-01-01"]) == 1  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_delete_last(self):
+        coord = _make_coordinator(["Jan"])
+        coord.async_refresh = AsyncMock()
+        today = str(date.today())
+        coord._logs = {"Jan": {today: [
+            {"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"},
+            {"name": "B", "grams": 200, "nutrients": {}, "time": "13:00", "category": "lunch"},
+        ]}}
+        await coord.delete_last("Jan")
+        assert len(coord._logs["Jan"][today]) == 1
+        assert coord._logs["Jan"][today][0]["name"] == "A"
+
+    @pytest.mark.asyncio
+    async def test_reset_day(self):
+        coord = _make_coordinator(["Jan"])
+        coord.async_refresh = AsyncMock()
+        coord._logs = {"Jan": {"2024-01-01": [{"name": "A", "grams": 100, "nutrients": {}, "time": "12:00", "category": "lunch"}]}}
+        await coord.reset_day("Jan", "2024-01-01")
+        assert coord._logs["Jan"]["2024-01-01"] == []
+
+
+class TestRecentSearches:
+    def test_add_and_get(self):
+        coord = _make_coordinator(["Jan"])
+        coord.add_recent_search("Jan", "brood")
+        coord.add_recent_search("Jan", "kaas")
+        recent = coord.get_recent_searches("Jan")
+        assert recent == ["kaas", "brood"]  # most recent first
+
+    def test_dedup(self):
+        coord = _make_coordinator(["Jan"])
+        coord.add_recent_search("Jan", "melk")
+        coord.add_recent_search("Jan", "brood")
+        coord.add_recent_search("Jan", "melk")  # re-search
+        recent = coord.get_recent_searches("Jan")
+        assert recent == ["melk", "brood"]
+
+    def test_max_10(self):
+        coord = _make_coordinator(["Jan"])
+        for i in range(15):
+            coord.add_recent_search("Jan", f"query_{i}")
+        assert len(coord.get_recent_searches("Jan")) == 10
+
+    def test_skip_short_queries(self):
+        coord = _make_coordinator(["Jan"])
+        coord.add_recent_search("Jan", "a")
+        assert coord.get_recent_searches("Jan") == []
+
+    def test_unknown_person(self):
+        coord = _make_coordinator(["Jan"])
+        assert coord.get_recent_searches("Unknown") == []
+
+
+class TestGetPersonGoals:
+    def test_unknown_person(self):
+        coord = _make_coordinator(["Jan"])
+        coord.hass.config_entries.async_entries.return_value = []
+        assert coord._get_person_goals("Unknown") == {}
+
+
+class TestGetLogForDate:
+    def test_unknown_person_returns_empty(self):
+        coord = _make_coordinator(["Jan"])
+        assert coord.get_log_for_date("Unknown") == []
+
+    def test_unknown_date_returns_empty(self):
+        coord = _make_coordinator(["Jan"])
+        assert coord.get_log_for_date("Jan", "2099-01-01") == []

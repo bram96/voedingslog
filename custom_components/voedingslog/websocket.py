@@ -37,6 +37,7 @@ from .const import (
     WS_TOGGLE_FAVORITE,
 )
 from .ai_handlers import register_ai_commands
+from .coordinator import _calculate_totals
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -155,12 +156,7 @@ async def ws_get_log(hass, connection, msg):
     day = msg.get("date")
     items = coordinator.get_log_for_date(person, day)
 
-    # Calculate totals
-    totals = {k: 0.0 for k in NUTRIENTS}
-    for item in items:
-        factor = item["grams"] / 100.0
-        for nutrient in NUTRIENTS:
-            totals[nutrient] += item["nutrients"].get(nutrient, 0.0) * factor
+    totals = _calculate_totals(items)
 
     connection.send_result(msg["id"], {
         "items": items,
