@@ -84,6 +84,7 @@ export interface AnalyzePhotoResponse {
 }
 
 export interface MealIngredient {
+  product_id?: string;
   name: string;
   grams: number;
   nutrients: NutrientMap;
@@ -98,6 +99,8 @@ export interface BaseProduct {
   serving_grams: number;
   portions?: Portion[];
   nutrients: NutrientMap;
+  barcode?: string;
+  aliases?: string[];
   favorite?: boolean;
 }
 
@@ -110,6 +113,7 @@ export interface Recipe {
   total_grams: number;
   nutrients: NutrientMap;
   preferred_portion?: number;
+  aliases?: string[];
   favorite?: boolean;
 }
 

@@ -237,6 +237,8 @@ export const panelStyles = css`
     color: var(--primary-text-color); transition: all 0.2s;
   }
   .filter-chip.active { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
+  .alias-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .alias-name { flex: 1; font-size: 13px; color: var(--secondary-text-color); }
   .meal-ingredients-section { margin-bottom: 16px; }
 
   /* Component recipe (weight/edit dialogs) */

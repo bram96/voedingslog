@@ -267,6 +267,66 @@ class TestAddAlias:
         assert added is False
 
 
+class TestRecipeProductRef:
+    @pytest.mark.asyncio
+    async def test_recipe_resolves_product_id_nutrients(self):
+        """When saving a recipe with product_id ingredients, nutrients come from the referenced product."""
+        coord = _make_coordinator()
+        base = await coord.save_product({
+            "type": "base", "name": "Rice", "nutrients": {"energy-kcal_100g": 130},
+        })
+        recipe = await coord.save_product({
+            "type": "recipe", "recipe_type": "fixed", "name": "Rice bowl",
+            "ingredients": [{"product_id": base["id"], "name": "Rice", "grams": 200, "nutrients": {}}],
+        })
+        # Nutrients should be resolved from the base product, not the empty inline nutrients
+        assert recipe["ingredients"][0]["nutrients"]["energy-kcal_100g"] == 130
+        assert recipe["nutrients"]["energy-kcal_100g"] == 130.0
+
+    @pytest.mark.asyncio
+    async def test_base_product_update_refreshes_recipes(self):
+        """Updating a base product refreshes all recipes that reference it."""
+        coord = _make_coordinator()
+        base = await coord.save_product({
+            "type": "base", "name": "Chicken", "nutrients": {"energy-kcal_100g": 200},
+        })
+        await coord.save_product({
+            "type": "recipe", "recipe_type": "fixed", "name": "Chicken dish",
+            "ingredients": [{"product_id": base["id"], "name": "Chicken", "grams": 100, "nutrients": {"energy-kcal_100g": 200}}],
+        })
+        # Update the base product's calories
+        await coord.save_product({
+            "id": base["id"], "type": "base", "name": "Chicken", "nutrients": {"energy-kcal_100g": 250},
+        })
+        # Recipe should now reflect the updated nutrients
+        recipe = next(p for p in coord._products if p["type"] == "recipe")
+        assert recipe["ingredients"][0]["nutrients"]["energy-kcal_100g"] == 250
+        assert recipe["nutrients"]["energy-kcal_100g"] == 250.0
+
+    @pytest.mark.asyncio
+    async def test_cleanup_keeps_recipe_referenced_products(self):
+        """Cleanup should not remove products referenced by recipe ingredients."""
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {}}  # no logs at all
+        coord.hass.data["voedingslog"] = {"entry1": coord}
+        base = await coord.save_product({
+            "type": "base", "name": "Unreferenced", "nutrients": {},
+        })
+        referenced = await coord.save_product({
+            "type": "base", "name": "Used in recipe", "nutrients": {},
+        })
+        await coord.save_product({
+            "type": "recipe", "name": "My recipe",
+            "ingredients": [{"product_id": referenced["id"], "name": "Used in recipe", "grams": 100, "nutrients": {}}],
+        })
+        removed = await coord.cleanup_unused_products()
+        assert removed == 1  # only "Unreferenced" removed
+        names = [p["name"] for p in coord._products]
+        assert "Used in recipe" in names
+        assert "My recipe" in names
+        assert "Unreferenced" not in names
+
+
 class TestBarcodeLocalLookup:
     def test_lookup_finds_local(self):
         coord = _make_coordinator()

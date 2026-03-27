@@ -293,6 +293,8 @@ export class ProductsController {
             placeholder="Bijv. 35" min="1" step="1" inputmode="numeric" />
         </div>
 
+        ${this._renderAliasEditor(product)}
+
         <p class="manual-hint">Voedingswaarden per 100g:</p>
         <div class="manual-fields">
           ${fields.map(
@@ -350,6 +352,8 @@ export class ProductsController {
           <input type="number" id="recipe-portion-input" .value=${String(recipe.preferred_portion || "")}
             placeholder="Bijv. 400" min="1" step="1" inputmode="numeric" />
         </div>
+
+        ${this._renderAliasEditor(recipe)}
 
         <div class="meal-ingredients-section">
           <label class="section-label">Ingrediënten</label>
@@ -531,7 +535,12 @@ export class ProductsController {
   addIngredient(product: Product): void {
     if (!this.editingProduct || this.editingProduct.type !== "recipe") return;
     const grams = product.serving_grams || 100;
-    const ingredient: MealIngredient = { name: product.name, grams, nutrients: product.nutrients };
+    const ingredient: MealIngredient = {
+      name: product.name,
+      grams,
+      nutrients: product.nutrients,
+      ...(product.id ? { product_id: product.id } : {}),
+    };
     this.editingProduct = {
       ...this.editingProduct,
       ingredients: [...this.editingProduct.ingredients, ingredient],
@@ -595,6 +604,55 @@ export class ProductsController {
     this.host.requestUpdate();
   }
 
+  private _renderAliasEditor(product: UnifiedProduct): TemplateResult {
+    const aliases = product.aliases || [];
+    if (!product.id) {
+      // New product — no aliases yet
+      return html``;
+    }
+    return html`
+      <div class="form-field">
+        <label>Aliassen <span style="font-weight:normal;color:var(--secondary-text-color)">(alternatieve namen voor zoeken)</span></label>
+        ${aliases.map(
+          (alias, idx) => html`
+            <div class="alias-row">
+              <span class="alias-name">${alias}</span>
+              <button class="item-delete" @click=${() => this._removeAlias(idx)}>
+                <ha-icon icon="mdi:close"></ha-icon>
+              </button>
+            </div>
+          `
+        )}
+        <div class="input-row" style="margin-top:4px">
+          <input type="text" id="new-alias-input" placeholder="Nieuw alias..."
+            @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this._addAliasFromInput(); }} />
+          <button class="btn-secondary" style="padding:6px 12px" @click=${() => this._addAliasFromInput()}>
+            <ha-icon icon="mdi:plus"></ha-icon>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private _addAliasFromInput(): void {
+    const input = this.host.shadowRoot?.getElementById("new-alias-input") as HTMLInputElement | null;
+    const alias = input?.value?.trim();
+    if (!alias || !this.editingProduct) return;
+    const current = this.editingProduct.aliases || [];
+    if (current.some((a) => a.toLowerCase() === alias.toLowerCase())) return;
+    this.editingProduct = { ...this.editingProduct, aliases: [...current, alias] };
+    if (input) input.value = "";
+    this.host.requestUpdate();
+  }
+
+  private _removeAlias(index: number): void {
+    if (!this.editingProduct) return;
+    const current = [...(this.editingProduct.aliases || [])];
+    current.splice(index, 1);
+    this.editingProduct = { ...this.editingProduct, aliases: current };
+    this.host.requestUpdate();
+  }
+
   private _openPhotoForBase(): void {
     this.host._setDialogMode("photo");
   }
@@ -625,6 +683,7 @@ export class ProductsController {
           name,
           serving_grams: servingGrams,
           nutrients,
+          aliases: this.editingProduct.aliases || [],
         },
       });
       await this.open(this.mode);
@@ -659,6 +718,7 @@ export class ProductsController {
           name,
           ingredients: this.editingProduct.ingredients,
           preferred_portion: preferredPortion,
+          aliases: this.editingProduct.aliases || [],
         },
       });
       await this.open(this.mode);

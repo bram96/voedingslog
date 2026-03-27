@@ -331,6 +331,44 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
             return [p for p in self._products if p.get("type") == product_type]
         return self._products
 
+    def _get_product_by_id(self, product_id: str) -> dict | None:
+        """Find a product by ID."""
+        return next((p for p in self._products if p.get("id") == product_id), None)
+
+    def _resolve_ingredient_nutrients(self, ingredients: list[dict]) -> list[dict]:
+        """Resolve ingredient nutrients from product store via product_id."""
+        resolved = []
+        for ing in ingredients:
+            pid = ing.get("product_id")
+            if pid:
+                source = self._get_product_by_id(pid)
+                if source:
+                    resolved.append({
+                        "product_id": pid,
+                        "name": source.get("name", ing.get("name", "")),
+                        "grams": ing.get("grams", 0),
+                        "nutrients": source.get("nutrients", {}),
+                    })
+                    continue
+            # No product_id or product not found — keep inline data
+            resolved.append(ing)
+        return resolved
+
+    def _refresh_recipes_for_product(self, product_id: str) -> bool:
+        """Refresh nutrients of all recipes that reference a product. Returns True if any updated."""
+        updated = False
+        for p in self._products:
+            if p.get("type") != "recipe":
+                continue
+            refs = [i for i in p.get("ingredients", []) if i.get("product_id") == product_id]
+            if not refs:
+                continue
+            p["ingredients"] = self._resolve_ingredient_nutrients(p["ingredients"])
+            p["nutrients"] = _compute_nutrients_from_components(p["ingredients"])
+            p["total_grams"] = sum(i.get("grams", 0) for i in p["ingredients"])
+            updated = True
+        return updated
+
     async def save_product(self, data: dict) -> dict:
         """Create or update a product (base or recipe)."""
         product_id = data.get("id") or str(uuid.uuid4())[:8]
@@ -342,7 +380,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         barcode = data.get("barcode", existing.get("barcode") if existing else None)
 
         if product_type == "recipe":
-            ingredients = data.get("ingredients", [])
+            ingredients = self._resolve_ingredient_nutrients(data.get("ingredients", []))
             total_grams = sum(i.get("grams", 0) for i in ingredients)
             nutrients = _compute_nutrients_from_components(ingredients)
             saved = {
@@ -377,6 +415,10 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         else:
             self._products.append(saved)
 
+        # If a base product changed, refresh all recipes referencing it
+        if product_type == "base":
+            self._refresh_recipes_for_product(product_id)
+
         await self._async_save_products()
         _LOGGER.info("Saved product: %s (type=%s)", saved["name"], saved["type"])
         return saved
@@ -401,7 +443,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         return False
 
     async def cleanup_unused_products(self) -> int:
-        """Remove base products not referenced in any log. Returns number removed."""
+        """Remove base products not referenced in any log or recipe. Returns number removed."""
         # Collect all product names from logs across ALL coordinators
         logged_names: set[str] = set()
         entries = self.hass.data.get(DOMAIN, {})
@@ -413,13 +455,23 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                     for item in day_items:
                         logged_names.add(item.get("name", ""))
 
-        # Keep: recipes (always), favorites, and products found in logs
+        # Collect product IDs referenced by recipe ingredients
+        recipe_refs: set[str] = set()
+        for p in self._products:
+            if p.get("type") == "recipe":
+                for ing in p.get("ingredients", []):
+                    pid = ing.get("product_id")
+                    if pid:
+                        recipe_refs.add(pid)
+
+        # Keep: recipes, favorites, products in logs, products referenced by recipes
         before = len(self._products)
         self._products = [
             p for p in self._products
             if p.get("type") == "recipe"
             or p.get("favorite")
             or p.get("name", "") in logged_names
+            or p.get("id") in recipe_refs
         ]
         removed = before - len(self._products)
         if removed > 0:
