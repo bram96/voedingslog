@@ -259,6 +259,12 @@ export const panelStyles = css`
   .period-toggle button { flex: 1; padding: 8px; border: none; background: var(--card-background-color); cursor: pointer; font-size: 14px; color: var(--primary-text-color); transition: background 0.2s; }
   .period-toggle button.active { background: var(--primary-color); color: var(--text-primary-color, #fff); }
 
+  /* Period navigation */
+  .period-nav { display: flex; align-items: center; gap: 4px; margin-bottom: 16px; }
+  .period-nav .date-nav-btn { background: var(--secondary-background-color); border: none; color: var(--primary-text-color); padding: 6px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; }
+  .period-nav .date-nav-btn ha-icon { --mdc-icon-size: 20px; }
+  .period-nav-label { flex: 1; text-align: center; font-size: 15px; font-weight: 500; }
+
   /* Period charts */
   .period-chart { width: 100%; height: auto; display: block; }
   .period-chart-title { font-size: 14px; font-weight: 500; margin: 12px 0 4px; }

@@ -15,6 +15,7 @@ export interface ExportControllerHost {
   _items: LogItem[];
   requestUpdate(): void;
   _closeDialog(): void;
+  _loadLog(): Promise<void>;
   _getCaloriesGoal(): number;
   _getMacroGoals(): { carbs: number; protein: number; fat: number; fiber: number };
   _formatDateLabel(dateStr: string): string;
@@ -22,6 +23,9 @@ export interface ExportControllerHost {
 
 type Slice = { pct: number; color: string; label: string; grams: number; goal: number };
 type PeriodMode = "day" | "week" | "month";
+
+/** 1 = Monday (ISO/European default). 0 = Sunday. */
+const WEEK_START_DAY = 1;
 
 interface GoalNutrient {
   key: string;
@@ -37,6 +41,8 @@ export class ExportController {
   periodMode: PeriodMode = "day";
   periodData: PeriodDay[] | null = null;
   periodLoading = false;
+  /** Anchor date for the current period (start of week/month, or the selected day). */
+  private _periodAnchor: string = "";
 
   constructor(host: ExportControllerHost) {
     this.host = host;
@@ -47,6 +53,7 @@ export class ExportController {
     this.periodMode = "day";
     this.periodData = null;
     this.periodLoading = false;
+    this._periodAnchor = "";
   }
 
   private _getGoalNutrients(): GoalNutrient[] {
@@ -66,11 +73,12 @@ export class ExportController {
 
   renderDayDetailDialog(): TemplateResult {
     const h = this.host;
+    if (!this._periodAnchor) {
+      this._periodAnchor = h._selectedDate;
+    }
     return html`
       <div class="dialog-header">
-        <h2>${this.periodMode === "day"
-          ? `Dagdetails — ${h._formatDateLabel(h._selectedDate)}`
-          : this.periodMode === "week" ? "Weekoverzicht" : "Maandoverzicht"}</h2>
+        <h2>${this._periodTitle()}</h2>
         <button class="close-btn" @click=${() => h._closeDialog()}>
           <ha-icon icon="mdi:close"></ha-icon>
         </button>
@@ -87,6 +95,16 @@ export class ExportController {
           )}
         </div>
 
+        <div class="period-nav">
+          <button class="date-nav-btn" @click=${() => this._navigate(-1)}>
+            <ha-icon icon="mdi:chevron-left"></ha-icon>
+          </button>
+          <span class="period-nav-label">${this._periodLabel()}</span>
+          <button class="date-nav-btn" @click=${() => this._navigate(1)}>
+            <ha-icon icon="mdi:chevron-right"></ha-icon>
+          </button>
+        </div>
+
         ${this.periodMode === "day" ? this._renderDayView() : this._renderPeriodView()}
       </div>
     `;
@@ -95,25 +113,100 @@ export class ExportController {
   async setPeriodMode(mode: PeriodMode): Promise<void> {
     this.periodMode = mode;
     this.exportImageUrl = null;
+    this._snapAnchor();
     if (mode !== "day") {
+      await this._loadPeriodData();
+    } else {
+      // Sync panel's selected date with anchor
+      this.host._selectedDate = this._periodAnchor;
+      await this.host._loadLog();
+    }
+    this.host.requestUpdate();
+  }
+
+  private async _navigate(delta: number): Promise<void> {
+    this.exportImageUrl = null;
+    const anchor = new Date(this._periodAnchor + "T12:00:00");
+    if (this.periodMode === "day") {
+      anchor.setDate(anchor.getDate() + delta);
+      this._periodAnchor = _toDateStr(anchor);
+      this.host._selectedDate = this._periodAnchor;
+      await this.host._loadLog();
+    } else if (this.periodMode === "week") {
+      anchor.setDate(anchor.getDate() + delta * 7);
+      this._periodAnchor = _toDateStr(anchor);
+      await this._loadPeriodData();
+    } else {
+      anchor.setMonth(anchor.getMonth() + delta);
+      this._periodAnchor = _toDateStr(anchor);
       await this._loadPeriodData();
     }
     this.host.requestUpdate();
   }
 
+  /** Snap the anchor to the start of the current period based on _selectedDate. */
+  private _snapAnchor(): void {
+    const ref = new Date(this.host._selectedDate + "T12:00:00");
+    if (this.periodMode === "day") {
+      this._periodAnchor = this.host._selectedDate;
+    } else if (this.periodMode === "week") {
+      // Find previous WEEK_START_DAY
+      const day = ref.getDay();
+      const diff = (day - WEEK_START_DAY + 7) % 7;
+      ref.setDate(ref.getDate() - diff);
+      this._periodAnchor = _toDateStr(ref);
+    } else {
+      // First of month
+      ref.setDate(1);
+      this._periodAnchor = _toDateStr(ref);
+    }
+  }
+
+  /** Compute start/end dates for the current period. */
+  private _periodRange(): { start: string; end: string } {
+    const anchor = new Date(this._periodAnchor + "T12:00:00");
+    if (this.periodMode === "week") {
+      const end = new Date(anchor);
+      end.setDate(end.getDate() + 6);
+      return { start: _toDateStr(anchor), end: _toDateStr(end) };
+    }
+    // Month: 1st to last day
+    const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    return { start: _toDateStr(anchor), end: _toDateStr(end) };
+  }
+
+  private _periodTitle(): string {
+    if (this.periodMode === "day") return "Dagdetails";
+    if (this.periodMode === "week") return "Weekoverzicht";
+    return "Maandoverzicht";
+  }
+
+  private _periodLabel(): string {
+    if (this.periodMode === "day") {
+      return this.host._formatDateLabel(this._periodAnchor || this.host._selectedDate);
+    }
+    if (this.periodMode === "week") {
+      const { start, end } = this._periodRange();
+      const s = new Date(start);
+      const e = new Date(end);
+      const fmt = (d: Date) => d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+      return `${fmt(s)} – ${fmt(e)}`;
+    }
+    // Month
+    const anchor = new Date(this._periodAnchor + "T12:00:00");
+    return anchor.toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
+  }
+
   private async _loadPeriodData(): Promise<void> {
     this.periodLoading = true;
     this.host.requestUpdate();
-    const days = this.periodMode === "week" ? 7 : 30;
-    const end = new Date(this.host._selectedDate);
-    const start = new Date(end);
-    start.setDate(start.getDate() - days + 1);
+    const { start, end } = this._periodRange();
     try {
       const res = await this.host.hass.callWS<GetPeriodResponse>({
         type: "voedingslog/get_period",
         person: this.host._selectedPerson,
-        start_date: start.toISOString().split("T")[0],
-        end_date: end.toISOString().split("T")[0],
+        start_date: start,
+        end_date: end,
       });
       this.periodData = res.days;
     } catch (e) {
@@ -635,6 +728,10 @@ export class ExportController {
 
 
 function _shortDay(dateStr: string): string {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + "T12:00:00");
   return ["zo", "ma", "di", "wo", "do", "vr", "za"][d.getDay()];
+}
+
+function _toDateStr(d: Date): string {
+  return d.toISOString().split("T")[0];
 }
