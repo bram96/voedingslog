@@ -37,11 +37,11 @@ Source in `frontend-src/src/`, built output in `frontend/voedingslog-panel.js`.
 
 | File | Purpose |
 |------|---------|
-| `controllers/ai-controller.ts` | Batch add — AI text parsing, handwriting OCR, product validation flow |
-| `controllers/search-controller.ts` | Product search, barcode lookup, photo label analysis, manual entry |
+| `controllers/products-controller.ts` | Product list (add mode + manage mode), base product/recipe editor, alias editor, online OFF fallback |
+| `controllers/search-controller.ts` | Search dialog (reusable with callbacks), barcode, photo label analysis, manual entry |
 | `controllers/entry-controller.ts` | Weight/portion selection, edit existing item, component recipe editing |
+| `controllers/ai-controller.ts` | Batch add — AI text parsing, handwriting OCR, product validation flow |
 | `controllers/export-controller.ts` | Day detail dialog, pie chart, PNG export, download/share |
-| `controllers/products-controller.ts` | Unified product management — base products + recipes (fixed & component) |
 
 **Shared utilities:**
 
@@ -96,7 +96,7 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 
 | File | What it tests |
 |------|---------------|
-| `tests/test_coordinator.py` | Nutrient computation, product CRUD, search, favorites, component editing |
+| `tests/test_coordinator.py` | Nutrient computation, product CRUD, search, favorites, aliases, barcode, component editing, recipe product refs, cleanup |
 | `tests/test_open_food_facts.py` | OFF product processing, serving parsing, portion building |
 | `frontend-src/src/helpers.test.ts` | Nutrient calculation, grouping, display constants |
 
@@ -108,29 +108,45 @@ The `.githooks/pre-commit` hook runs all tests before every commit. Activated vi
 
 - **One config entry per person**: Each person is a separate HA integration instance. `ws_get_config` gathers persons from all entries. WS commands route to the correct coordinator by person name.
 - **Unified product store**: Products and recipes live in one store (`voedingslog.products_v2`). Three product types: `base` (simple product), `recipe` with `recipe_type: "fixed"` (mixed, logged as portion), and `recipe` with `recipe_type: "component"` (individual items with editable grams per log).
+- **Recipe ingredients reference products**: Ingredients can have a `product_id` pointing to a base product. When a base product's nutrients change, all recipes referencing it are automatically refreshed.
+- **Product aliases**: Products have an `aliases` list for alternative search names. AI text parsing auto-stores recognized names as aliases. Search checks both name and aliases.
+- **Local barcode cache**: Products can have a `barcode` field. Barcode lookup checks local products first before hitting OFF API.
 - **Controller composition pattern**: Each dialog group lives in its own controller class with a typed host interface. Controllers render templates and handle actions via the host's state and methods. No mixins, no type casts.
+- **Callback-based search**: The search dialog routes ALL results (search, barcode, manual entry, photo AI) through `_onSelected`. When opened with a callback (e.g. recipe ingredient search), results go to the callback. When opened without, results go to the weight dialog for logging. This ensures consistent behavior across all sub-flows.
+- **Products controller dual mode**: The products controller supports `"add"` mode (click to log, with online OFF fallback and barcode/manual/batch buttons) and `"manage"` mode (click to edit, with create/delete/cleanup). Shared `_renderProductItem` reduces duplication.
 - **`async_setup()` + `async_setup_entry()`**: Panel/WS/static files registered globally in `async_setup`. Coordinator/sensors/services registered per config entry in `async_setup_entry`.
 - **WebSocket API over services**: Services are fire-and-forget. WS commands return data to the frontend (search results, config, etc).
 - **Html5Camera for barcode/photo**: Reusable `Html5Camera` class wraps html5-qrcode for both barcode scanning and photo viewfinder. Light DOM container with `requestAnimationFrame` position tracking.
 - **Content hash cache busting**: JS URL uses MD5 hash of file content (`?v=a3f1b2c4`) instead of version number.
-- **Local-first search**: Products are cached on first use. `ProductSearch` class checks cache first, "Zoek online" button for OFF API.
-- **Shared search dialog**: The search dialog supports callbacks — recipe ingredient search opens the same dialog and returns the selected product to the caller.
+- **Local-first search**: Products are cached on first use. Search checks local products (name + aliases) first, "Zoek online" button for OFF API.
 - **AI structured output**: AI uses `ai_task.generate_data` with the `structure` parameter for typed responses. Photo attachments use `media-source://` URIs via temp files in `/media`.
-- **AI text/handwriting → product lookup**: AI only identifies product names + estimated grams. Real nutrients come from local cache / OFF search, not AI guessing.
+- **AI text/handwriting → product lookup**: AI only identifies product names + estimated grams. Real nutrients come from local cache / OFF search, not AI guessing. Matched names are stored as aliases for future instant matching.
 
 ## Data Model
 
 ### Product types (unified store)
 ```python
 # Base product
-{"id": str, "type": "base", "name": str, "serving_grams": float, "nutrients": dict, "portions": list, "favorite": bool}
+{"id": str, "type": "base", "name": str, "serving_grams": float,
+ "nutrients": dict, "portions": list, "barcode": str|None,
+ "aliases": list[str], "favorite": bool}
 
 # Fixed recipe (log a portion of the total)
-{"id": str, "type": "recipe", "recipe_type": "fixed", "name": str, "ingredients": [...], "total_grams": float, "nutrients": dict, "preferred_portion": float|None, "favorite": bool}
+{"id": str, "type": "recipe", "recipe_type": "fixed", "name": str,
+ "ingredients": [...], "total_grams": float, "nutrients": dict,
+ "preferred_portion": float|None, "aliases": list[str], "favorite": bool}
 
 # Component recipe (individual items with editable grams)
-{"id": str, "type": "recipe", "recipe_type": "component", "name": str, "ingredients": [...], "total_grams": float, "nutrients": dict, "favorite": bool}
+{"id": str, "type": "recipe", "recipe_type": "component", "name": str,
+ "ingredients": [...], "total_grams": float, "nutrients": dict,
+ "aliases": list[str], "favorite": bool}
 ```
+
+### Recipe ingredient
+```python
+{"product_id": str|None, "name": str, "grams": float, "nutrients": dict}
+```
+When `product_id` is set, nutrients are resolved from the referenced product on save.
 
 ### Log item
 ```python
@@ -152,15 +168,17 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 |---------|---------|
 | `voedingslog/get_config` | Panel initialization data (persons from all entries, per-person goals) |
 | `voedingslog/get_log` | Day's log for a person |
-| `voedingslog/lookup_barcode` | Barcode lookup (no logging) |
-| `voedingslog/search_products` | Search local products or online (OFF) |
+| `voedingslog/lookup_barcode` | Barcode lookup — local first, then OFF (no logging) |
+| `voedingslog/search_products` | Search local products (name + aliases) or online (OFF) |
 | `voedingslog/log_product` | Log a product with full nutrient data (optional `components`) |
 | `voedingslog/edit_item` | Edit name, weight, category, nutrients, components of existing item |
 | `voedingslog/delete_item` | Delete item by index |
 | `voedingslog/reset_day` | Clear day's log |
 | `voedingslog/get_products` | List all products (optional `product_type` filter) |
-| `voedingslog/save_product` | Create/update product (base or recipe) |
+| `voedingslog/save_product` | Create/update product — resolves ingredient product_ids, refreshes referencing recipes |
 | `voedingslog/delete_product` | Delete product by ID |
+| `voedingslog/cleanup_products` | Remove base products not in any log or recipe (keeps favorites) |
+| `voedingslog/add_alias` | Add an alias to a product |
 | `voedingslog/get_favorites` | List favorite products |
 | `voedingslog/toggle_favorite` | Toggle favorite status (by `product_id`) |
 
@@ -169,8 +187,8 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 | Command | Purpose |
 |---------|---------|
 | `voedingslog/analyze_photo` | AI analysis of nutrition label photo (structured output) |
-| `voedingslog/parse_text` | AI text parsing → product lookup from cache/OFF |
-| `voedingslog/parse_handwriting` | AI handwriting OCR → product lookup from cache/OFF |
+| `voedingslog/parse_text` | AI text parsing → product lookup from cache/OFF, stores aliases |
+| `voedingslog/parse_handwriting` | AI handwriting OCR → product lookup from cache/OFF, stores aliases |
 
 ## Code Conventions
 
