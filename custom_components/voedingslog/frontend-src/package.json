@@ -14,7 +14,12 @@
     "lit": "^3.1.0"
   },
   "devDependencies": {
+    "@esm-bundle/chai": "4.3.4-fix.0",
+    "@lit-labs/testing": "^0.2.8",
+    "@open-wc/testing": "^4.0.0",
+    "@web/test-runner": "^0.20.2",
     "esbuild": "^0.21.0",
+    "jsdom": "^29.0.1",
     "typescript": "^5.4.0",
     "vitest": "^4.1.2"
   },
