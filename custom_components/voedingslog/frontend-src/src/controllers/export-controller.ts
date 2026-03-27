@@ -1,10 +1,13 @@
 /**
  * Export controller — day detail dialog, period charts, PNG export, download/share.
  */
-import { html, nothing, type TemplateResult } from "lit";
+import { html, type TemplateResult } from "lit";
 import type { HomeAssistant, LogItem, MealCategory, VoedingslogConfig, PeriodDay, GetPeriodResponse } from "../types.js";
-import { sumNutrients, itemKcal, NUTRIENTS_META, groupByCategory, CATEGORY_ICONS, DEFAULT_CATEGORY_LABELS } from "../helpers.js";
-import { svg } from "lit";
+import { sumNutrients, itemKcal, NUTRIENTS_META, groupByCategory, DEFAULT_CATEGORY_LABELS } from "../helpers.js";
+import { renderDayView, type Slice } from "../views/day-view.js";
+import { renderPeriodView, type GoalNutrient } from "../views/period-view.js";
+
+export type { Slice };
 
 export interface ExportControllerHost {
   hass: HomeAssistant;
@@ -21,19 +24,10 @@ export interface ExportControllerHost {
   _formatDateLabel(dateStr: string): string;
 }
 
-type Slice = { pct: number; color: string; label: string; grams: number; goal: number };
 type PeriodMode = "day" | "week" | "month";
 
 /** 1 = Monday (ISO/European default). 0 = Sunday. */
 const WEEK_START_DAY = 1;
-
-interface GoalNutrient {
-  key: string;
-  label: string;
-  unit: string;
-  goal: number;
-  color: string;
-}
 
 export class ExportController {
   host: ExportControllerHost;
@@ -86,6 +80,11 @@ export class ExportController {
     if (!this._periodAnchor) {
       this._periodAnchor = h._selectedDate;
     }
+
+    const dayContent = this.periodMode === "day"
+      ? this._buildDayView()
+      : this._buildPeriodView();
+
     return html`
       <div class="dialog-header">
         <h2>${this._periodTitle()}</h2>
@@ -115,10 +114,65 @@ export class ExportController {
           </button>
         </div>
 
-        ${this.periodMode === "day" ? this._renderDayView() : this._renderPeriodView()}
+        ${dayContent}
       </div>
     `;
   }
+
+  private _buildDayView(): TemplateResult {
+    const h = this.host;
+    const totals = sumNutrients(h._items);
+    const mg = h._getMacroGoals();
+    const protein = totals["proteins_100g"] || 0;
+    const carbs = totals["carbohydrates_100g"] || 0;
+    const fat = totals["fat_100g"] || 0;
+    const fiber = totals["fiber_100g"] || 0;
+    const macroTotal = protein + carbs + fat + fiber;
+
+    const pctProtein = macroTotal > 0 ? Math.round(protein / macroTotal * 100) : 0;
+    const pctCarbs = macroTotal > 0 ? Math.round(carbs / macroTotal * 100) : 0;
+    const pctFat = macroTotal > 0 ? Math.round(fat / macroTotal * 100) : 0;
+    const pctFiber = macroTotal > 0 ? 100 - pctProtein - pctCarbs - pctFat : 0;
+
+    const slices: Slice[] = [
+      { pct: pctCarbs, color: "var(--primary-color, #03a9f4)", label: "Koolhydraten", grams: carbs, goal: mg.carbs },
+      { pct: pctProtein, color: "#4caf50", label: "Eiwitten", grams: protein, goal: mg.protein },
+      { pct: pctFat, color: "#ff9800", label: "Vetten", grams: fat, goal: mg.fat },
+      { pct: pctFiber, color: "#8bc34a", label: "Vezels", grams: fiber, goal: mg.fiber },
+    ];
+
+    return renderDayView({
+      totals,
+      items: h._items,
+      config: h._config,
+      caloriesGoal: h._getCaloriesGoal(),
+      slices,
+      exportImageUrl: this.exportImageUrl,
+      hasAiEntity: !!h._config?.ai_task_entity,
+      reviewLoading: this._reviewLoading,
+      dailyReview: this._dailyReview,
+      onExport: (s) => this.exportImage(s),
+      onDownload: () => this.download(),
+      onShare: () => this.share(),
+      onLoadReview: () => this._loadDailyReview(),
+    });
+  }
+
+  private _buildPeriodView(): TemplateResult {
+    return renderPeriodView({
+      periodData: this.periodData,
+      goals: this._getGoalNutrients(),
+      periodLoading: this.periodLoading,
+      suggestionsLoading: this._suggestionsLoading,
+      suggestions: this._suggestions,
+      exportImageUrl: this.exportImageUrl,
+      onExportPeriodImage: () => this._exportPeriodImage(),
+      onDownload: () => this.download(),
+      onLoadSuggestions: () => this._loadSuggestions(),
+    });
+  }
+
+  // ── Navigation ──────────────────────────────────────────────
 
   async setPeriodMode(mode: PeriodMode): Promise<void> {
     this.periodMode = mode;
@@ -127,7 +181,6 @@ export class ExportController {
     if (mode !== "day") {
       await this._loadPeriodData();
     } else {
-      // Sync panel's selected date with anchor
       this.host._selectedDate = this._periodAnchor;
       await this.host._loadLog();
     }
@@ -160,13 +213,11 @@ export class ExportController {
     if (this.periodMode === "day") {
       this._periodAnchor = this.host._selectedDate;
     } else if (this.periodMode === "week") {
-      // Find previous WEEK_START_DAY
       const day = ref.getDay();
       const diff = (day - WEEK_START_DAY + 7) % 7;
       ref.setDate(ref.getDate() - diff);
       this._periodAnchor = _toDateStr(ref);
     } else {
-      // First of month
       ref.setDate(1);
       this._periodAnchor = _toDateStr(ref);
     }
@@ -180,7 +231,6 @@ export class ExportController {
       end.setDate(end.getDate() + 6);
       return { start: _toDateStr(anchor), end: _toDateStr(end) };
     }
-    // Month: 1st to last day
     const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
     return { start: _toDateStr(anchor), end: _toDateStr(end) };
   }
@@ -202,10 +252,11 @@ export class ExportController {
       const fmt = (d: Date) => d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
       return `${fmt(s)} – ${fmt(e)}`;
     }
-    // Month
     const anchor = new Date(this._periodAnchor + "T12:00:00");
     return anchor.toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
   }
+
+  // ── Data loading ────────────────────────────────────────────
 
   private async _loadPeriodData(): Promise<void> {
     this.periodLoading = true;
@@ -226,8 +277,6 @@ export class ExportController {
     this.periodLoading = false;
     this.host.requestUpdate();
   }
-
-  // ── Day view (existing pie chart) ─────────────────────────────
 
   private async _loadDailyReview(): Promise<void> {
     this._reviewLoading = true;
@@ -261,379 +310,6 @@ export class ExportController {
     }
     this._suggestionsLoading = false;
     this.host.requestUpdate();
-  }
-
-  private _renderSuggestions(): TemplateResult {
-    if (!this._suggestions) return html``;
-    const { gaps, ai_advice } = this._suggestions;
-
-    const parseBullets = (text: string): string[] =>
-      text.split("\n").map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter((l) => l.length > 0);
-
-    return html`
-      <div class="suggestions-section">
-        ${ai_advice?.from_database ? html`
-          <div class="suggestion-group">
-            <div class="suggestion-label">
-              <ha-icon icon="mdi:food-variant" style="--mdc-icon-size:14px;vertical-align:middle"></ha-icon>
-              Uit je producten
-            </div>
-            <ul class="suggestion-bullets">
-              ${parseBullets(ai_advice.from_database).map((b) => html`<li>${b}</li>`)}
-            </ul>
-          </div>
-        ` : nothing}
-        ${ai_advice?.other_suggestions ? html`
-          <div class="suggestion-group">
-            <div class="suggestion-label">
-              <ha-icon icon="mdi:lightbulb-outline" style="--mdc-icon-size:14px;vertical-align:middle"></ha-icon>
-              Anders
-            </div>
-            <ul class="suggestion-bullets">
-              ${parseBullets(ai_advice.other_suggestions).map((b) => html`<li>${b}</li>`)}
-            </ul>
-          </div>
-        ` : nothing}
-        ${!ai_advice ? html`
-          ${gaps.map((g: any) => g.suggestions?.length > 0 ? html`
-            <div class="suggestion-group">
-              <div class="suggestion-label">${g.nutrient_label} aanvullen:</div>
-              ${g.suggestions.slice(0, 3).map((s: any) => html`
-                <div class="detail-row">
-                  <span>${s.name}</span>
-                  <span style="color:#4caf50">${s.value_per_100g}/100g</span>
-                </div>
-              `)}
-            </div>
-          ` : nothing)}
-        ` : nothing}
-      </div>
-    `;
-  }
-
-  private _renderDayView(): TemplateResult {
-    const h = this.host;
-    const totals = sumNutrients(h._items);
-    const mg = h._getMacroGoals();
-    const goal = h._getCaloriesGoal();
-    const kcal = totals["energy-kcal_100g"] || 0;
-    const protein = totals["proteins_100g"] || 0;
-    const carbs = totals["carbohydrates_100g"] || 0;
-    const fat = totals["fat_100g"] || 0;
-    const fiber = totals["fiber_100g"] || 0;
-    const macroTotal = protein + carbs + fat + fiber;
-
-    const pctProtein = macroTotal > 0 ? Math.round(protein / macroTotal * 100) : 0;
-    const pctCarbs = macroTotal > 0 ? Math.round(carbs / macroTotal * 100) : 0;
-    const pctFat = macroTotal > 0 ? Math.round(fat / macroTotal * 100) : 0;
-    const pctFiber = macroTotal > 0 ? 100 - pctProtein - pctCarbs - pctFat : 0;
-
-    let gradientStops = "";
-    let angle = 0;
-    const slices: Slice[] = [
-      { pct: pctCarbs, color: "var(--primary-color, #03a9f4)", label: "Koolhydraten", grams: carbs, goal: mg.carbs },
-      { pct: pctProtein, color: "#4caf50", label: "Eiwitten", grams: protein, goal: mg.protein },
-      { pct: pctFat, color: "#ff9800", label: "Vetten", grams: fat, goal: mg.fat },
-      { pct: pctFiber, color: "#8bc34a", label: "Vezels", grams: fiber, goal: mg.fiber },
-    ];
-    for (const s of slices) {
-      const end = angle + s.pct;
-      gradientStops += `${s.color} ${angle}% ${end}%, `;
-      angle = end;
-    }
-    gradientStops = gradientStops.replace(/, $/, "");
-
-    return html`
-      <div class="pie-section">
-        <div class="pie-chart" style="background: conic-gradient(${gradientStops || "#eee 0% 100%"})">
-          <div class="pie-center">
-            <span class="pie-kcal">${Math.round(kcal)}</span>
-            <span class="pie-unit">/ ${goal} kcal</span>
-          </div>
-        </div>
-        <div class="pie-legend">
-          ${slices.map((s) => {
-            const goalPct = s.goal > 0 ? Math.min(100, Math.round(s.grams / s.goal * 100)) : -1;
-            return html`
-              <div class="legend-item">
-                <span class="legend-dot" style="background:${s.color}"></span>
-                <div class="legend-info">
-                  <div class="legend-top">
-                    <span class="legend-label">${s.label}</span>
-                    <span class="legend-value">
-                      ${s.grams.toFixed(1)}g${s.goal > 0 ? html` / ${s.goal}g` : nothing} (${s.pct}%)
-                    </span>
-                  </div>
-                  ${goalPct >= 0 ? html`
-                    <div class="macro-bar">
-                      <div class="macro-bar-fill" style="width:${goalPct}%; background:${s.color}"></div>
-                    </div>
-                  ` : nothing}
-                </div>
-              </div>
-            `;
-          })}
-        </div>
-      </div>
-
-      <div class="detail-table">
-        <div class="detail-table-header">Alle voedingswaarden</div>
-        ${Object.entries(h._config?.nutrients || {}).map(([key, meta]) => {
-          const raw = totals[key] || 0;
-          const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
-          const value = raw * factor;
-          return html`
-            <div class="detail-row">
-              <span>${meta.label}</span>
-              <span>${value.toFixed(1)} ${meta.unit}</span>
-            </div>
-          `;
-        })}
-      </div>
-
-      ${h._config?.ai_task_entity ? html`
-        <div style="margin-top:12px">
-          ${this._reviewLoading
-            ? html`<div class="period-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Analyse laden...</div>`
-            : this._dailyReview
-              ? html`
-                <div class="ai-advice">
-                  <ha-icon icon="mdi:robot-outline" style="--mdc-icon-size:16px;color:var(--primary-color);flex-shrink:0"></ha-icon>
-                  <div>
-                    <ul class="suggestion-bullets" style="margin:0;padding-left:16px">
-                      ${this._dailyReview.split("\n").map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter((l) => l).map((l) => html`<li>${l}</li>`)}
-                    </ul>
-                  </div>
-                </div>
-              `
-              : html`
-                <button class="btn-secondary btn-confirm" @click=${() => this._loadDailyReview()}>
-                  <ha-icon icon="mdi:robot-outline"></ha-icon>
-                  Daganalyse
-                </button>
-              `}
-        </div>
-      ` : nothing}
-
-      <div style="margin-top:12px">
-        <div class="detail-table-header">Gelogde items (${h._items.length})</div>
-        ${this._renderGroupedItems(h._items, h._config?.category_labels || DEFAULT_CATEGORY_LABELS)}
-      </div>
-
-      ${this.exportImageUrl
-        ? html`
-          <div class="export-preview">
-            <img src=${this.exportImageUrl} alt="Voedingslog export"
-              style="width:100%;border-radius:8px;border:1px solid var(--divider-color);margin-top:8px;" />
-            <div class="export-actions">
-              <button class="btn-primary btn-confirm" @click=${() => this.download()}>
-                <ha-icon icon="mdi:download"></ha-icon>
-                Download
-              </button>
-              ${(navigator as any).share ? html`
-                <button class="btn-secondary btn-confirm" @click=${() => this.share()}>
-                  <ha-icon icon="mdi:share-variant"></ha-icon>
-                  Delen
-                </button>
-              ` : nothing}
-            </div>
-          </div>
-        `
-        : html`
-          <button class="btn-secondary btn-confirm" @click=${() => this.exportImage(slices)}>
-            <ha-icon icon="mdi:download"></ha-icon>
-            Exporteer als afbeelding
-          </button>
-        `}
-    `;
-  }
-
-  // ── Period view (line charts) ─────────────────────────────────
-
-  private _renderGroupedItems(items: LogItem[], labels: Record<MealCategory, string>): TemplateResult {
-    const groups = groupByCategory(items);
-    const categories: MealCategory[] = ["breakfast", "lunch", "dinner", "snack"];
-    return html`
-      ${categories.map((cat) => {
-        const catItems = groups[cat];
-        if (catItems.length === 0) return nothing;
-        return html`
-          <div class="detail-category">
-            <div class="detail-category-header">
-              <ha-icon icon=${CATEGORY_ICONS[cat]} style="--mdc-icon-size:16px"></ha-icon>
-              <span>${labels[cat]}</span>
-            </div>
-            ${catItems.map((item) => {
-              const kcalVal = itemKcal(item);
-              return html`
-                <div class="detail-row">
-                  <span>${item.name}</span>
-                  <span>${item.grams}g · ${Math.round(kcalVal)} kcal</span>
-                </div>
-              `;
-            })}
-          </div>
-        `;
-      })}
-    `;
-  }
-
-  private _renderPeriodView(): TemplateResult {
-    if (this.periodLoading) {
-      return html`<div class="period-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Laden...</div>`;
-    }
-    if (!this.periodData || this.periodData.length === 0) {
-      return html`<p class="empty-hint">Geen data voor deze periode.</p>`;
-    }
-
-    const goals = this._getGoalNutrients();
-    const days = this.periodData;
-
-    return html`
-      ${goals.map((g) => this._renderChart(g, days))}
-
-      <div class="detail-table" style="margin-top:8px">
-        <div class="detail-table-header">Gemiddeld per dag${(() => {
-          const today = new Date().toISOString().split("T")[0];
-          const completed = days.filter((d) => d.item_count > 0 && d.date !== today).length;
-          return completed < days.length ? ` (${completed} afgeronde dagen)` : "";
-        })()}</div>
-        ${goals.map((g) => {
-          const today = new Date().toISOString().split("T")[0];
-          const loggedDays = days.filter((d) => d.item_count > 0 && d.date !== today);
-          const avg = loggedDays.length > 0 ? loggedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / loggedDays.length : 0;
-          const pct = g.goal > 0 ? Math.round(avg / g.goal * 100) : 0;
-          return html`
-            <div class="detail-row">
-              <span>${g.label} ${pct < 80 ? html`<span class="nutrient-gap-badge">laag</span>` : nothing}</span>
-              <span>${Math.round(avg)} / ${g.goal} ${g.unit} (${pct}%)</span>
-            </div>
-          `;
-        })}
-      </div>
-
-      ${(() => {
-        const todayStr = new Date().toISOString().split("T")[0];
-        const completedDays = days.filter((d) => d.item_count > 0 && d.date !== todayStr);
-        const gaps = goals.filter((g) => {
-          const avg = completedDays.length > 0 ? completedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / completedDays.length : 0;
-          return g.goal > 0 && avg / g.goal < 0.8;
-        });
-        return gaps.length > 0 ? html`
-          <div class="nutrient-gaps" style="margin-top:8px">
-            <div class="detail-table-header">
-              <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:16px;color:#ff9800;vertical-align:middle"></ha-icon>
-              Aandachtspunten
-            </div>
-            ${gaps.map((g) => {
-              const avg = completedDays.length > 0 ? completedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / completedDays.length : 0;
-              const deficit = Math.round(g.goal - avg);
-              return html`
-                <div class="detail-row">
-                  <span>${g.label}</span>
-                  <span style="color:#ff9800">${deficit} ${g.unit}/dag tekort</span>
-                </div>
-              `;
-            })}
-            ${this._suggestionsLoading
-              ? html`<div class="period-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Suggesties laden...</div>`
-              : this._suggestions
-                ? this._renderSuggestions()
-                : html`<button class="btn-secondary btn-confirm" style="margin-top:8px" @click=${() => this._loadSuggestions()}>
-                    <ha-icon icon="mdi:lightbulb-outline"></ha-icon>
-                    Wat kan ik eten?
-                  </button>`}
-          </div>
-        ` : nothing;
-      })()}
-
-      ${this.exportImageUrl
-        ? html`
-          <div class="export-preview">
-            <img src=${this.exportImageUrl} alt="Voedingslog export"
-              style="width:100%;border-radius:8px;border:1px solid var(--divider-color);margin-top:8px;" />
-            <div class="export-actions">
-              <button class="btn-primary btn-confirm" @click=${() => this.download()}>
-                <ha-icon icon="mdi:download"></ha-icon> Download
-              </button>
-            </div>
-          </div>
-        `
-        : html`
-          <button class="btn-secondary btn-confirm" @click=${() => this._exportPeriodImage()}>
-            <ha-icon icon="mdi:download"></ha-icon> Exporteer als afbeelding
-          </button>
-        `}
-    `;
-  }
-
-  private _renderChart(goal: GoalNutrient, days: PeriodDay[]): TemplateResult {
-    const W = 400;
-    const H = 140;
-    const padL = 45;
-    const padR = 10;
-    const padT = 10;
-    const padB = 30;
-    const chartW = W - padL - padR;
-    const chartH = H - padT - padB;
-
-    const values = days.map((d) => d.totals[goal.key] || 0);
-    const maxVal = Math.max(goal.goal * 1.3, ...values) || 1;
-    const barW = Math.max(4, Math.min(20, (chartW - days.length * 2) / days.length));
-    const isMonth = days.length > 14;
-
-    const goalY = padT + chartH - (goal.goal / maxVal) * chartH;
-
-    return html`
-      <div class="period-chart-title">${goal.label} (${goal.unit})</div>
-      <svg viewBox="0 0 ${W} ${H}" class="period-chart">
-        <!-- Grid lines -->
-        ${[0, 0.25, 0.5, 0.75, 1].map((f) => {
-          const y = padT + chartH - f * chartH;
-          const val = Math.round(f * maxVal);
-          return svg`
-            <line x1=${padL} y1=${y} x2=${W - padR} y2=${y} stroke="var(--divider-color, #eee)" stroke-width="0.5" />
-            <text x=${padL - 4} y=${y + 3} text-anchor="end" fill="var(--secondary-text-color, #999)" font-size="9">${val}</text>
-          `;
-        })}
-
-        <!-- Goal line -->
-        <line x1=${padL} y1=${goalY} x2=${W - padR} y2=${goalY}
-          stroke=${goal.color} stroke-width="1" stroke-dasharray="4 3" opacity="0.6" />
-        <text x=${W - padR} y=${goalY - 3} text-anchor="end" fill=${goal.color} font-size="8" opacity="0.8">doel ${goal.goal}</text>
-
-        <!-- Bars -->
-        ${values.map((v, i) => {
-          const x = padL + (i / days.length) * chartW + (chartW / days.length - barW) / 2;
-          const barH = (v / maxVal) * chartH;
-          const y = padT + chartH - barH;
-          const over = v > goal.goal;
-          return svg`<rect x=${x} y=${y} width=${barW} height=${barH} rx="2"
-            fill=${over ? "#e53935" : goal.color} opacity=${over ? 0.8 : 0.7} />`;
-        })}
-
-        <!-- 3-day moving average -->
-        ${values.length >= 3 ? (() => {
-          const pts: string[] = [];
-          for (let i = 0; i < values.length; i++) {
-            const window = values.slice(Math.max(0, i - 1), Math.min(values.length, i + 2));
-            const avg = window.reduce((a, b) => a + b, 0) / window.length;
-            const x = padL + (i / days.length) * chartW + chartW / days.length / 2;
-            const y = padT + chartH - (avg / maxVal) * chartH;
-            pts.push(`${x},${y}`);
-          }
-          return svg`<polyline points=${pts.join(" ")} fill="none" stroke=${goal.color} stroke-width="1.5" opacity="0.9" />`;
-        })() : nothing}
-
-        <!-- X-axis labels -->
-        ${days.map((d, i) => {
-          if (isMonth && i % 5 !== 0 && i !== days.length - 1) return nothing;
-          const x = padL + (i / days.length) * chartW + chartW / days.length / 2;
-          const label = isMonth ? d.date.slice(8) : _shortDay(d.date);
-          return svg`<text x=${x} y=${H - 5} text-anchor="middle" fill="var(--secondary-text-color, #999)" font-size="8">${label}</text>`;
-        })}
-      </svg>
-    `;
   }
 
   // ── Export (day) ───────────────────────────────────────────────

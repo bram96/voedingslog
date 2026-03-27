@@ -2,24 +2,25 @@
  * Products controller — unified product/recipe management and add-to-log flow.
  *
  * Two modes:
- * - "add": product list for logging (click → weight dialog), online OFF fallback
- * - "manage": product list for editing (click → editor), create/delete/cleanup
+ * - "add": product list for logging (click -> weight dialog), online OFF fallback
+ * - "manage": product list for editing (click -> editor), create/delete/cleanup
  */
-import { html, nothing, type TemplateResult } from "lit";
-import { NUTRIENTS_META, EDITABLE_NUTRIENTS } from "../helpers.js";
+import { html, type TemplateResult } from "lit";
 import type {
   MealIngredient,
   Product,
   Portion,
   UnifiedProduct,
-  BaseProduct,
-  Recipe,
   VoedingslogConfig,
   GetProductsResponse,
   SaveProductResponse,
   SearchProductsResponse,
   DialogMode,
 } from "../types.js";
+import { readNutrientFields } from "../ui/nutrient-fields.js";
+import { renderProductsList } from "../views/products-list-view.js";
+import { renderBaseProductEditor } from "../views/base-product-editor-view.js";
+import { renderRecipeEditor } from "../views/recipe-editor-view.js";
 
 export interface ProductsControllerHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
@@ -84,373 +85,83 @@ export class ProductsController {
     return result;
   }
 
-  private _typeIcon(product: UnifiedProduct): string {
-    if (product.type === "base") return "mdi:food-variant";
-    if (product.type === "recipe" && product.recipe_type === "component") return "mdi:view-list";
-    return "mdi:pot-steam";
-  }
-
-  private _typeMeta(product: UnifiedProduct): string {
-    if (product.type === "base") {
-      const kcal = `${Math.round(product.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g`;
-      const tags: string[] = [];
-      if (product.completeness !== undefined && product.completeness < 60) tags.push("onvolledig");
-      if (this.mode === "manage" && product.last_used) {
-        const days = Math.floor((Date.now() - new Date(product.last_used).getTime()) / 86400000);
-        if (days > 90) tags.push(`${days}d niet gebruikt`);
-      }
-      return tags.length > 0 ? `${kcal} · ${tags.join(" · ")}` : kcal;
-    }
-    const recipe = product as Recipe;
-    const kcal = Math.round((recipe.nutrients?.["energy-kcal_100g"] || 0) * recipe.total_grams / 100);
-    const shared = (this.host._config?.persons?.length || 0) > 1 ? " · gedeeld" : "";
-    return `${recipe.ingredients.length} ingrediënten · ${Math.round(recipe.total_grams)}g · ${kcal} kcal${shared}`;
-  }
-
-  // ── Shared product item rendering ─────────────────────────────
-
-  private _renderProductItem(product: UnifiedProduct): TemplateResult {
-    const isAdd = this.mode === "add";
-    return html`
-      <div class="product-item">
-        <div class="product-info" @click=${() => isAdd ? this.logProduct(product) : this.openEditor(product)}>
-          <div class="product-name-row">
-            <ha-icon icon=${this._typeIcon(product)} style="--mdc-icon-size:18px;margin-right:6px;opacity:0.6"></ha-icon>
-            <span class="product-name">${product.name}</span>
-          </div>
-          <span class="product-meta">${this._typeMeta(product)}</span>
-        </div>
-        <button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this.toggleFavorite(product); }}>
-          <ha-icon icon=${product.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
-        </button>
-        ${!isAdd ? html`
-          <button class="item-edit" @click=${() => this.openEditor(product)}>
-            <ha-icon icon="mdi:pencil"></ha-icon>
-          </button>
-          <button class="item-delete" @click=${() => this.deleteProduct(product.id)}>
-            <ha-icon icon="mdi:close"></ha-icon>
-          </button>
-        ` : nothing}
-      </div>
-    `;
-  }
-
-  // ── Products dialog (both modes) ──────────────────────────────
+  // ── Render delegation ─────────────────────────────────────────
 
   renderProductsDialog(): TemplateResult {
     const h = this.host;
-    const isAdd = this.mode === "add";
-    const filtered = this._filteredProducts();
-    const q = this.searchQuery.trim();
-    const hasAI = !!h._config?.ai_task_entity;
-
-    // In add mode, show recent + favorites when search is empty
-    const showQuickAccess = isAdd && !q && !this.showFavoritesOnly;
-    const favoriteProducts = showQuickAccess ? this.products.filter((p) => p.favorite) : [];
-
-    return html`
-      <div class="dialog-header">
-        <h2>${isAdd ? "Toevoegen" : "Producten"}</h2>
-        <button class="close-btn" @click=${() => h._closeDialog()}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="input-row" style="margin-bottom:8px">
-          <input type="text" placeholder="Zoek product of recept..."
-            .value=${this.searchQuery}
-            @input=${(e: Event) => { this.searchQuery = (e.target as HTMLInputElement).value; this._onlineResults = []; h.requestUpdate(); }}
-            @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" && this.searchQuery.trim()) h.requestUpdate(); }}
-          />
-          <button class="btn-secondary ${this.showFavoritesOnly ? "active" : ""}" style="padding:8px 12px"
-            @click=${() => { this.showFavoritesOnly = !this.showFavoritesOnly; h.requestUpdate(); }}>
-            <ha-icon icon=${this.showFavoritesOnly ? "mdi:star" : "mdi:star-outline"}></ha-icon>
-          </button>
-        </div>
-
-        <div class="type-filter-chips">
-          ${(["all", "base", "recipe"] as TypeFilter[]).map(
-            (t) => html`
-              <button class="filter-chip ${this.typeFilter === t ? "active" : ""}"
-                @click=${() => { this.typeFilter = t; h.requestUpdate(); }}>
-                ${t === "all" ? "Alle" : t === "base" ? "Producten" : "Recepten"}
-              </button>
-            `
-          )}
-        </div>
-
-        ${/* Recent items in add mode when no search query */""}
-        ${showQuickAccess && this.recentItems.length > 0 ? html`
-          <div class="favorites-section">
-            <div class="section-label"><ha-icon icon="mdi:history" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon> Recent</div>
-            ${this.recentItems.map((p) => html`
-              <div class="product-item">
-                <div class="product-info" @click=${() => this.host._selectProduct(p, "products")}>
-                  <div class="product-name-row">
-                    <span class="product-name">${p.name}</span>
-                  </div>
-                  <span class="product-meta">${p.serving_grams}g · ${Math.round((p.nutrients?.["energy-kcal_100g"] || 0) * (p.serving_grams || 100) / 100)} kcal</span>
-                </div>
-              </div>
-            `)}
-          </div>
-        ` : nothing}
-
-        ${/* Favorites section in add mode when no search query */""}
-        ${favoriteProducts.length > 0 ? html`
-          <div class="favorites-section">
-            <div class="section-label"><ha-icon icon="mdi:star" style="--mdc-icon-size:16px;vertical-align:middle;color:#ff9800"></ha-icon> Favorieten</div>
-            ${favoriteProducts.map((p) => this._renderProductItem(p))}
-          </div>
-        ` : nothing}
-
-        ${/* Local results */""}
-        ${filtered.length === 0 && !showQuickAccess
-          ? html`<p class="empty-hint">${this.products.length === 0
-              ? isAdd ? "Nog geen producten opgeslagen." : "Nog geen producten. Voeg een product of recept toe."
-              : "Geen producten gevonden."}</p>`
-          : (!showQuickAccess ? filtered : filtered.filter((p) => !p.favorite)).map(
-              (product) => this._renderProductItem(product)
-            )}
-
-        ${/* Online search results (add mode) */""}
-        ${isAdd && this._onlineResults.length > 0 ? html`
-          <div class="section-label" style="margin-top:12px">
-            <ha-icon icon="mdi:cloud-search" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon> Online resultaten
-          </div>
-          ${this._onlineResults.map((p) => html`
-            <div class="product-item">
-              <div class="product-info" @click=${() => this._selectOnlineProduct(p)}>
-                <div class="product-name-row">
-                  <ha-icon icon="mdi:food-variant" style="--mdc-icon-size:18px;margin-right:6px;opacity:0.6"></ha-icon>
-                  <span class="product-name">${p.name}</span>
-                </div>
-                <span class="product-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
-              </div>
-            </div>
-          `)}
-        ` : nothing}
-
-        ${/* Online search button (add mode, when local search has query) */""}
-        ${isAdd && q && this._onlineResults.length === 0 ? html`
-          ${this._onlineSearching
-            ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Online zoeken...</div>`
-            : html`<button class="btn-secondary search-online-btn" @click=${() => this._searchOnline()}>
-                <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
-              </button>`}
-        ` : nothing}
-
-        ${/* Add mode: extra action buttons */""}
-        ${isAdd ? html`
-          <div class="ai-validate-actions" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
-            <button class="btn-secondary btn-confirm" @click=${() => h._openBarcodeScanner()}>
-              <ha-icon icon="mdi:barcode-scan"></ha-icon>
-              Barcode
-            </button>
-            <button class="btn-secondary btn-confirm" @click=${() => h._setDialogMode("manual")}>
-              <ha-icon icon="mdi:pencil-plus"></ha-icon>
-              Handmatig
-            </button>
-            ${hasAI ? html`
-              <button class="btn-secondary btn-confirm" @click=${() => h._openBatchAdd("log")}>
-                <ha-icon icon="mdi:text-box-outline"></ha-icon>
-                AI batch
-              </button>
-            ` : nothing}
-          </div>
-        ` : nothing}
-
-        ${/* Manage mode: create/cleanup buttons */""}
-        ${!isAdd ? html`
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn-primary btn-confirm" style="flex:1" @click=${() => this.openEditor(null, "base")}>
-              <ha-icon icon="mdi:plus"></ha-icon>
-              Nieuw product
-            </button>
-            <button class="btn-primary btn-confirm" style="flex:1" @click=${() => this.openEditor(null, "recipe")}>
-              <ha-icon icon="mdi:plus"></ha-icon>
-              Nieuw recept
-            </button>
-          </div>
-          <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => this.cleanupProducts()}>
-            <ha-icon icon="mdi:broom"></ha-icon>
-            Ongebruikte producten opruimen
-          </button>
-        ` : nothing}
-      </div>
-    `;
+    return renderProductsList({
+      products: this.products,
+      filteredProducts: this._filteredProducts(),
+      mode: this.mode,
+      searchQuery: this.searchQuery,
+      showFavoritesOnly: this.showFavoritesOnly,
+      typeFilter: this.typeFilter,
+      recentItems: this.recentItems,
+      onlineResults: this._onlineResults,
+      onlineSearching: this._onlineSearching,
+      hasAI: !!h._config?.ai_task_entity,
+      config: h._config,
+      callbacks: {
+        onProductClick: (p) => this.mode === "add" ? this.logProduct(p) : this.openEditor(p),
+        onFavorite: (p) => this.toggleFavorite(p),
+        onEdit: (p) => this.openEditor(p),
+        onDelete: (id) => this.deleteProduct(id),
+        onSearchInput: (value) => { this.searchQuery = value; this._onlineResults = []; h.requestUpdate(); },
+        onToggleFavorites: () => { this.showFavoritesOnly = !this.showFavoritesOnly; h.requestUpdate(); },
+        onSetTypeFilter: (t) => { this.typeFilter = t; h.requestUpdate(); },
+        onSearchOnline: () => this._searchOnline(),
+        onSelectOnlineProduct: (p) => this._selectOnlineProduct(p),
+        onSelectRecentProduct: (p) => h._selectProduct(p, "products"),
+        onOpenBarcode: () => h._openBarcodeScanner(),
+        onOpenManual: () => h._setDialogMode("manual"),
+        onOpenBatchAdd: () => h._openBatchAdd("log"),
+        onNewProduct: () => this.openEditor(null, "base"),
+        onNewRecipe: () => this.openEditor(null, "recipe"),
+        onCleanup: () => this.cleanupProducts(),
+        onClose: () => h._closeDialog(),
+      },
+    });
   }
 
   renderEditDialog(): TemplateResult {
     const product = this.editingProduct;
     if (!product) return html``;
+    const h = this.host;
+
     if (product.type === "recipe") {
-      return this._renderRecipeEditDialog(product);
+      return renderRecipeEditor({
+        recipe: product,
+        config: h._config,
+        editingIngredientIndex: this.editingIngredientIndex,
+        callbacks: {
+          onClose: () => { h._setDialogMode("products"); this.editingProduct = null; h.requestUpdate(); },
+          onSave: () => this._saveRecipe(),
+          onAddIngredient: () => this.openIngredientSearch(),
+          onRemoveIngredient: (idx) => this.removeIngredient(idx),
+          onToggleIngredientEdit: (idx) => this.toggleIngredientEdit(idx),
+          onUpdateIngredientGrams: (idx, g) => this.updateIngredientGrams(idx, g),
+          onUpdateIngredientName: (idx, n) => this.updateIngredientName(idx, n),
+          onUpdateIngredientNutrient: (idx, k, v) => this.updateIngredientNutrient(idx, k, v),
+          onOpenAiIngredients: () => this.openAiIngredients(),
+          onAddAlias: () => this._addAliasFromInput(),
+          onRemoveAlias: (idx) => this._removeAlias(idx),
+        },
+      });
     }
-    return this._renderBaseEditDialog(product);
-  }
 
-  private _renderBaseEditDialog(product: BaseProduct): TemplateResult {
-    const h = this.host;
-    const fields = EDITABLE_NUTRIENTS.map((n) => ({ id: `product-${n.key}`, label: n.label, key: n.key }));
-
-    return html`
-      <div class="dialog-header">
-        <h2>${product.id ? "Product bewerken" : "Nieuw product"}</h2>
-        <button class="close-btn" @click=${() => { h._setDialogMode("products"); this.editingProduct = null; h.requestUpdate(); }}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="form-field">
-          <label>Naam</label>
-          <input type="text" id="product-name-input" .value=${product.name || ""} placeholder="Bijv. Volkoren brood" />
-        </div>
-
-        <div class="form-field">
-          <label>Standaard portie (gram)</label>
-          <input type="number" id="product-serving-input" .value=${String(product.serving_grams || 100)}
-            placeholder="Bijv. 35" min="1" step="1" inputmode="numeric" />
-        </div>
-
-        ${this._renderAliasEditor(product)}
-
-        <p class="manual-hint">Voedingswaarden per 100g:</p>
-        <div class="manual-fields">
-          ${fields.map(
-            (f) => {
-              const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
-              const displayVal = (product.nutrients?.[f.key] ?? 0) * factor;
-              return html`
-                <div class="manual-field-row">
-                  <label>${f.label}</label>
-                  <input type="number" id=${f.id} min="0" step="0.1" inputmode="decimal"
-                    .value=${String(displayVal)} />
-                </div>
-              `;
-            }
-          )}
-        </div>
-
-        ${!product.id && !!h._config?.ai_task_entity ? html`
-          <button class="btn-secondary btn-confirm" @click=${() => this._openPhotoForBase()}>
-            <ha-icon icon="mdi:camera"></ha-icon>
-            Foto van etiket (AI)
-          </button>
-        ` : nothing}
-
-        ${product.id ? html`
-          <button class="btn-secondary btn-confirm" @click=${() => this._refreshFromOff(product.id)}>
-            <ha-icon icon="mdi:refresh"></ha-icon>
-            Ververs vanuit Open Food Facts
-          </button>
-          <button class="btn-secondary btn-confirm" @click=${() => this._mergeInto(product.id)}>
-            <ha-icon icon="mdi:merge"></ha-icon>
-            Duplicaat samenvoegen
-          </button>
-        ` : nothing}
-
-        <button class="btn-primary btn-confirm" @click=${() => this._saveBase(fields)}>
-          <ha-icon icon="mdi:check"></ha-icon>
-          Opslaan
-        </button>
-      </div>
-    `;
-  }
-
-  private _renderRecipeEditDialog(recipe: Recipe): TemplateResult {
-    const h = this.host;
-    const ingredients = recipe.ingredients || [];
-    return html`
-      <div class="dialog-header">
-        <h2>${recipe.id ? "Recept bewerken" : "Nieuw recept"}</h2>
-        <button class="close-btn" @click=${() => { h._setDialogMode("products"); this.editingProduct = null; h.requestUpdate(); }}>
-          <ha-icon icon="mdi:close"></ha-icon>
-        </button>
-      </div>
-      <div class="dialog-body">
-        <div class="form-field">
-          <label>Naam</label>
-          <input type="text" id="recipe-name-input" .value=${recipe.name || ""} placeholder="Bijv. Pasta bolognese" />
-        </div>
-
-        <div class="form-field">
-          <label>Type recept</label>
-          <select id="recipe-type-select">
-            <option value="fixed" ?selected=${recipe.recipe_type === "fixed"}>Vast recept (portie van geheel)</option>
-            <option value="component" ?selected=${recipe.recipe_type === "component"}>Samengesteld (losse onderdelen)</option>
-          </select>
-        </div>
-
-        <div class="form-field">
-          <label>Standaard portie (gram)</label>
-          <input type="number" id="recipe-portion-input" .value=${String(recipe.preferred_portion || "")}
-            placeholder="Bijv. 400" min="1" step="1" inputmode="numeric" />
-        </div>
-
-        ${this._renderAliasEditor(recipe)}
-
-        <div class="meal-ingredients-section">
-          <label class="section-label">Ingrediënten</label>
-          ${ingredients.map(
-            (ing, idx) => html`
-              <div class="ingredient-row">
-                <span class="ingredient-name" @click=${() => this.toggleIngredientEdit(idx)}
-                  style="cursor:pointer;flex:1">${ing.name}</span>
-                <input type="number" class="ingredient-grams-input" .value=${String(ing.grams)}
-                  min="1" step="1" inputmode="numeric"
-                  @change=${(e: Event) => this.updateIngredientGrams(idx, parseFloat((e.target as HTMLInputElement).value))} />
-                <span class="ingredient-unit">g</span>
-                <button class="item-edit" @click=${() => this.toggleIngredientEdit(idx)}>
-                  <ha-icon icon="mdi:pencil"></ha-icon>
-                </button>
-                <button class="item-delete" @click=${() => this.removeIngredient(idx)}>
-                  <ha-icon icon="mdi:close"></ha-icon>
-                </button>
-              </div>
-              ${this.editingIngredientIndex === idx ? html`
-                <div class="ingredient-nutrients">
-                  <div class="form-field form-field-inline">
-                    <label>Naam</label>
-                    <input type="text" .value=${ing.name}
-                      @change=${(e: Event) => this.updateIngredientName(idx, (e.target as HTMLInputElement).value)} />
-                  </div>
-                  ${Object.entries(h._config?.nutrients || {}).map(
-                    ([key, meta]) => {
-                      const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
-                      const displayVal = ((ing.nutrients?.[key] || 0) * factor).toFixed(2);
-                      return html`
-                      <div class="form-field form-field-inline">
-                        <label>${meta.label} (${meta.unit}/100g)</label>
-                        <input type="number" .value=${displayVal}
-                          min="0" step="0.01" inputmode="decimal"
-                          @change=${(e: Event) => this.updateIngredientNutrient(idx, key, parseFloat((e.target as HTMLInputElement).value) / factor)} />
-                      </div>
-                    `;}
-                  )}
-                </div>
-              ` : nothing}
-            `
-          )}
-
-          <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => this.openIngredientSearch()}>
-            <ha-icon icon="mdi:plus"></ha-icon> Ingrediënt zoeken
-          </button>
-        </div>
-
-        ${!!h._config?.ai_task_entity ? html`
-          <button class="btn-secondary btn-confirm" @click=${() => this.openAiIngredients()}>
-            <ha-icon icon="mdi:text-box-outline"></ha-icon>
-            AI ingrediënten invoer
-          </button>
-        ` : nothing}
-
-        <button class="btn-primary btn-confirm" @click=${() => this._saveRecipe()}>
-          <ha-icon icon="mdi:check"></ha-icon>
-          Opslaan
-        </button>
-      </div>
-    `;
+    return renderBaseProductEditor({
+      product,
+      config: h._config,
+      callbacks: {
+        onClose: () => { h._setDialogMode("products"); this.editingProduct = null; h.requestUpdate(); },
+        onSave: () => this._saveBase(),
+        onPhoto: () => this._openPhotoForBase(),
+        onRefresh: (id) => this._refreshFromOff(id),
+        onMerge: (id) => this._mergeInto(id),
+        onAddAlias: () => this._addAliasFromInput(),
+        onRemoveAlias: (idx) => this._removeAlias(idx),
+      },
+    });
   }
 
   // ── Actions ──────────────────────────────────────────────────
@@ -569,6 +280,8 @@ export class ProductsController {
     this.host._selectProduct(p, "products");
   }
 
+  // ── Ingredient management ─────────────────────────────────────
+
   openAiIngredients(): void {
     this.host._openBatchAdd("recipe");
   }
@@ -579,7 +292,6 @@ export class ProductsController {
       "product-edit",
     );
   }
-
 
   addIngredient(product: Product): void {
     if (!this.editingProduct || this.editingProduct.type !== "recipe") return;
@@ -644,6 +356,8 @@ export class ProductsController {
     this.host.requestUpdate();
   }
 
+  // ── Favorites ─────────────────────────────────────────────────
+
   toggleFavorite(product: UnifiedProduct): void {
     product.favorite = !product.favorite;
     this.host.hass.callWS({
@@ -653,35 +367,7 @@ export class ProductsController {
     this.host.requestUpdate();
   }
 
-  private _renderAliasEditor(product: UnifiedProduct): TemplateResult {
-    const aliases = product.aliases || [];
-    if (!product.id) {
-      // New product — no aliases yet
-      return html``;
-    }
-    return html`
-      <div class="form-field">
-        <label>Aliassen <span style="font-weight:normal;color:var(--secondary-text-color)">(alternatieve namen voor zoeken)</span></label>
-        ${aliases.map(
-          (alias, idx) => html`
-            <div class="alias-row">
-              <span class="alias-name">${alias}</span>
-              <button class="item-delete" @click=${() => this._removeAlias(idx)}>
-                <ha-icon icon="mdi:close"></ha-icon>
-              </button>
-            </div>
-          `
-        )}
-        <div class="input-row" style="margin-top:4px">
-          <input type="text" id="new-alias-input" placeholder="Nieuw alias..."
-            @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter") this._addAliasFromInput(); }} />
-          <button class="btn-secondary" style="padding:6px 12px" @click=${() => this._addAliasFromInput()}>
-            <ha-icon icon="mdi:plus"></ha-icon>
-          </button>
-        </div>
-      </div>
-    `;
-  }
+  // ── Alias management ──────────────────────────────────────────
 
   private _addAliasFromInput(): void {
     const input = this.host.shadowRoot?.getElementById("new-alias-input") as HTMLInputElement | null;
@@ -701,6 +387,8 @@ export class ProductsController {
     this.editingProduct = { ...this.editingProduct, aliases: current };
     this.host.requestUpdate();
   }
+
+  // ── CRUD actions ──────────────────────────────────────────────
 
   private _openPhotoForBase(): void {
     this.host._setDialogMode("photo");
@@ -731,7 +419,7 @@ export class ProductsController {
     }
   }
 
-  private async _saveBase(fields: { id: string; key: string }[]): Promise<void> {
+  private async _saveBase(): Promise<void> {
     const h = this.host;
     if (!this.editingProduct || this.editingProduct.type !== "base") return;
 
@@ -742,13 +430,7 @@ export class ProductsController {
     const servingInput = h.shadowRoot?.getElementById("product-serving-input") as HTMLInputElement | null;
     const servingGrams = parseFloat(servingInput?.value || "100") || 100;
 
-    const nutrients: Record<string, number> = {};
-    for (const f of fields) {
-      const input = h.shadowRoot?.getElementById(f.id) as HTMLInputElement | null;
-      const displayVal = parseFloat(input?.value || "0") || 0;
-      const factor = (NUTRIENTS_META as Record<string, number>)[f.key] || 1;
-      nutrients[f.key] = displayVal / factor;
-    }
+    const nutrients = readNutrientFields("product", h.shadowRoot);
 
     try {
       await h.hass.callWS<SaveProductResponse>({
@@ -776,7 +458,7 @@ export class ProductsController {
     const nameInput = h.shadowRoot?.getElementById("recipe-name-input") as HTMLInputElement | null;
     const name = nameInput?.value?.trim();
     if (!name) { alert("Vul een naam in."); return; }
-    if (this.editingProduct.ingredients.length === 0) { alert("Voeg minimaal één ingrediënt toe."); return; }
+    if (this.editingProduct.ingredients.length === 0) { alert("Voeg minimaal \u00e9\u00e9n ingredi\u00ebnt toe."); return; }
 
     const typeSelect = h.shadowRoot?.getElementById("recipe-type-select") as HTMLSelectElement | null;
     const recipeType = (typeSelect?.value as "fixed" | "component") || "fixed";
