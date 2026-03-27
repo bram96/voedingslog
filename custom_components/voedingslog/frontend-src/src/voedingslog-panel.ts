@@ -21,7 +21,7 @@ import {
 } from "./helpers.js";
 import { panelStyles } from "./styles.js";
 import { AiController } from "./controllers/ai-controller.js";
-import { MealsController } from "./controllers/meals-controller.js";
+import { ProductsController } from "./controllers/products-controller.js";
 import { SearchController } from "./controllers/search-controller.js";
 import { EntryController } from "./controllers/entry-controller.js";
 import { ExportController } from "./controllers/export-controller.js";
@@ -52,7 +52,7 @@ export class VoedingslogPanel extends LitElement {
   private _searchCtrl = new SearchController(this);
   private _entry = new EntryController(this);
   private _ai = new AiController(this);
-  private _meals = new MealsController(this);
+  private _products = new ProductsController(this);
   private _export = new ExportController(this);
 
   private _barcodeCamera = new Html5Camera(this, "vl-barcode-reader", "barcode-scanner-placeholder");
@@ -95,9 +95,9 @@ export class VoedingslogPanel extends LitElement {
       case "photo": this._setDialogMode("manual"); break;
       case "manual": this._setDialogMode("search"); break;
       case "search": this._searchCtrl.closeSearch(); break;
-      case "meal-edit": this._setDialogMode("meals"); break;
+      case "product-edit": this._setDialogMode("products"); break;
       case "batch-add":
-        if (this._ai.currentMode === "meal") this._setDialogMode("meal-edit");
+        if (this._ai.currentMode === "recipe") this._setDialogMode("product-edit");
         else this._closeDialog();
         break;
       default: this._closeDialog(); break;
@@ -276,9 +276,9 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon="mdi:plus"></ha-icon>
           <span>Toevoegen</span>
         </button>
-        <button class="action-btn" @click=${() => this._meals.loadMeals()}>
-          <ha-icon icon="mdi:pot-steam"></ha-icon>
-          <span>Recepten</span>
+        <button class="action-btn" @click=${() => this._products.loadProducts()}>
+          <ha-icon icon="mdi:food-variant"></ha-icon>
+          <span>Producten</span>
         </button>
       </div>
     `;
@@ -364,8 +364,8 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "photo" ? this._searchCtrl.renderPhotoDialog() : nothing}
           ${this._dialogMode === "weight" ? this._entry.renderWeightDialog() : nothing}
           ${this._dialogMode === "edit" ? this._entry.renderEditDialog() : nothing}
-          ${this._dialogMode === "meals" ? this._meals.renderMealsDialog() : nothing}
-          ${this._dialogMode === "meal-edit" ? this._meals.renderEditDialog() : nothing}
+          ${this._dialogMode === "products" ? this._products.renderProductsDialog() : nothing}
+          ${this._dialogMode === "product-edit" ? this._products.renderEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._searchCtrl.renderManualEntryDialog() : nothing}
           ${this._dialogMode === "day-detail" ? this._export.renderDayDetailDialog() : nothing}
           ${this._dialogMode === "batch-add" ? this._ai.renderBatchAddDialog(this._ai.currentMode) : nothing}
@@ -403,14 +403,10 @@ export class VoedingslogPanel extends LitElement {
 
 
 
-
   _openManualWithPrefill(product: Product): void {
     this._prefillProduct = product;
     this._setDialogMode("manual");
   }
-
-
-  // ── Meals dialogs ────────────────────────────────────────────────
 
 
   // ── Actions ──────────────────────────────────────────────────────
@@ -443,7 +439,7 @@ export class VoedingslogPanel extends LitElement {
 
 
 
-  _openBatchAdd(mode: "log" | "meal"): void {
+  _openBatchAdd(mode: "log" | "recipe"): void {
     this._ai.currentMode = mode;
     this._ai.batchMode = "text";
     this._setDialogMode("batch-add");
@@ -461,7 +457,6 @@ export class VoedingslogPanel extends LitElement {
     this._editingItem = item;
     this._setDialogMode("edit");
   }
-
 
 
 
@@ -490,8 +485,8 @@ export class VoedingslogPanel extends LitElement {
   }
 
 
-  _addMealIngredientFromAi(ingredient: import("./types.js").MealIngredient): void {
-    this._meals.addIngredientFromAi(ingredient);
+  _addRecipeIngredientFromAi(ingredient: import("./types.js").MealIngredient): void {
+    this._products.addIngredientFromAi(ingredient);
   }
 
   _selectProduct(product: Product): void {
@@ -517,7 +512,7 @@ export class VoedingslogPanel extends LitElement {
     this._scanFailed = false;
     this._prefillProduct = null;
     this._searchCtrl.reset();
-    this._meals.reset();
+    this._products.reset();
     this._export.reset();
     this._ai.reset();
   }
@@ -543,16 +538,6 @@ export class VoedingslogPanel extends LitElement {
       input.click();
     }
   }
-
-
-
-
-
-
-
-
-
-
 
   private async _deleteItem(index: number): Promise<void> {
     const items = this._items;

@@ -16,9 +16,13 @@ from .open_food_facts import lookup_by_barcode, search_by_name
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_KEY = f"{DOMAIN}.logs"
-STORAGE_KEY_MEALS = f"{DOMAIN}.meals"
-STORAGE_KEY_PRODUCTS = f"{DOMAIN}.products"
+STORAGE_KEY_PRODUCTS_V2 = f"{DOMAIN}.products_v2"
+# Old keys (used only for migration)
+_OLD_STORAGE_KEY_MEALS = f"{DOMAIN}.meals"
+_OLD_STORAGE_KEY_PRODUCTS = f"{DOMAIN}.products"
 STORAGE_VERSION = 1
+
+_MIGRATION_FLAG = f"{DOMAIN}_products_migrated"
 
 
 def _default_category() -> str:
@@ -31,6 +35,21 @@ def _default_category() -> str:
     if hour < 17:
         return "snack"
     return "dinner"
+
+
+def _compute_nutrients_from_components(components: list[dict]) -> dict[str, float]:
+    """Compute nutrients per 100g from a list of components with grams + nutrients."""
+    total_grams = sum(c.get("grams", 0) for c in components)
+    if total_grams <= 0:
+        return {k: 0.0 for k in NUTRIENTS}
+    nutrients: dict[str, float] = {}
+    for key in NUTRIENTS:
+        total_value = sum(
+            c.get("nutrients", {}).get(key, 0) * c.get("grams", 0) / 100
+            for c in components
+        )
+        nutrients[key] = total_value / total_grams * 100
+    return nutrients
 
 
 class VoedingslogCoordinator(DataUpdateCoordinator):
@@ -50,15 +69,12 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         # Logs are per-entry so each person has their own storage
         log_key = f"{STORAGE_KEY}.{entry_id}" if entry_id else STORAGE_KEY
         self._store = Store(hass, STORAGE_VERSION, log_key)
-        # Meals and products are shared across all entries
-        self._meals_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_MEALS)
-        self._products_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PRODUCTS)
-        self._meals: list[dict] = []
-        # Product cache: list of {name, serving_grams, nutrients, portions?}
-        self._product_cache: list[dict] = []
+        # Unified product store (shared across all entries)
+        self._products_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PRODUCTS_V2)
+        self._products: list[dict] = []
 
     async def async_load_from_store(self) -> None:
-        """Load persisted logs and meals from disk."""
+        """Load persisted logs and products from disk."""
         data = await self._store.async_load()
         if data and isinstance(data, dict):
             for person in self.persons:
@@ -77,15 +93,89 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 if any(self._logs[p] for p in self.persons):
                     await self._async_save()
 
-        meals_data = await self._meals_store.async_load()
-        if meals_data and isinstance(meals_data, list):
-            self._meals = meals_data
-            _LOGGER.info("Loaded %d custom meals", len(self._meals))
+        # Load unified products (or migrate from old stores)
+        await self._load_or_migrate_products()
 
+    async def _load_or_migrate_products(self) -> None:
+        """Load unified product store, or migrate from old meals + products stores."""
         products_data = await self._products_store.async_load()
         if products_data and isinstance(products_data, list):
-            self._product_cache = products_data
-            _LOGGER.info("Loaded %d cached products", len(self._product_cache))
+            self._products = products_data
+            _LOGGER.info("Loaded %d products", len(self._products))
+            return
+
+        # Check if another coordinator already migrated
+        if self.hass.data.get(_MIGRATION_FLAG):
+            # Re-load — the first coordinator saved it
+            products_data = await self._products_store.async_load()
+            if products_data and isinstance(products_data, list):
+                self._products = products_data
+            return
+
+        # Mark migration as in progress
+        self.hass.data[_MIGRATION_FLAG] = True
+
+        # Load old stores
+        old_products_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_PRODUCTS)
+        old_meals_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_MEALS)
+        old_products = await old_products_store.async_load() or []
+        old_meals = await old_meals_store.async_load() or []
+
+        if not old_products and not old_meals:
+            _LOGGER.info("No old products or meals to migrate")
+            return
+
+        # Collect all product names from logs across ALL coordinators
+        logged_names: set[str] = set()
+        entries = self.hass.data.get(DOMAIN, {})
+        for coord in entries.values():
+            if not isinstance(coord, VoedingslogCoordinator):
+                continue
+            for person_logs in coord._logs.values():
+                for day_items in person_logs.values():
+                    for item in day_items:
+                        logged_names.add(item.get("name", ""))
+
+        # Prune old products: keep if in logs OR favorite
+        migrated: list[dict] = []
+        if isinstance(old_products, list):
+            for p in old_products:
+                name = p.get("name", "")
+                if name in logged_names or p.get("favorite"):
+                    migrated.append({
+                        "id": str(uuid.uuid4())[:8],
+                        "type": "base",
+                        "name": name,
+                        "serving_grams": p.get("serving_grams", 100),
+                        "nutrients": p.get("nutrients", {}),
+                        "portions": p.get("portions", []),
+                        "favorite": p.get("favorite", False),
+                    })
+
+        # Convert old meals to recipes
+        if isinstance(old_meals, list):
+            for m in old_meals:
+                migrated.append({
+                    "id": m.get("id") or str(uuid.uuid4())[:8],
+                    "type": "recipe",
+                    "recipe_type": "fixed",
+                    "name": m.get("name", ""),
+                    "ingredients": m.get("ingredients", []),
+                    "total_grams": m.get("total_grams", 0),
+                    "nutrients": m.get("nutrients_per_100g", {}),
+                    "preferred_portion": m.get("preferred_portion"),
+                    "favorite": m.get("favorite", False),
+                })
+
+        self._products = migrated
+        await self._async_save_products()
+        pruned = len(old_products) - sum(1 for p in migrated if p["type"] == "base") if isinstance(old_products, list) else 0
+        _LOGGER.info(
+            "Migrated products: %d base (%d pruned), %d recipes",
+            sum(1 for p in migrated if p["type"] == "base"),
+            pruned,
+            sum(1 for p in migrated if p["type"] == "recipe"),
+        )
 
     async def _async_save(self) -> None:
         """Persist current logs to disk."""
@@ -146,10 +236,11 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         nutrients: dict[str, float],
         category: str | None = None,
         day: str | None = None,
+        components: list[dict] | None = None,
     ):
         """Log a product with manually provided values."""
         product = {"name": name, "serving_grams": grams, "nutrients": nutrients}
-        await self._add_item(person, product, grams, category, day)
+        await self._add_item(person, product, grams, category, day, components)
 
     async def edit_item(
         self,
@@ -160,19 +251,27 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         nutrients: dict | None = None,
         name: str | None = None,
         day: str | None = None,
+        components: list[dict] | None = None,
     ) -> bool:
-        """Edit an existing log item (grams, category, nutrients, name)."""
+        """Edit an existing log item (grams, category, nutrients, name, components)."""
         day = day or str(date.today())
         log = self._logs[person].get(day, [])
         if not (0 <= index < len(log)):
             return False
         item = log[index]
-        if grams is not None:
-            item["grams"] = grams
+        if components is not None:
+            # Recalculate from components
+            item["components"] = components
+            total_grams = sum(c.get("grams", 0) for c in components)
+            item["grams"] = total_grams
+            item["nutrients"] = _compute_nutrients_from_components(components)
+        else:
+            if grams is not None:
+                item["grams"] = grams
+            if nutrients is not None:
+                item["nutrients"] = nutrients
         if category and category in MEAL_CATEGORIES:
             item["category"] = category
-        if nutrients is not None:
-            item["nutrients"] = nutrients
         if name is not None:
             item["name"] = name
         _LOGGER.info("Edited: %s for %s (%.0fg, %s)", item["name"], person, item["grams"], item["category"])
@@ -186,9 +285,9 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         return await lookup_by_barcode(session, barcode)
 
     def search_products_local(self, query: str) -> list[dict]:
-        """Search the local product cache."""
+        """Search the unified product list by name."""
         q = query.lower()
-        return [p for p in self._product_cache if q in p.get("name", "").lower()][:10]
+        return [p for p in self._products if q in p.get("name", "").lower()][:10]
 
     async def search_products_online(self, query: str) -> list[dict]:
         """Search products via Open Food Facts API."""
@@ -197,29 +296,85 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
 
     def get_favorites(self) -> list[dict]:
         """Return favorite products."""
-        return [p for p in self._product_cache if p.get("favorite")]
+        return [p for p in self._products if p.get("favorite")]
 
-    def get_cached_products(self) -> list[dict]:
-        """Return all cached (logged) products."""
-        return self._product_cache
+    def get_products(self, product_type: str | None = None) -> list[dict]:
+        """Return all products, optionally filtered by type."""
+        if product_type:
+            return [p for p in self._products if p.get("type") == product_type]
+        return self._products
 
-    async def toggle_favorite(self, product_name: str) -> bool:
-        """Toggle favorite status for a cached product. Returns new state."""
-        for p in self._product_cache:
-            if p.get("name") == product_name:
+    async def save_product(self, data: dict) -> dict:
+        """Create or update a product (base or recipe)."""
+        product_id = data.get("id") or str(uuid.uuid4())[:8]
+        product_type = data.get("type", "base")
+
+        if product_type == "recipe":
+            ingredients = data.get("ingredients", [])
+            total_grams = sum(i.get("grams", 0) for i in ingredients)
+            nutrients = _compute_nutrients_from_components(ingredients)
+            saved = {
+                "id": product_id,
+                "type": "recipe",
+                "recipe_type": data.get("recipe_type", "fixed"),
+                "name": data.get("name", "Naamloos recept"),
+                "ingredients": ingredients,
+                "total_grams": total_grams,
+                "nutrients": nutrients,
+                "preferred_portion": data.get("preferred_portion"),
+                "favorite": data.get("favorite", False),
+            }
+        else:
+            saved = {
+                "id": product_id,
+                "type": "base",
+                "name": data.get("name", "Naamloos product"),
+                "serving_grams": data.get("serving_grams", 100),
+                "nutrients": data.get("nutrients", {}),
+                "portions": data.get("portions", []),
+                "favorite": data.get("favorite", False),
+            }
+
+        # Update existing or append
+        idx = next((i for i, p in enumerate(self._products) if p["id"] == product_id), None)
+        if idx is not None:
+            self._products[idx] = saved
+        else:
+            self._products.append(saved)
+
+        await self._async_save_products()
+        _LOGGER.info("Saved product: %s (type=%s)", saved["name"], saved["type"])
+        return saved
+
+    async def delete_product(self, product_id: str) -> bool:
+        """Delete a product by ID."""
+        idx = next((i for i, p in enumerate(self._products) if p["id"] == product_id), None)
+        if idx is not None:
+            removed = self._products.pop(idx)
+            await self._async_save_products()
+            _LOGGER.info("Deleted product: %s", removed["name"])
+            return True
+        return False
+
+    async def toggle_favorite(self, product_id: str) -> bool:
+        """Toggle favorite status for a product by ID. Returns new state."""
+        for p in self._products:
+            if p.get("id") == product_id:
                 p["favorite"] = not p.get("favorite", False)
                 await self._async_save_products()
                 return p["favorite"]
         return False
 
     def _cache_product(self, product: dict) -> None:
-        """Add a product to the local cache when it's actually logged."""
+        """Add a product to the unified store when it's actually logged."""
         name = product.get("name", "")
         if not name:
             return
-        if any(p.get("name") == name for p in self._product_cache):
+        if any(p.get("name") == name for p in self._products):
             return
-        self._product_cache.append({
+        self._products.append({
+            "id": str(uuid.uuid4())[:8],
+            "type": "base",
             "name": product["name"],
             "serving_grams": product.get("serving_grams", 100),
             "nutrients": product.get("nutrients", {}),
@@ -228,8 +383,8 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         })
 
     async def _async_save_products(self) -> None:
-        """Persist product cache to disk."""
-        await self._products_store.async_save(self._product_cache)
+        """Persist unified product store to disk."""
+        await self._products_store.async_save(self._products)
 
     async def delete_item(self, person: str, index: int, day: str | None = None):
         """Delete an item by index from a person's log."""
@@ -268,69 +423,13 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         return self._logs[person].get(str(date.today()), [])
 
     # ------------------------------------------------------------------
-    # Custom meals (recipes)
-    # ------------------------------------------------------------------
-
-    def get_meals(self) -> list[dict]:
-        """Return all custom meals."""
-        return self._meals
-
-    async def save_meal(self, meal: dict) -> dict:
-        """Create or update a custom meal. Computes nutrients_per_100g from ingredients."""
-        ingredients = meal.get("ingredients", [])
-        total_grams = sum(i.get("grams", 0) for i in ingredients)
-
-        # Calculate combined nutrients per 100g
-        nutrients_per_100g: dict[str, float] = {}
-        if total_grams > 0:
-            for key in NUTRIENTS:
-                total_value = sum(
-                    i.get("nutrients", {}).get(key, 0) * i.get("grams", 0) / 100
-                    for i in ingredients
-                )
-                nutrients_per_100g[key] = total_value / total_grams * 100
-        else:
-            nutrients_per_100g = {k: 0.0 for k in NUTRIENTS}
-
-        meal_id = meal.get("id") or str(uuid.uuid4())[:8]
-        preferred_portion = meal.get("preferred_portion")
-        saved = {
-            "id": meal_id,
-            "name": meal.get("name", "Naamloze maaltijd"),
-            "ingredients": ingredients,
-            "total_grams": total_grams,
-            "nutrients_per_100g": nutrients_per_100g,
-            "preferred_portion": preferred_portion,
-            "favorite": meal.get("favorite", False),
-        }
-
-        # Update existing or append
-        idx = next((i for i, m in enumerate(self._meals) if m["id"] == meal_id), None)
-        if idx is not None:
-            self._meals[idx] = saved
-        else:
-            self._meals.append(saved)
-
-        await self._meals_store.async_save(self._meals)
-        _LOGGER.info("Saved meal: %s (%d ingredients, %.0fg total)", saved["name"], len(ingredients), total_grams)
-        return saved
-
-    async def delete_meal(self, meal_id: str) -> bool:
-        """Delete a custom meal by ID."""
-        idx = next((i for i, m in enumerate(self._meals) if m["id"] == meal_id), None)
-        if idx is not None:
-            removed = self._meals.pop(idx)
-            await self._meals_store.async_save(self._meals)
-            _LOGGER.info("Deleted meal: %s", removed["name"])
-            return True
-        return False
-
-    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
     async def _add_item(
-        self, person: str, product: dict, grams: float, category: str | None = None, day: str | None = None
+        self, person: str, product: dict, grams: float,
+        category: str | None = None, day: str | None = None,
+        components: list[dict] | None = None,
     ):
         if person not in self._logs:
             _LOGGER.error("Unknown person: %s", person)
@@ -341,15 +440,17 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
 
         cat = category if category in MEAL_CATEGORIES else _default_category()
 
-        self._logs[person][target_day].append(
-            {
-                "name": product["name"],
-                "grams": grams,
-                "nutrients": product["nutrients"],
-                "time": datetime.now().strftime("%H:%M"),
-                "category": cat,
-            }
-        )
+        item: dict = {
+            "name": product["name"],
+            "grams": grams,
+            "nutrients": product["nutrients"],
+            "time": datetime.now().strftime("%H:%M"),
+            "category": cat,
+        }
+        if components:
+            item["components"] = components
+
+        self._logs[person][target_day].append(item)
         _LOGGER.info("Logged: %s (%.0fg) for %s [%s] on %s", product["name"], grams, person, cat, target_day)
         self._cache_product(product)
         await self.async_refresh()

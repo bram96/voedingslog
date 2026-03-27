@@ -252,7 +252,7 @@ export class SearchController {
           <span class="result-name">${p.name}</span>
           <span class="result-meta">${Math.round(p.nutrients?.["energy-kcal_100g"] || 0)} kcal/100g</span>
         </div>
-        ${showFav
+        ${showFav && p.id
           ? html`<button class="fav-btn" @click=${(e: Event) => { e.stopPropagation(); this.toggleFavorite(p); }}>
               <ha-icon icon=${p.favorite ? "mdi:star" : "mdi:star-outline"}></ha-icon>
             </button>`
@@ -262,10 +262,11 @@ export class SearchController {
   }
 
   async toggleFavorite(product: Product): Promise<void> {
+    if (!product.id) return;
     try {
       const res = await this.host.hass.callWS<{ favorite: boolean }>({
         type: "voedingslog/toggle_favorite",
-        product_name: product.name,
+        product_id: product.id,
       });
       product.favorite = res.favorite;
       this.host.requestUpdate();

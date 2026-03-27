@@ -6,7 +6,8 @@
   "scripts": {
     "build": "esbuild src/voedingslog-panel.ts --bundle --format=esm --minify --outfile=../frontend/voedingslog-panel.js",
     "watch": "pnpm build --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "html5-qrcode": "^2.3.8",
@@ -14,7 +15,8 @@
   },
   "devDependencies": {
     "esbuild": "^0.21.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

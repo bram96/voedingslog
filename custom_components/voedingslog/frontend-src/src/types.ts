@@ -16,6 +16,7 @@ export interface LogItem {
   nutrients: NutrientMap;
   time: string;
   category: MealCategory;
+  components?: MealIngredient[];
 }
 
 export interface IndexedLogItem extends LogItem {
@@ -28,11 +29,14 @@ export interface Portion {
 }
 
 export interface Product {
+  id?: string;
   name: string;
   serving_grams: number;
   portions?: Portion[];
   nutrients: NutrientMap;
   favorite?: boolean;
+  /** Passed through when logging a component recipe. */
+  components?: MealIngredient[];
 }
 
 export interface GetFavoritesResponse {
@@ -85,22 +89,38 @@ export interface MealIngredient {
   nutrients: NutrientMap;
 }
 
-export interface CustomMeal {
+// ── Unified product types ────────────────────────────────────────
+
+export interface BaseProduct {
   id: string;
+  type: "base";
+  name: string;
+  serving_grams: number;
+  portions?: Portion[];
+  nutrients: NutrientMap;
+  favorite?: boolean;
+}
+
+export interface Recipe {
+  id: string;
+  type: "recipe";
+  recipe_type: "fixed" | "component";
   name: string;
   ingredients: MealIngredient[];
   total_grams: number;
-  nutrients_per_100g: NutrientMap;
+  nutrients: NutrientMap;
   preferred_portion?: number;
   favorite?: boolean;
 }
 
-export interface GetMealsResponse {
-  meals: CustomMeal[];
+export type UnifiedProduct = BaseProduct | Recipe;
+
+export interface GetProductsResponse {
+  products: UnifiedProduct[];
 }
 
-export interface SaveMealResponse {
-  meal: CustomMeal;
+export interface SaveProductResponse {
+  product: UnifiedProduct;
 }
 
 export interface NutrientDisplayConfig {
@@ -119,5 +139,5 @@ export interface ParseFoodResponse {
   products: ParsedProduct[];
 }
 
-type DialogMode = "add-chooser" | "search" | "barcode" | "photo" | "weight" | "edit" | "meals" | "meal-edit" | "manual" | "day-detail" | "batch-add" | "ai-validate" | null;
+type DialogMode = "add-chooser" | "search" | "barcode" | "photo" | "weight" | "edit" | "products" | "product-edit" | "manual" | "day-detail" | "batch-add" | "ai-validate" | null;
 export type { DialogMode };

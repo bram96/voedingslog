@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-commit hook: run all tests before allowing a commit.
+# To activate: git config core.hooksPath .githooks
+# Or run: make setup
+
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+echo "=== Running Python tests ==="
+"$ROOT/.venv/bin/pytest" "$ROOT/tests/" -q --tb=short || {
+  echo "Python tests failed. Commit aborted."
+  exit 1
+}
+
+echo "=== Running TypeScript typecheck ==="
+(cd "$ROOT/custom_components/voedingslog/frontend-src" && pnpm typecheck) || {
+  echo "TypeScript typecheck failed. Commit aborted."
+  exit 1
+}
+
+echo "=== Running TypeScript tests ==="
+(cd "$ROOT/custom_components/voedingslog/frontend-src" && pnpm test) || {
+  echo "TypeScript tests failed. Commit aborted."
+  exit 1
+}
+
+echo "All tests passed."

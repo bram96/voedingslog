@@ -223,13 +223,28 @@ export const panelStyles = css`
   .chooser-item:disabled { opacity: 0.4; cursor: not-allowed; }
   .chooser-item ha-icon { --mdc-icon-size: 28px; color: var(--primary-color); }
 
-  /* Meals */
-  .meal-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--divider-color); }
-  .meal-item:last-of-type { border-bottom: none; }
-  .meal-info { flex: 1; cursor: pointer; min-width: 0; }
-  .meal-name { display: block; font-size: 15px; font-weight: 500; }
-  .meal-meta { display: block; font-size: 12px; color: var(--secondary-text-color); }
+  /* Products */
+  .product-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--divider-color); }
+  .product-item:last-of-type { border-bottom: none; }
+  .product-info { flex: 1; cursor: pointer; min-width: 0; }
+  .product-name-row { display: flex; align-items: center; }
+  .product-name { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .product-meta { display: block; font-size: 12px; color: var(--secondary-text-color); margin-left: 24px; }
+  .type-filter-chips { display: flex; gap: 6px; margin-bottom: 12px; }
+  .filter-chip {
+    padding: 5px 14px; border-radius: 16px; font-size: 13px; cursor: pointer;
+    border: 1px solid var(--divider-color); background: var(--card-background-color);
+    color: var(--primary-text-color); transition: all 0.2s;
+  }
+  .filter-chip.active { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
   .meal-ingredients-section { margin-bottom: 16px; }
+
+  /* Component recipe (weight/edit dialogs) */
+  .component-list { margin-bottom: 16px; }
+  .component-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
+  .component-name { flex: 1; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .component-grams-input { width: 65px; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color); }
+  .component-total { display: flex; justify-content: space-between; padding: 10px 0 4px; font-weight: 600; font-size: 14px; }
   .ingredient-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
   .ingredient-name { flex: 1; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ingredient-grams-input { width: 65px; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 14px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color); }

@@ -24,13 +24,13 @@ export interface AiControllerHost extends PhotoCaptureHost {
   _closeDialog(): void;
   _loadLog(): Promise<void>;
   _setDialogMode(mode: string): void;
-  _addMealIngredientFromAi(ingredient: MealIngredient): void;
+  _addRecipeIngredientFromAi(ingredient: MealIngredient): void;
   _stopPhotoCamera(): void;
   _capturePhotoFrame(): string | null;
 }
 
-/** Whether the AI validation flow is adding to a log or building a meal. */
-type ValidateMode = "log" | "meal";
+/** Whether the AI validation flow is adding to a log or building a recipe. */
+type ValidateMode = "log" | "recipe";
 
 export class AiController {
   host: AiControllerHost;
@@ -52,16 +52,16 @@ export class AiController {
     this.validateSearch = "";
     this.validateSearchResults = [];
     this.batchMode = "text";
-    this.currentMode = "log";
-    this._validateMode = "log";
+    this.currentMode = "log" as ValidateMode;
+    this._validateMode = "log" as ValidateMode;
   }
 
   renderBatchAddDialog(mode: ValidateMode = "log"): TemplateResult {
     const h = this.host;
-    const isMeal = mode === "meal";
-    const title = isMeal ? "AI ingrediënten invoer" : "Batch toevoegen";
-    const closeAction = isMeal ? () => h._setDialogMode("meal-edit") : () => h._closeDialog();
-    const placeholder = isMeal
+    const isRecipe = mode === "recipe";
+    const title = isRecipe ? "AI ingrediënten invoer" : "Batch toevoegen";
+    const closeAction = isRecipe ? () => h._setDialogMode("product-edit") : () => h._closeDialog();
+    const placeholder = isRecipe
       ? "Bijv. 200g kipfilet, 100g rijst, 150g broccoli, scheutje olijfolie"
       : "Bijv. 2 boterhammen met kaas, een appel, kop koffie met melk";
 
@@ -230,7 +230,7 @@ export class AiController {
             Overslaan
           </button>
           <button class="btn-primary btn-confirm" @click=${() => this.confirm()} ?disabled=${!product.matched}>
-            ${this._validateMode === "meal" ? "Toevoegen" : "Bevestigen"}
+            ${this._validateMode === "recipe" ? "Ingrediënt toevoegen" : "Bevestigen"}
           </button>
         </div>
       </div>
@@ -342,7 +342,7 @@ export class AiController {
     this.validateSearch = "";
     this.validateSearchResults = [];
     if (this.validateIndex >= this.parsedProducts.length) {
-      if (this._validateMode === "meal") {
+      if (this._validateMode === "recipe") {
         this.host._setDialogMode("meal-edit");
       } else {
         this.host._closeDialog();
@@ -361,9 +361,9 @@ export class AiController {
     const gramsInput = h.shadowRoot?.getElementById("ai-validate-grams") as HTMLInputElement | null;
     const grams = parseFloat(gramsInput?.value || "") || product.serving_grams || 100;
 
-    if (this._validateMode === "meal") {
+    if (this._validateMode === "recipe") {
       // Add as meal ingredient
-      h._addMealIngredientFromAi({
+      h._addRecipeIngredientFromAi({
         name: product.name,
         grams,
         nutrients: product.nutrients || {},
@@ -392,8 +392,8 @@ export class AiController {
     this.validateSearch = "";
     this.validateSearchResults = [];
     if (this.validateIndex >= this.parsedProducts.length) {
-      if (this._validateMode === "meal") {
-        h._setDialogMode("meal-edit");
+      if (this._validateMode === "recipe") {
+        h._setDialogMode("product-edit");
       } else {
         h._closeDialog();
         h._loadLog();

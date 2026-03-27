@@ -20,9 +20,9 @@ from .const import (
     WS_DELETE_ITEM,
     WS_EDIT_ITEM,
     WS_RESET_DAY,
-    WS_GET_MEALS,
-    WS_SAVE_MEAL,
-    WS_DELETE_MEAL,
+    WS_GET_PRODUCTS,
+    WS_SAVE_PRODUCT,
+    WS_DELETE_PRODUCT,
     WS_GET_FAVORITES,
     WS_TOGGLE_FAVORITE,
 )
@@ -60,9 +60,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_edit_item)
     websocket_api.async_register_command(hass, ws_reset_day)
     register_ai_commands(hass, _get_coordinator)
-    websocket_api.async_register_command(hass, ws_get_meals)
-    websocket_api.async_register_command(hass, ws_save_meal)
-    websocket_api.async_register_command(hass, ws_delete_meal)
+    websocket_api.async_register_command(hass, ws_get_products)
+    websocket_api.async_register_command(hass, ws_save_product)
+    websocket_api.async_register_command(hass, ws_delete_product)
     websocket_api.async_register_command(hass, ws_get_favorites)
     websocket_api.async_register_command(hass, ws_toggle_favorite)
 
@@ -199,6 +199,7 @@ async def ws_search_products(hass, connection, msg):
         vol.Required("nutrients"): dict,
         vol.Required("category"): vol.In(MEAL_CATEGORIES),
         vol.Optional("date"): str,
+        vol.Optional("components"): list,
     }
 )
 @websocket_api.async_response
@@ -216,6 +217,7 @@ async def ws_log_product(hass, connection, msg):
         nutrients=msg["nutrients"],
         category=msg["category"],
         day=msg.get("date"),
+        components=msg.get("components"),
     )
     connection.send_result(msg["id"], {"success": True})
 
@@ -250,6 +252,7 @@ async def ws_delete_item(hass, connection, msg):
         vol.Optional("nutrients"): dict,
         vol.Optional("name"): str,
         vol.Optional("date"): str,
+        vol.Optional("components"): list,
     }
 )
 @websocket_api.async_response
@@ -268,6 +271,7 @@ async def ws_edit_item(hass, connection, msg):
         nutrients=msg.get("nutrients"),
         name=msg.get("name"),
         day=msg.get("date"),
+        components=msg.get("components"),
     )
     if ok:
         connection.send_result(msg["id"], {"success": True})
@@ -294,56 +298,60 @@ async def ws_reset_day(hass, connection, msg):
     connection.send_result(msg["id"], {"success": True})
 
 
-# ── Custom meals (recipes) ────────────────────────────────────────
+# ── Unified products (base + recipes) ────────────────────────────
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): WS_GET_MEALS}
+    {
+        vol.Required("type"): WS_GET_PRODUCTS,
+        vol.Optional("product_type"): str,
+    }
 )
 @websocket_api.async_response
-async def ws_get_meals(hass, connection, msg):
-    """Return all custom meals."""
+async def ws_get_products(hass, connection, msg):
+    """Return all products, optionally filtered by type."""
     coordinator = _get_coordinator(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
-    connection.send_result(msg["id"], {"meals": coordinator.get_meals()})
+    products = coordinator.get_products(msg.get("product_type"))
+    connection.send_result(msg["id"], {"products": products})
 
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): WS_SAVE_MEAL,
-        vol.Required("meal"): dict,
+        vol.Required("type"): WS_SAVE_PRODUCT,
+        vol.Required("product"): dict,
     }
 )
 @websocket_api.async_response
-async def ws_save_meal(hass, connection, msg):
-    """Create or update a custom meal."""
+async def ws_save_product(hass, connection, msg):
+    """Create or update a product (base or recipe)."""
     coordinator = _get_coordinator(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
-    saved = await coordinator.save_meal(msg["meal"])
-    connection.send_result(msg["id"], {"meal": saved})
+    saved = await coordinator.save_product(msg["product"])
+    connection.send_result(msg["id"], {"product": saved})
 
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): WS_DELETE_MEAL,
-        vol.Required("meal_id"): str,
+        vol.Required("type"): WS_DELETE_PRODUCT,
+        vol.Required("product_id"): str,
     }
 )
 @websocket_api.async_response
-async def ws_delete_meal(hass, connection, msg):
-    """Delete a custom meal."""
+async def ws_delete_product(hass, connection, msg):
+    """Delete a product by ID."""
     coordinator = _get_coordinator(hass)
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
-    ok = await coordinator.delete_meal(msg["meal_id"])
+    ok = await coordinator.delete_product(msg["product_id"])
     if ok:
         connection.send_result(msg["id"], {"success": True})
     else:
-        connection.send_error(msg["id"], "not_found", "Meal not found")
+        connection.send_error(msg["id"], "not_found", "Product not found")
 
 
 # ── Favorites ─────────────────────────────────────────────────────
@@ -364,7 +372,7 @@ async def ws_get_favorites(hass, connection, msg):
 @websocket_api.websocket_command(
     {
         vol.Required("type"): WS_TOGGLE_FAVORITE,
-        vol.Required("product_name"): str,
+        vol.Required("product_id"): str,
     }
 )
 @websocket_api.async_response
@@ -374,6 +382,5 @@ async def ws_toggle_favorite(hass, connection, msg):
     if not coordinator:
         connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
         return
-    is_fav = await coordinator.toggle_favorite(msg["product_name"])
+    is_fav = await coordinator.toggle_favorite(msg["product_id"])
     connection.send_result(msg["id"], {"favorite": is_fav})
-
