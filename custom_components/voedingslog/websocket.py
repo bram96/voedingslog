@@ -20,6 +20,7 @@ from .const import (
     WS_DELETE_ITEM,
     WS_EDIT_ITEM,
     WS_RESET_DAY,
+    WS_GET_SUGGESTIONS,
     WS_GET_RECENT,
     WS_GET_STREAK,
     WS_GET_PERIOD,
@@ -67,6 +68,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_edit_item)
     websocket_api.async_register_command(hass, ws_reset_day)
     register_ai_commands(hass, _get_coordinator)
+    websocket_api.async_register_command(hass, ws_get_suggestions)
     websocket_api.async_register_command(hass, ws_get_recent)
     websocket_api.async_register_command(hass, ws_get_streak)
     websocket_api.async_register_command(hass, ws_get_period)
@@ -320,6 +322,76 @@ async def ws_reset_day(hass, connection, msg):
 
     await coordinator.reset_day(msg["person"], msg.get("date"))
     connection.send_result(msg["id"], {"success": True})
+
+
+# ── Nutrient suggestions ─────────────────────────────────────────
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_GET_SUGGESTIONS,
+        vol.Required("person"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_suggestions(hass, connection, msg):
+    """Get nutrient gap suggestions with product recommendations and optional AI advice."""
+    coordinator = _get_coordinator(hass, msg["person"])
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+
+    gaps = coordinator.get_nutrient_suggestions(msg["person"])
+    if not gaps:
+        connection.send_result(msg["id"], {"gaps": [], "ai_advice": None})
+        return
+
+    # Try AI advice if configured
+    ai_advice = None
+    ai_entity = ""
+    for e in hass.config_entries.async_entries(DOMAIN):
+        merged = {**e.data, **e.options}
+        ai_entity = merged.get("ai_task_entity", "")
+        if ai_entity:
+            break
+
+    if ai_entity:
+        gap_text = ", ".join(
+            f"{g['nutrient_label']}: {g['deficit']} {g.get('nutrient_key', '').split('_')[0]} tekort"
+            for g in gaps
+        )
+        product_names = ", ".join(
+            s["name"] for g in gaps for s in g["suggestions"][:3]
+        )
+        try:
+            result = await hass.services.async_call(
+                "ai_task",
+                "generate_data",
+                {
+                    "task_name": "nutrition_advice",
+                    "entity_id": ai_entity,
+                    "instructions": (
+                        f"Een persoon heeft de volgende voedingstekorten (gemiddeld per dag): {gap_text}. "
+                        f"Beschikbare producten: {product_names}. "
+                        "Geef een kort, praktisch advies in het Nederlands (max 3 zinnen) "
+                        "over hoe deze tekorten aan te vullen met de beschikbare producten. "
+                        "Wees specifiek over hoeveelheden."
+                    ),
+                    "structure": {
+                        "advice": {
+                            "description": "Kort praktisch voedingsadvies in het Nederlands",
+                            "required": True,
+                            "selector": {"text": {"multiline": True}},
+                        }
+                    },
+                },
+                blocking=True,
+                return_response=True,
+            )
+            ai_advice = (result or {}).get("data", {}).get("advice")
+        except Exception as e:
+            _LOGGER.debug("AI nutrition advice failed: %s", e)
+
+    connection.send_result(msg["id"], {"gaps": gaps, "ai_advice": ai_advice})
 
 
 # ── Recent items ─────────────────────────────────────────────────

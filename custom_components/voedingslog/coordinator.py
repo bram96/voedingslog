@@ -457,6 +457,60 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Merged product '%s' into '%s'", remove_name, keep.get("name"))
         return keep
 
+    def get_nutrient_suggestions(self, person: str, days: int = 7) -> list[dict]:
+        """Find products that could fill nutrient gaps based on recent intake.
+        Returns [{nutrient_key, nutrient_label, deficit, suggestions: [{name, value_per_100g}]}]."""
+        end = date.today()
+        start = end - timedelta(days=days - 1)
+        period = self.get_period_totals(person, str(start), str(end))
+        if not period:
+            return []
+
+        # Get config goals from hass
+        goals: dict[str, float] = {}
+        for e in self.hass.config_entries.async_entries(DOMAIN):
+            merged = {**e.data, **e.options}
+            for p in merged.get("personen", []):
+                if p == person:
+                    goals["energy-kcal_100g"] = merged.get("doel_calorieen", 0)
+                    goals["proteins_100g"] = merged.get("protein_goal", 0)
+                    goals["carbohydrates_100g"] = merged.get("carbs_goal", 0)
+                    goals["fat_100g"] = merged.get("fat_goal", 0)
+                    goals["fiber_100g"] = merged.get("fiber_goal", 0)
+                    break
+
+        results = []
+        for key, goal in goals.items():
+            if goal <= 0:
+                continue
+            avg = sum(d["totals"].get(key, 0) for d in period) / len(period)
+            if avg >= goal * 0.8:
+                continue  # Not a gap
+
+            deficit = goal - avg
+            label = NUTRIENTS.get(key, {}).get("label", key)
+
+            # Find top products rich in this nutrient
+            candidates = []
+            for p in self._products:
+                if p.get("type") != "base":
+                    continue
+                value = p.get("nutrients", {}).get(key, 0)
+                if value > 0:
+                    candidates.append({"name": p["name"], "value_per_100g": round(value, 1)})
+            candidates.sort(key=lambda x: -x["value_per_100g"])
+
+            results.append({
+                "nutrient_key": key,
+                "nutrient_label": label,
+                "goal": round(goal, 1),
+                "average": round(avg, 1),
+                "deficit": round(deficit, 1),
+                "suggestions": candidates[:5],
+            })
+
+        return results
+
     async def cleanup_unused_products(self) -> int:
         """Remove base products not referenced in any log or recipe. Returns number removed."""
         # Collect all product names from logs across ALL coordinators

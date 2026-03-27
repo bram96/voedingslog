@@ -337,6 +337,11 @@ export const panelStyles = css`
   }
   .detail-row:last-child { border-bottom: none; }
   .detail-row span:last-child { color: var(--secondary-text-color); white-space: nowrap; }
+  .ai-advice { background: var(--secondary-background-color); border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin: 8px 0; display: flex; gap: 8px; align-items: flex-start; }
+  .ai-advice span { flex: 1; }
+  .suggestions-section { margin-top: 4px; }
+  .suggestion-group { margin-top: 8px; }
+  .suggestion-label { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); margin-bottom: 2px; }
   .nutrient-gap-badge { background: #ff9800; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; vertical-align: middle; }
   .detail-category { margin-top: 8px; }
   .detail-category-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); padding: 4px 0; }

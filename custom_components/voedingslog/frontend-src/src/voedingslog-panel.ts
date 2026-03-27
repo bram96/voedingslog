@@ -406,7 +406,8 @@ export class VoedingslogPanel extends LitElement {
           const p = totals["proteins_100g"] || 0;
           const c = totals["carbohydrates_100g"] || 0;
           const f = totals["fat_100g"] || 0;
-          const total = p + c + f;
+          const v = totals["fiber_100g"] || 0;
+          const total = p + c + f + v;
           if (total < 1) return nothing;
           return html`
             <div class="macro-ratio">
@@ -414,11 +415,13 @@ export class VoedingslogPanel extends LitElement {
                 <div style="width:${p/total*100}%;background:#4caf50" title="Eiwit"></div>
                 <div style="width:${c/total*100}%;background:var(--primary-color,#03a9f4)" title="Koolh."></div>
                 <div style="width:${f/total*100}%;background:#ff9800" title="Vet"></div>
+                <div style="width:${v/total*100}%;background:#8bc34a" title="Vezels"></div>
               </div>
               <div class="macro-ratio-labels">
                 <span style="color:#4caf50">E ${Math.round(p/total*100)}%</span>
                 <span style="color:var(--primary-color,#03a9f4)">K ${Math.round(c/total*100)}%</span>
                 <span style="color:#ff9800">V ${Math.round(f/total*100)}%</span>
+                <span style="color:#8bc34a">Vez ${Math.round(v/total*100)}%</span>
               </div>
             </div>
           `;

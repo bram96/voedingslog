@@ -43,6 +43,9 @@ export class ExportController {
   periodLoading = false;
   /** Anchor date for the current period (start of week/month, or the selected day). */
   private _periodAnchor: string = "";
+  // Nutrient suggestions
+  private _suggestions: { gaps: any[]; ai_advice: string | null } | null = null;
+  private _suggestionsLoading = false;
 
   constructor(host: ExportControllerHost) {
     this.host = host;
@@ -54,6 +57,8 @@ export class ExportController {
     this.periodData = null;
     this.periodLoading = false;
     this._periodAnchor = "";
+    this._suggestions = null;
+    this._suggestionsLoading = false;
   }
 
   private _getGoalNutrients(): GoalNutrient[] {
@@ -218,6 +223,49 @@ export class ExportController {
   }
 
   // ── Day view (existing pie chart) ─────────────────────────────
+
+  private async _loadSuggestions(): Promise<void> {
+    this._suggestionsLoading = true;
+    this.host.requestUpdate();
+    try {
+      const res = await this.host.hass.callWS<{ gaps: any[]; ai_advice: string | null }>({
+        type: "voedingslog/get_suggestions",
+        person: this.host._selectedPerson,
+      });
+      this._suggestions = res;
+    } catch (e) {
+      console.error("Failed to load suggestions:", e);
+      this._suggestions = { gaps: [], ai_advice: null };
+    }
+    this._suggestionsLoading = false;
+    this.host.requestUpdate();
+  }
+
+  private _renderSuggestions(): TemplateResult {
+    if (!this._suggestions) return html``;
+    const { gaps, ai_advice } = this._suggestions;
+    return html`
+      <div class="suggestions-section">
+        ${ai_advice ? html`
+          <div class="ai-advice">
+            <ha-icon icon="mdi:robot-outline" style="--mdc-icon-size:16px;vertical-align:middle;color:var(--primary-color)"></ha-icon>
+            <span>${ai_advice}</span>
+          </div>
+        ` : nothing}
+        ${gaps.map((g: any) => g.suggestions?.length > 0 ? html`
+          <div class="suggestion-group">
+            <div class="suggestion-label">${g.nutrient_label} aanvullen:</div>
+            ${g.suggestions.slice(0, 3).map((s: any) => html`
+              <div class="detail-row">
+                <span>${s.name}</span>
+                <span style="color:#4caf50">${s.value_per_100g}/100g</span>
+              </div>
+            `)}
+          </div>
+        ` : nothing)}
+      </div>
+    `;
+  }
 
   private _renderDayView(): TemplateResult {
     const h = this.host;
@@ -411,6 +459,14 @@ export class ExportController {
                 </div>
               `;
             })}
+            ${this._suggestionsLoading
+              ? html`<div class="period-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Suggesties laden...</div>`
+              : this._suggestions
+                ? this._renderSuggestions()
+                : html`<button class="btn-secondary btn-confirm" style="margin-top:8px" @click=${() => this._loadSuggestions()}>
+                    <ha-icon icon="mdi:lightbulb-outline"></ha-icon>
+                    Wat kan ik eten?
+                  </button>`}
           </div>
         ` : nothing;
       })()}
