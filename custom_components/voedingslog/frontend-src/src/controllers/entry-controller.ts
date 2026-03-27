@@ -11,7 +11,7 @@ import type {
   IndexedLogItem,
   VoedingslogConfig,
 } from "../types.js";
-import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory } from "../helpers.js";
+import { KEY_NUTRIENTS_DISPLAY, DEFAULT_CATEGORY_LABELS, defaultCategory, NUTRIENTS_META } from "../helpers.js";
 
 export interface EntryControllerHost {
   hass: HomeAssistant;
@@ -302,14 +302,17 @@ export class EntryController {
           <div class="nutrient-edit-section">
             <div class="preview-title">Voedingswaarden per 100g</div>
             ${Object.entries(h._config?.nutrients || {}).map(
-              ([key, meta]) => html`
-                <div class="form-field form-field-inline">
-                  <label>${meta.label} (${meta.unit})</label>
-                  <input type="number" id="edit-nutrient-${key}"
-                    .value=${String((item.nutrients?.[key] || 0).toFixed(2))}
-                    min="0" step="0.01" inputmode="decimal" />
-                </div>
-              `
+              ([key, meta]) => {
+                const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+                const displayVal = ((item.nutrients?.[key] || 0) * factor).toFixed(2);
+                return html`
+                  <div class="form-field form-field-inline">
+                    <label>${meta.label} (${meta.unit})</label>
+                    <input type="number" id="edit-nutrient-${key}"
+                      .value=${displayVal}
+                      min="0" step="0.01" inputmode="decimal" />
+                  </div>
+                `;}
             )}
           </div>
         ` : nothing}
@@ -414,7 +417,11 @@ export class EntryController {
     const nutrients: Record<string, number> = { ...item.nutrients };
     for (const key of Object.keys(h._config?.nutrients || {})) {
       const input = h.shadowRoot?.getElementById(`edit-nutrient-${key}`) as HTMLInputElement | null;
-      if (input) nutrients[key] = parseFloat(input.value) || 0;
+      if (input) {
+        const displayVal = parseFloat(input.value) || 0;
+        const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+        nutrients[key] = displayVal / factor;
+      }
     }
 
     try {
