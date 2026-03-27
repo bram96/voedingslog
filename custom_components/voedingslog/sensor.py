@@ -138,7 +138,8 @@ class WeekAverageSensor(CoordinatorEntity, SensorEntity):
         end = str(date.today())
         start = str(date.today() - timedelta(days=6))
         days = self.coordinator.get_period_totals(self._person, start, end)
-        logged = [d for d in days if d["item_count"] > 0]
+        today = str(date.today())
+        logged = [d for d in days if d["item_count"] > 0 and d["date"] != today]
         if not logged:
             return 0
         factor = self._meta.get("factor", 1)

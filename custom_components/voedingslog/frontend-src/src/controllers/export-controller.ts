@@ -447,9 +447,14 @@ export class ExportController {
       ${goals.map((g) => this._renderChart(g, days))}
 
       <div class="detail-table" style="margin-top:8px">
-        <div class="detail-table-header">Gemiddeld per dag${(() => { const logged = days.filter((d) => d.item_count > 0).length; return logged < days.length ? ` (${logged}/${days.length} dagen)` : ""; })()}</div>
+        <div class="detail-table-header">Gemiddeld per dag${(() => {
+          const today = new Date().toISOString().split("T")[0];
+          const completed = days.filter((d) => d.item_count > 0 && d.date !== today).length;
+          return completed < days.length ? ` (${completed} afgeronde dagen)` : "";
+        })()}</div>
         ${goals.map((g) => {
-          const loggedDays = days.filter((d) => d.item_count > 0);
+          const today = new Date().toISOString().split("T")[0];
+          const loggedDays = days.filter((d) => d.item_count > 0 && d.date !== today);
           const avg = loggedDays.length > 0 ? loggedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / loggedDays.length : 0;
           const pct = g.goal > 0 ? Math.round(avg / g.goal * 100) : 0;
           return html`
@@ -462,9 +467,10 @@ export class ExportController {
       </div>
 
       ${(() => {
-        const loggedDays = days.filter((d) => d.item_count > 0);
+        const todayStr = new Date().toISOString().split("T")[0];
+        const completedDays = days.filter((d) => d.item_count > 0 && d.date !== todayStr);
         const gaps = goals.filter((g) => {
-          const avg = loggedDays.length > 0 ? loggedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / loggedDays.length : 0;
+          const avg = completedDays.length > 0 ? completedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / completedDays.length : 0;
           return g.goal > 0 && avg / g.goal < 0.8;
         });
         return gaps.length > 0 ? html`
@@ -474,7 +480,7 @@ export class ExportController {
               Aandachtspunten
             </div>
             ${gaps.map((g) => {
-              const avg = loggedDays.length > 0 ? loggedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / loggedDays.length : 0;
+              const avg = completedDays.length > 0 ? completedDays.reduce((sum, d) => sum + (d.totals[g.key] || 0), 0) / completedDays.length : 0;
               const deficit = Math.round(g.goal - avg);
               return html`
                 <div class="detail-row">

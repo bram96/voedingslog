@@ -479,8 +479,9 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                     goals["fiber_100g"] = merged.get("fiber_goal", 0)
                     break
 
-        # Only count days that have logged items (skip empty days)
-        logged_days = [d for d in period if d["item_count"] > 0]
+        # Only count completed days (skip empty days and today which is still in progress)
+        today_str = str(date.today())
+        logged_days = [d for d in period if d["item_count"] > 0 and d["date"] != today_str]
         if not logged_days:
             return []
 

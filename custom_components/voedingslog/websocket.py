@@ -376,7 +376,8 @@ async def ws_get_suggestions(hass, connection, msg):
                         if goal_val > 0 and label not in all_goals:
                             key_map = {"Calorieen": "energy-kcal_100g", "Koolhydraten": "carbohydrates_100g", "Vet": "fat_100g"}
                             key = key_map.get(label, "")
-                            logged_p = [d for d in period if d["item_count"] > 0]
+                            today_str = str(date.today())
+                            logged_p = [d for d in period if d["item_count"] > 0 and d["date"] != today_str]
                             avg = sum(d["totals"].get(key, 0) for d in logged_p) / max(len(logged_p), 1) if key else 0
                             all_goals[label] = {"goal": goal_val, "average": round(avg, 1), "status": "op limiet" if avg >= goal_val * 0.9 else "ok"}
                     break
@@ -403,10 +404,12 @@ async def ws_get_suggestions(hass, connection, msg):
                     "task_name": "nutrition_advice",
                     "entity_id": ai_entity,
                     "instructions": (
-                        "Je bent een voedingsadviseur. Analyseer de voedingstekorten en geef advies.\n\n"
-                        f"DOELEN EN HUIDIGE INTAKE (gemiddeld per dag, afgelopen 7 dagen):\n{goals_text}\n\n"
+                        "Je bent een voedingsadviseur. Analyseer de voedingstekorten van de afgelopen week en geef advies.\n"
+                        "De gemiddelden zijn berekend over AFGERONDE dagen (vandaag is uitgesloten omdat die nog bezig is).\n\n"
+                        f"DOELEN EN GEMIDDELDE INTAKE (per dag, afgelopen afgeronde dagen):\n{goals_text}\n\n"
                         f"BESCHIKBARE PRODUCTEN UIT DE LOKALE DATABASE:\n{products_text}\n\n"
                         "BELANGRIJK:\n"
+                        "- Dit is advies voor TOEKOMSTIGE dagen, gebaseerd op wat er de afgelopen week anders had gekund\n"
                         "- Suggesties mogen NIET leiden tot overschrijding van andere doelen (let op calorieen en koolhydraten!)\n"
                         "- Geef eerst suggesties uit de lokale database (als die goed genoeg zijn)\n"
                         "- Geef daarna een 'Anders' sectie met makkelijk te bereiden producten die niet in de database staan\n"
