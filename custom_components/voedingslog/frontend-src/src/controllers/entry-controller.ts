@@ -91,21 +91,11 @@ export class EntryController {
 
   private _renderSimpleWeightSection(p: Product): TemplateResult {
     const h = this.host;
-    return html`
-      <div class="nutrient-preview">
-        <div class="preview-title">Voedingswaarden per 100g</div>
-        <div class="nutrient-grid">
-          ${KEY_NUTRIENTS_DISPLAY.map(
-            (n) => html`
-              <div class="nutrient-row">
-                <span>${n.label}</span>
-                <span>${(p.nutrients?.[n.key] || 0).toFixed(n.decimals)} ${n.unit}</span>
-              </div>
-            `
-          )}
-        </div>
-      </div>
+    const weightInput = h.shadowRoot?.getElementById("weight-input") as HTMLInputElement | null;
+    const grams = parseFloat(weightInput?.value || "") || p.serving_grams || 100;
+    const factor = grams / 100;
 
+    return html`
       <div class="form-field">
         <label>Gewicht (gram)</label>
         ${this._renderPortionChips(p.portions || [])}
@@ -113,6 +103,20 @@ export class EntryController {
           .value=${String(p.serving_grams || 100)}
           min="1" step="1" inputmode="numeric"
           @input=${() => h.requestUpdate()} />
+      </div>
+
+      <div class="nutrient-preview">
+        <div class="preview-title">Voedingswaarden (${Math.round(grams)}g)</div>
+        <div class="nutrient-grid">
+          ${KEY_NUTRIENTS_DISPLAY.map(
+            (n) => html`
+              <div class="nutrient-row">
+                <span>${n.label}</span>
+                <span>${((p.nutrients?.[n.key] || 0) * factor).toFixed(n.decimals)} ${n.unit}</span>
+              </div>
+            `
+          )}
+        </div>
       </div>
     `;
   }

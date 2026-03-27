@@ -25,6 +25,7 @@ export interface ProductsControllerHost {
   hass: { callWS<T = unknown>(msg: Record<string, unknown>): Promise<T> };
   shadowRoot: ShadowRoot | null;
   _config: VoedingslogConfig | null;
+  _selectedPerson: string | null;
   _dialogMode: DialogMode;
   requestUpdate(): void;
   _closeDialog(): void;
@@ -51,6 +52,8 @@ export class ProductsController {
   // Online search state
   private _onlineResults: Product[] = [];
   private _onlineSearching = false;
+  // Recent items for quick-add
+  recentItems: Product[] = [];
 
   constructor(host: ProductsControllerHost) {
     this.host = host;
@@ -133,9 +136,9 @@ export class ProductsController {
     const q = this.searchQuery.trim();
     const hasAI = !!h._config?.ai_task_entity;
 
-    // In add mode, show favorites when search is empty
-    const showFavorites = isAdd && !q && !this.showFavoritesOnly;
-    const favoriteProducts = showFavorites ? this.products.filter((p) => p.favorite) : [];
+    // In add mode, show recent + favorites when search is empty
+    const showQuickAccess = isAdd && !q && !this.showFavoritesOnly;
+    const favoriteProducts = showQuickAccess ? this.products.filter((p) => p.favorite) : [];
 
     return html`
       <div class="dialog-header">
@@ -168,6 +171,23 @@ export class ProductsController {
           )}
         </div>
 
+        ${/* Recent items in add mode when no search query */""}
+        ${showQuickAccess && this.recentItems.length > 0 ? html`
+          <div class="favorites-section">
+            <div class="section-label"><ha-icon icon="mdi:history" style="--mdc-icon-size:16px;vertical-align:middle"></ha-icon> Recent</div>
+            ${this.recentItems.map((p) => html`
+              <div class="product-item">
+                <div class="product-info" @click=${() => this.host._selectProduct(p, "products")}>
+                  <div class="product-name-row">
+                    <span class="product-name">${p.name}</span>
+                  </div>
+                  <span class="product-meta">${p.serving_grams}g · ${Math.round((p.nutrients?.["energy-kcal_100g"] || 0) * (p.serving_grams || 100) / 100)} kcal</span>
+                </div>
+              </div>
+            `)}
+          </div>
+        ` : nothing}
+
         ${/* Favorites section in add mode when no search query */""}
         ${favoriteProducts.length > 0 ? html`
           <div class="favorites-section">
@@ -177,11 +197,11 @@ export class ProductsController {
         ` : nothing}
 
         ${/* Local results */""}
-        ${filtered.length === 0 && !showFavorites
+        ${filtered.length === 0 && !showQuickAccess
           ? html`<p class="empty-hint">${this.products.length === 0
               ? isAdd ? "Nog geen producten opgeslagen." : "Nog geen producten. Voeg een product of recept toe."
               : "Geen producten gevonden."}</p>`
-          : (!showFavorites ? filtered : filtered.filter((p) => !p.favorite)).map(
+          : (!showQuickAccess ? filtered : filtered.filter((p) => !p.favorite)).map(
               (product) => this._renderProductItem(product)
             )}
 
@@ -320,6 +340,13 @@ export class ProductsController {
           </button>
         ` : nothing}
 
+        ${product.id ? html`
+          <button class="btn-secondary btn-confirm" @click=${() => this._refreshFromOff(product.id)}>
+            <ha-icon icon="mdi:refresh"></ha-icon>
+            Ververs vanuit Open Food Facts
+          </button>
+        ` : nothing}
+
         <button class="btn-primary btn-confirm" @click=${() => this._saveBase(fields)}>
           <ha-icon icon="mdi:check"></ha-icon>
           Opslaan
@@ -430,11 +457,21 @@ export class ProductsController {
     this.searchQuery = "";
     this.showFavoritesOnly = false;
     this._onlineResults = [];
+    this.recentItems = [];
     try {
       const res = await this.host.hass.callWS<GetProductsResponse>({ type: "voedingslog/get_products" });
       this.products = res.products || [];
     } catch (e) {
       console.error("Failed to load products:", e);
+    }
+    if (mode === "add") {
+      try {
+        const res = await this.host.hass.callWS<{ items: Product[] }>({
+          type: "voedingslog/get_recent",
+          person: this.host._selectedPerson,
+        });
+        this.recentItems = res.items || [];
+      } catch { /* ignore */ }
     }
     this.host._setDialogMode("products");
   }
@@ -664,6 +701,15 @@ export class ProductsController {
 
   private _openPhotoForBase(): void {
     this.host._setDialogMode("photo");
+  }
+
+  private async _refreshFromOff(productId: string): Promise<void> {
+    try {
+      await this.host.hass.callWS({ type: "voedingslog/refresh_product", product_id: productId });
+      await this.open(this.mode);
+    } catch {
+      alert("Kon product niet verversen vanuit Open Food Facts.");
+    }
   }
 
   private async _saveBase(fields: { id: string; key: string }[]): Promise<void> {

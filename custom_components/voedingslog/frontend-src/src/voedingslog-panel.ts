@@ -181,22 +181,32 @@ export class VoedingslogPanel extends LitElement {
       return html`<div class="container"><p>Laden...</p></div>`;
     }
 
-    const labels = this._config.category_labels || DEFAULT_CATEGORY_LABELS;
-    const groups = groupByCategory(this._items);
+    try {
+      const labels = this._config.category_labels || DEFAULT_CATEGORY_LABELS;
+      const groups = groupByCategory(this._items);
 
-    return html`
-      <div class="panel">
-        ${this._renderHeader()}
-        <div class="container">
-          ${this._renderActions()}
-          ${this._renderDayTotals()}
-          ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-            (cat) => this._renderCategorySection(cat, labels[cat], groups[cat])
-          )}
+      return html`
+        <div class="panel">
+          ${this._renderHeader()}
+          <div class="container">
+            ${this._renderActions()}
+            ${this._renderDayTotals()}
+            ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
+              (cat) => this._renderCategorySection(cat, labels[cat], groups[cat])
+            )}
+          </div>
         </div>
-      </div>
-      ${this._renderDialog()}
-    `;
+        ${this._renderDialog()}
+      `;
+    } catch (e) {
+      console.error("Render error:", e);
+      return html`
+        <div class="container" style="padding:24px">
+          <p>Er is een fout opgetreden bij het weergeven van de pagina.</p>
+          <button class="btn-primary" @click=${() => { this._closeDialog(); this._loadLog(); }}>Probeer opnieuw</button>
+        </div>
+      `;
+    }
   }
 
   private _toggleMenu(): void {

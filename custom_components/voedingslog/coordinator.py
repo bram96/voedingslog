@@ -17,12 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_KEY = f"{DOMAIN}.logs"
 STORAGE_KEY_PRODUCTS_V2 = f"{DOMAIN}.products_v2"
-# Old keys (used only for migration)
-_OLD_STORAGE_KEY_MEALS = f"{DOMAIN}.meals"
-_OLD_STORAGE_KEY_PRODUCTS = f"{DOMAIN}.products"
 STORAGE_VERSION = 1
-
-_MIGRATION_FLAG = f"{DOMAIN}_products_migrated"
 
 
 def _default_category() -> str:
@@ -35,6 +30,18 @@ def _default_category() -> str:
     if hour < 17:
         return "snack"
     return "dinner"
+
+
+def _sanitize_nutrients(nutrients: dict) -> dict[str, float]:
+    """Ensure all nutrient values are valid floats."""
+    result: dict[str, float] = {}
+    for key in NUTRIENTS:
+        val = nutrients.get(key, 0)
+        try:
+            result[key] = float(val) if val else 0.0
+        except (TypeError, ValueError):
+            result[key] = 0.0
+    return result
 
 
 def _compute_nutrients_from_components(components: list[dict]) -> dict[str, float]:
@@ -93,90 +100,11 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 if any(self._logs[p] for p in self.persons):
                     await self._async_save()
 
-        # Load unified products (or migrate from old stores)
-        await self._load_or_migrate_products()
-
-    async def _load_or_migrate_products(self) -> None:
-        """Load unified product store, or migrate from old meals + products stores."""
+        # Load unified products
         products_data = await self._products_store.async_load()
-
-        # Check if old stores still exist and should be re-migrated
-        old_products_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_PRODUCTS)
-        old_meals_store = Store(self.hass, STORAGE_VERSION, _OLD_STORAGE_KEY_MEALS)
-        old_products = await old_products_store.async_load() or []
-        old_meals = await old_meals_store.async_load() or []
-        has_old_data = bool(old_products or old_meals)
-
-        if products_data and isinstance(products_data, list) and not has_old_data:
-            # New store exists and old stores are gone — normal load
+        if products_data and isinstance(products_data, list):
             self._products = products_data
             _LOGGER.info("Loaded %d products", len(self._products))
-            return
-
-        if products_data and isinstance(products_data, list) and not has_old_data:
-            self._products = products_data
-            return
-
-        # Check if another coordinator already migrated this run
-        if self.hass.data.get(_MIGRATION_FLAG):
-            products_data = await self._products_store.async_load()
-            if products_data and isinstance(products_data, list):
-                self._products = products_data
-            return
-
-        # Mark migration as in progress
-        self.hass.data[_MIGRATION_FLAG] = True
-
-        if not has_old_data:
-            if products_data and isinstance(products_data, list):
-                self._products = products_data
-            _LOGGER.info("No old products or meals to migrate")
-            return
-
-        # Migrate ALL old products (no pruning — other entries may not be loaded yet)
-        migrated: list[dict] = []
-        if isinstance(old_products, list):
-            for p in old_products:
-                name = p.get("name", "")
-                if not name:
-                    continue
-                migrated.append({
-                    "id": str(uuid.uuid4())[:8],
-                    "type": "base",
-                    "name": name,
-                    "serving_grams": p.get("serving_grams", 100),
-                    "nutrients": p.get("nutrients", {}),
-                    "portions": p.get("portions", []),
-                    "favorite": p.get("favorite", False),
-                })
-
-        # Migrate ALL old meals as recipes
-        if isinstance(old_meals, list):
-            for m in old_meals:
-                migrated.append({
-                    "id": m.get("id") or str(uuid.uuid4())[:8],
-                    "type": "recipe",
-                    "recipe_type": "fixed",
-                    "name": m.get("name", ""),
-                    "ingredients": m.get("ingredients", []),
-                    "total_grams": m.get("total_grams", 0),
-                    "nutrients": m.get("nutrients_per_100g", {}),
-                    "preferred_portion": m.get("preferred_portion"),
-                    "favorite": m.get("favorite", False),
-                })
-
-        self._products = migrated
-        await self._async_save_products()
-
-        # Remove old store files now that migration is complete
-        await old_products_store.async_remove()
-        await old_meals_store.async_remove()
-
-        _LOGGER.info(
-            "Migrated products: %d base, %d recipes (old stores removed)",
-            sum(1 for p in migrated if p["type"] == "base"),
-            sum(1 for p in migrated if p["type"] == "recipe"),
-        )
 
     async def _async_save(self) -> None:
         """Persist current logs to disk."""
@@ -442,6 +370,25 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
                 return p["favorite"]
         return False
 
+    async def refresh_product_from_off(self, product_id: str) -> dict | None:
+        """Re-fetch a product's nutrients from OFF by name. Returns updated product or None."""
+        product = self._get_product_by_id(product_id)
+        if not product or product.get("type") != "base":
+            return None
+        session = await self._get_session()
+        results = await search_by_name(session, product["name"])
+        if not results:
+            return None
+        off_product = results[0]
+        product["nutrients"] = off_product["nutrients"]
+        product["portions"] = off_product.get("portions", product.get("portions", []))
+        if off_product.get("serving_grams"):
+            product["serving_grams"] = off_product["serving_grams"]
+        self._refresh_recipes_for_product(product_id)
+        await self._async_save_products()
+        _LOGGER.info("Refreshed product from OFF: %s", product["name"])
+        return product
+
     async def cleanup_unused_products(self) -> int:
         """Remove base products not referenced in any log or recipe. Returns number removed."""
         # Collect all product names from logs across ALL coordinators
@@ -503,12 +450,17 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         name = product.get("name", "")
         if not name:
             return
-        if any(p.get("name") == name for p in self._products):
-            # Update barcode on existing product if provided
-            barcode = product.get("barcode")
-            if barcode:
-                self._store_barcode(name, barcode)
-            return
+        name_lower = name.lower()
+        for p in self._products:
+            if p.get("name", "").lower() == name_lower:
+                # Update barcode on existing product if provided
+                barcode = product.get("barcode")
+                if barcode:
+                    self._store_barcode(name, barcode)
+                return
+            # Also check aliases to avoid near-duplicates
+            if name_lower in [a.lower() for a in p.get("aliases", [])]:
+                return
         self._products.append({
             "id": str(uuid.uuid4())[:8],
             "type": "base",
@@ -561,6 +513,28 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         """Return today's log for a person."""
         return self._logs[person].get(str(date.today()), [])
 
+    def get_recent_items(self, person: str, limit: int = 10) -> list[dict]:
+        """Return recently logged unique products (last 7 days, deduped by name)."""
+        person_logs = self._logs.get(person, {})
+        seen: set[str] = set()
+        recent: list[dict] = []
+        current = date.today()
+        for _ in range(7):
+            day_str = str(current)
+            for item in reversed(person_logs.get(day_str, [])):
+                name = item.get("name", "")
+                if name and name not in seen:
+                    seen.add(name)
+                    recent.append({
+                        "name": name,
+                        "serving_grams": item.get("grams", 100),
+                        "nutrients": item.get("nutrients", {}),
+                    })
+                    if len(recent) >= limit:
+                        return recent
+            current -= timedelta(days=1)
+        return recent
+
     def get_period_totals(self, person: str, start_date: str, end_date: str) -> list[dict]:
         """Return daily totals for a date range [{date, totals, item_count}, ...]."""
         person_logs = self._logs.get(person, {})
@@ -600,7 +574,7 @@ class VoedingslogCoordinator(DataUpdateCoordinator):
         item: dict = {
             "name": product["name"],
             "grams": grams,
-            "nutrients": product["nutrients"],
+            "nutrients": _sanitize_nutrients(product.get("nutrients", {})),
             "time": datetime.now().strftime("%H:%M"),
             "category": cat,
         }

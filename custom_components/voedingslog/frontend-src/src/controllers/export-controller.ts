@@ -434,8 +434,8 @@ export class ExportController {
           const y = padT + chartH - f * chartH;
           const val = Math.round(f * maxVal);
           return svg`
-            <line x1=${padL} y1=${y} x2=${W - padR} y2=${y} stroke="#eee" stroke-width="0.5" />
-            <text x=${padL - 4} y=${y + 3} text-anchor="end" fill="#999" font-size="9">${val}</text>
+            <line x1=${padL} y1=${y} x2=${W - padR} y2=${y} stroke="var(--divider-color, #eee)" stroke-width="0.5" />
+            <text x=${padL - 4} y=${y + 3} text-anchor="end" fill="var(--secondary-text-color, #999)" font-size="9">${val}</text>
           `;
         })}
 
@@ -459,7 +459,7 @@ export class ExportController {
           if (isMonth && i % 5 !== 0 && i !== days.length - 1) return nothing;
           const x = padL + (i / days.length) * chartW + chartW / days.length / 2;
           const label = isMonth ? d.date.slice(8) : _shortDay(d.date);
-          return svg`<text x=${x} y=${H - 5} text-anchor="middle" fill="#999" font-size="8">${label}</text>`;
+          return svg`<text x=${x} y=${H - 5} text-anchor="middle" fill="var(--secondary-text-color, #999)" font-size="8">${label}</text>`;
         })}
       </svg>
     `;

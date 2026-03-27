@@ -20,10 +20,12 @@ from .const import (
     WS_DELETE_ITEM,
     WS_EDIT_ITEM,
     WS_RESET_DAY,
+    WS_GET_RECENT,
     WS_GET_PERIOD,
     WS_GET_PRODUCTS,
     WS_SAVE_PRODUCT,
     WS_DELETE_PRODUCT,
+    WS_REFRESH_PRODUCT,
     WS_CLEANUP_PRODUCTS,
     WS_ADD_ALIAS,
     WS_GET_FAVORITES,
@@ -63,10 +65,12 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_edit_item)
     websocket_api.async_register_command(hass, ws_reset_day)
     register_ai_commands(hass, _get_coordinator)
+    websocket_api.async_register_command(hass, ws_get_recent)
     websocket_api.async_register_command(hass, ws_get_period)
     websocket_api.async_register_command(hass, ws_get_products)
     websocket_api.async_register_command(hass, ws_save_product)
     websocket_api.async_register_command(hass, ws_delete_product)
+    websocket_api.async_register_command(hass, ws_refresh_product)
     websocket_api.async_register_command(hass, ws_cleanup_products)
     websocket_api.async_register_command(hass, ws_add_alias)
     websocket_api.async_register_command(hass, ws_get_favorites)
@@ -304,6 +308,25 @@ async def ws_reset_day(hass, connection, msg):
     connection.send_result(msg["id"], {"success": True})
 
 
+# ── Recent items ─────────────────────────────────────────────────
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_GET_RECENT,
+        vol.Required("person"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_get_recent(hass, connection, msg):
+    """Return recently logged unique products."""
+    coordinator = _get_coordinator(hass, msg["person"])
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    items = coordinator.get_recent_items(msg["person"])
+    connection.send_result(msg["id"], {"items": items})
+
+
 # ── Period data ──────────────────────────────────────────────────
 
 @websocket_api.websocket_command(
@@ -379,6 +402,26 @@ async def ws_delete_product(hass, connection, msg):
         connection.send_result(msg["id"], {"success": True})
     else:
         connection.send_error(msg["id"], "not_found", "Product not found")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_REFRESH_PRODUCT,
+        vol.Required("product_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_refresh_product(hass, connection, msg):
+    """Re-fetch a product's nutrients from Open Food Facts."""
+    coordinator = _get_coordinator(hass)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Coordinator not ready")
+        return
+    product = await coordinator.refresh_product_from_off(msg["product_id"])
+    if product:
+        connection.send_result(msg["id"], {"product": product})
+    else:
+        connection.send_error(msg["id"], "not_found", "Product not found or OFF search failed")
 
 
 @websocket_api.websocket_command(

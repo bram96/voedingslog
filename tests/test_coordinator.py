@@ -1,5 +1,6 @@
 """Tests for coordinator logic — nutrient computation, product CRUD, migration."""
 import pytest
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 from custom_components.voedingslog.coordinator import (
     _compute_nutrients_from_components,
@@ -325,6 +326,61 @@ class TestRecipeProductRef:
         assert "Used in recipe" in names
         assert "My recipe" in names
         assert "Unreferenced" not in names
+
+
+class TestRecentItems:
+    def test_returns_unique_recent(self):
+        coord = _make_coordinator(["Jan"])
+        today = str(date.today())
+        coord._logs = {"Jan": {today: [
+            {"name": "A", "grams": 100, "nutrients": {}, "time": "08:00", "category": "breakfast"},
+            {"name": "B", "grams": 200, "nutrients": {}, "time": "12:00", "category": "lunch"},
+            {"name": "A", "grams": 150, "nutrients": {}, "time": "18:00", "category": "dinner"},
+        ]}}
+        recent = coord.get_recent_items("Jan")
+        assert len(recent) == 2
+        assert recent[0]["name"] == "A"  # most recent first
+        assert recent[0]["serving_grams"] == 150
+
+    def test_empty_logs(self):
+        coord = _make_coordinator(["Jan"])
+        coord._logs = {"Jan": {}}
+        assert coord.get_recent_items("Jan") == []
+
+
+class TestSanitizeNutrients:
+    def test_valid_values(self):
+        from custom_components.voedingslog.coordinator import _sanitize_nutrients
+        result = _sanitize_nutrients({"energy-kcal_100g": 200, "fat_100g": "10.5"})
+        assert result["energy-kcal_100g"] == 200.0
+        assert result["fat_100g"] == 10.5
+
+    def test_invalid_values(self):
+        from custom_components.voedingslog.coordinator import _sanitize_nutrients
+        result = _sanitize_nutrients({"energy-kcal_100g": "abc", "fat_100g": None})
+        assert result["energy-kcal_100g"] == 0.0
+        assert result["fat_100g"] == 0.0
+
+    def test_missing_keys(self):
+        from custom_components.voedingslog.coordinator import _sanitize_nutrients
+        result = _sanitize_nutrients({})
+        assert result["energy-kcal_100g"] == 0.0
+
+
+class TestDuplicateDetection:
+    def test_cache_skips_alias_match(self):
+        coord = _make_coordinator()
+        coord._products = [
+            {"id": "1", "type": "base", "name": "Volkoren brood", "aliases": ["brown bread"], "nutrients": {}},
+        ]
+        coord._cache_product({"name": "brown bread", "nutrients": {}})
+        assert len(coord._products) == 1  # not added, matched alias
+
+    def test_cache_case_insensitive(self):
+        coord = _make_coordinator()
+        coord._products = [{"id": "1", "type": "base", "name": "Melk", "aliases": [], "nutrients": {}}]
+        coord._cache_product({"name": "melk", "nutrients": {}})
+        assert len(coord._products) == 1
 
 
 class TestBarcodeLocalLookup:
