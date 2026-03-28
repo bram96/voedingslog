@@ -2,7 +2,7 @@
  * Search controller — product search, barcode, photo label dialogs.
  */
 import { html, nothing, type TemplateResult } from "lit";
-import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
+import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse, AiGuessNutrientsResponse } from "../types.js";
 import { ProductSearch } from "../product-search.js";
 import { readFileAsBase64 } from "../photo-capture.js";
 import { readNutrientFields } from "../ui/nutrient-fields.js";
@@ -82,6 +82,7 @@ export class SearchController {
       renderResult: (p) => this._renderResult(p, true),
       onBarcode: () => h._openBarcodeScanner(),
       onManual: () => { h._prefillProduct = null; h._setDialogMode("manual"); },
+      onAiGuess: h._config?.ai_task_entity ? () => this.aiGuessNutrients() : undefined,
     });
   }
 
@@ -239,6 +240,33 @@ export class SearchController {
       h._analyzing = false;
       h.requestUpdate();
       alert("Fout bij analyseren foto: " + ((err as Error).message || err));
+    }
+  }
+
+  async aiGuessNutrients(): Promise<void> {
+    const h = this.host;
+    const query = this.search.query.trim();
+    const foodName = query || prompt("Voer een productnaam in (bijv. paprika):");
+    if (!foodName) return;
+
+    h._analyzing = true;
+    h.requestUpdate();
+    try {
+      const res = await h.hass.callWS<AiGuessNutrientsResponse>({
+        type: "voedingslog/ai_guess_nutrients",
+        food_name: foodName,
+      });
+      h._analyzing = false;
+      if (res.product) {
+        h._openManualWithPrefill(res.product);
+      } else {
+        alert("AI kon geen voedingswaarden schatten.");
+        h.requestUpdate();
+      }
+    } catch (err) {
+      h._analyzing = false;
+      h.requestUpdate();
+      alert("Fout bij AI schatting: " + ((err as Error).message || err));
     }
   }
 

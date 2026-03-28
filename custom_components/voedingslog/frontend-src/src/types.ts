@@ -84,6 +84,10 @@ export interface AnalyzePhotoResponse {
   product: Product | null;
 }
 
+export interface AiGuessNutrientsResponse {
+  product: Product | null;
+}
+
 export interface MealIngredient {
   product_id?: string;
   name: string;
