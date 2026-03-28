@@ -194,12 +194,12 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
         `)}
       ` : nothing}
 
-      ${/* Online search button (add mode, when local search has query) */""}
-      ${isAdd && q && onlineResults.length === 0 ? html`
+      ${/* Online/AI search buttons (add mode, when there's a query) */""}
+      ${isAdd && q ? html`
         ${onlineSearching
           ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Online zoeken...</div>`
           : html`
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;margin-top:8px">
               <button class="btn-secondary search-online-btn" style="flex:1" @click=${() => callbacks.onSearchOnline()}>
                 <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online
               </button>

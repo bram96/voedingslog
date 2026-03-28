@@ -629,9 +629,9 @@ var la=Object.create;var yr=Object.defineProperty;var co=Object.getOwnPropertyDe
       `:G}
 
       ${""}
-      ${O&&V&&v.length===0?M`
+      ${O&&V?M`
         ${m?M`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Online zoeken...</div>`:M`
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;margin-top:8px">
               <button class="btn-secondary search-online-btn" style="flex:1" @click=${()=>k.onSearchOnline()}>
                 <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online
               </button>
