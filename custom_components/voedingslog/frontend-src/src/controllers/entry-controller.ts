@@ -236,7 +236,7 @@ export class EntryController {
       const input = h.shadowRoot?.getElementById(`edit-nutrient-${key}`) as HTMLInputElement | null;
       if (input) {
         const displayVal = parseFloat(input.value) || 0;
-        const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+        const factor = NUTRIENTS_META[key] || 1;
         nutrients[key] = displayVal / factor;
       }
     }

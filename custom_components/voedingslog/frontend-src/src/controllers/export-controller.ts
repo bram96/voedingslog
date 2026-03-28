@@ -3,7 +3,7 @@
  */
 import { html, type TemplateResult } from "lit";
 import type { HomeAssistant, LogItem, MealCategory, VoedingslogConfig, PeriodDay, GetPeriodResponse } from "../types.js";
-import { sumNutrients, itemKcal, NUTRIENTS_META, groupByCategory, DEFAULT_CATEGORY_LABELS } from "../helpers.js";
+import { sumNutrients, itemKcal, NUTRIENTS_META, groupByCategory, DEFAULT_CATEGORY_LABELS, toDateStr, shortDay } from "../helpers.js";
 import { renderDayView, type Slice } from "../views/day-view.js";
 import { renderPeriodView, type GoalNutrient } from "../views/period-view.js";
 
@@ -192,16 +192,16 @@ export class ExportController {
     const anchor = new Date(this._periodAnchor + "T12:00:00");
     if (this.periodMode === "day") {
       anchor.setDate(anchor.getDate() + delta);
-      this._periodAnchor = _toDateStr(anchor);
+      this._periodAnchor = toDateStr(anchor);
       this.host._selectedDate = this._periodAnchor;
       await this.host._loadLog();
     } else if (this.periodMode === "week") {
       anchor.setDate(anchor.getDate() + delta * 7);
-      this._periodAnchor = _toDateStr(anchor);
+      this._periodAnchor = toDateStr(anchor);
       await this._loadPeriodData();
     } else {
       anchor.setMonth(anchor.getMonth() + delta);
-      this._periodAnchor = _toDateStr(anchor);
+      this._periodAnchor = toDateStr(anchor);
       await this._loadPeriodData();
     }
     this.host.requestUpdate();
@@ -216,10 +216,10 @@ export class ExportController {
       const day = ref.getDay();
       const diff = (day - WEEK_START_DAY + 7) % 7;
       ref.setDate(ref.getDate() - diff);
-      this._periodAnchor = _toDateStr(ref);
+      this._periodAnchor = toDateStr(ref);
     } else {
       ref.setDate(1);
-      this._periodAnchor = _toDateStr(ref);
+      this._periodAnchor = toDateStr(ref);
     }
   }
 
@@ -229,10 +229,10 @@ export class ExportController {
     if (this.periodMode === "week") {
       const end = new Date(anchor);
       end.setDate(end.getDate() + 6);
-      return { start: _toDateStr(anchor), end: _toDateStr(end) };
+      return { start: toDateStr(anchor), end: toDateStr(end) };
     }
     const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
-    return { start: _toDateStr(anchor), end: _toDateStr(end) };
+    return { start: toDateStr(anchor), end: toDateStr(end) };
   }
 
   private _periodTitle(): string {
@@ -408,7 +408,7 @@ export class ExportController {
     ctx.font = "13px sans-serif";
     for (const [key, meta] of nutrientEntries) {
       const raw = totals[key] || 0;
-      const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+      const factor = NUTRIENTS_META[key] || 1;
       const value = raw * factor;
       y += rowH;
       ctx.fillStyle = "#333";
@@ -560,7 +560,7 @@ export class ExportController {
       for (let i = 0; i < days.length; i++) {
         if (isMonth && i % 5 !== 0 && i !== days.length - 1) continue;
         const x = padL + (i / days.length) * cW + cW / days.length / 2;
-        const label = isMonth ? days[i].date.slice(8) : _shortDay(days[i].date);
+        const label = isMonth ? days[i].date.slice(8) : shortDay(days[i].date);
         ctx.fillText(label, x, y + chartH + 12);
       }
 
@@ -603,12 +603,3 @@ export class ExportController {
   }
 }
 
-
-function _shortDay(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  return ["zo", "ma", "di", "wo", "do", "vr", "za"][d.getDay()];
-}
-
-function _toDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
-}

@@ -43,6 +43,9 @@ export class VoedingslogPanel extends LitElement {
   @state() _selectedDate: string = new Date().toISOString().split("T")[0];
   @state() _items: LogItem[] = [];
   @state() private _loading = true;
+  /** Cached derived data — recomputed when _items changes. */
+  private _cachedTotals: import("./types.js").NutrientMap = {};
+  private _cachedGroups: Record<MealCategory, IndexedLogItem[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
   @state() private _streak = 0;
 
   @state() _dialogMode: DialogMode = null;
@@ -183,6 +186,8 @@ export class VoedingslogPanel extends LitElement {
         date: this._selectedDate,
       });
       this._items = res.items || [];
+      this._cachedTotals = sumNutrients(this._items);
+      this._cachedGroups = groupByCategory(this._items);
     } catch (e) {
       console.error("Failed to load log:", e);
     }
@@ -202,7 +207,7 @@ export class VoedingslogPanel extends LitElement {
 
     try {
       const labels = this._config.category_labels || DEFAULT_CATEGORY_LABELS;
-      const groups = groupByCategory(this._items);
+      const groups = this._cachedGroups;
 
       return html`
         ${this._gestures.pullDistance > 10 ? html`
@@ -342,7 +347,7 @@ export class VoedingslogPanel extends LitElement {
   }
 
   private _renderDayTotals(): TemplateResult {
-    const totals = sumNutrients(this._items);
+    const totals = this._cachedTotals;
     const goal = this._getCaloriesGoal();
     const kcal = totals["energy-kcal_100g"] || 0;
     const pct = Math.min(100, Math.round((kcal / goal) * 100));

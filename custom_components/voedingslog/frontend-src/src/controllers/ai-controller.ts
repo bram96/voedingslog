@@ -196,8 +196,8 @@ export class AiController {
 
   private async _acceptSuggestion(): Promise<void> {
     const product = this.parsedProducts[this.validateIndex];
-    const suggestedId = (product as any).suggested_product_id;
-    const suggestedName = (product as any).suggested_product;
+    const suggestedId = product.suggested_product_id;
+    const suggestedName = product.suggested_product;
     if (!suggestedId || !suggestedName) return;
 
     // Search for the suggested product to get full data

@@ -55,10 +55,10 @@ export function renderValidateView(params: ValidateViewParams): TemplateResult {
       ${!product.matched
         ? html`
           <div class="ai-warning">Niet gevonden in database — zoek een product of sla over</div>
-          ${(product as any).suggested_product ? html`
+          ${product.suggested_product ? html`
             <button class="btn-secondary btn-confirm" style="margin-top:4px" @click=${onAcceptSuggestion}>
               <ha-icon icon="mdi:lightbulb-outline"></ha-icon>
-              Bedoel je "${(product as any).suggested_product}"?
+              Bedoel je "${product.suggested_product}"?
             </button>
           ` : nothing}
         `

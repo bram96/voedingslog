@@ -116,7 +116,7 @@ export function renderRecipeEditor(params: RecipeEditorParams): TemplateResult {
                 </div>
                 ${Object.entries(config?.nutrients || {}).map(
                   ([key, meta]) => {
-                    const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+                    const factor = NUTRIENTS_META[key] || 1;
                     const displayVal = ((ing.nutrients?.[key] || 0) * factor).toFixed(2);
                     return html`
                     <div class="form-field form-field-inline">

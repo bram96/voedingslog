@@ -86,7 +86,7 @@ export function renderDayView(params: DayViewParams): TemplateResult {
       <div class="detail-table-header">Alle voedingswaarden</div>
       ${Object.entries(config?.nutrients || {}).map(([key, meta]) => {
         const raw = totals[key] || 0;
-        const factor = (NUTRIENTS_META as Record<string, number>)[key] || 1;
+        const factor = NUTRIENTS_META[key] || 1;
         const value = raw * factor;
         return html`
           <div class="detail-row">

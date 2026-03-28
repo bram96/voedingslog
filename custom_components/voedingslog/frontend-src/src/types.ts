@@ -154,6 +154,8 @@ export interface NutrientDisplayConfig {
 export interface ParsedProduct extends Product {
   ai_name?: string;
   matched?: boolean;
+  suggested_product?: string;
+  suggested_product_id?: string;
 }
 
 export interface ParseFoodResponse {

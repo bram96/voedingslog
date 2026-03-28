@@ -6,6 +6,10 @@ import {
   sumNutrients,
   KEY_NUTRIENTS_DISPLAY,
   NUTRIENTS_META,
+  EDITABLE_NUTRIENTS,
+  formatDateLabel,
+  toDateStr,
+  shortDay,
 } from "./helpers.js";
 import type { LogItem, MealCategory } from "./types.js";
 
@@ -173,5 +177,47 @@ describe("KEY_NUTRIENTS_DISPLAY", () => {
 
   it("includes kcal first", () => {
     expect(KEY_NUTRIENTS_DISPLAY[0].key).toBe("energy-kcal_100g");
+  });
+});
+
+describe("EDITABLE_NUTRIENTS", () => {
+  it("has 8 fields", () => {
+    expect(EDITABLE_NUTRIENTS).toHaveLength(8);
+  });
+
+  it("includes sodium in mg", () => {
+    const sodium = EDITABLE_NUTRIENTS.find((n) => n.key === "sodium_100g");
+    expect(sodium?.label).toContain("mg");
+  });
+});
+
+describe("formatDateLabel", () => {
+  it("returns 'Vandaag' for today", () => {
+    const today = new Date().toISOString().split("T")[0];
+    expect(formatDateLabel(today)).toBe("Vandaag");
+  });
+
+  it("returns 'Gisteren' for yesterday", () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    expect(formatDateLabel(yesterday)).toBe("Gisteren");
+  });
+
+  it("returns formatted date for other days", () => {
+    const label = formatDateLabel("2026-01-15");
+    expect(label).toBeTruthy();
+    expect(label).not.toBe("Vandaag");
+  });
+});
+
+describe("toDateStr", () => {
+  it("formats date to YYYY-MM-DD", () => {
+    expect(toDateStr(new Date("2026-03-15T12:00:00Z"))).toBe("2026-03-15");
+  });
+});
+
+describe("shortDay", () => {
+  it("returns Dutch day abbreviation", () => {
+    expect(shortDay("2026-03-23")).toBe("ma"); // Monday
+    expect(shortDay("2026-03-28")).toBe("za"); // Saturday
   });
 });
