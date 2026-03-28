@@ -15,10 +15,10 @@ import type {
   GetProductsResponse,
   SaveProductResponse,
   SearchProductsResponse,
-  AiGuessNutrientsResponse,
   DialogMode,
 } from "../types.js";
 import { readNutrientFields } from "../ui/nutrient-fields.js";
+import { aiGuessNutrients } from "../helpers/api.js";
 import { renderProductsList } from "../views/products-list-view.js";
 import { renderBaseProductEditor } from "../views/base-product-editor-view.js";
 import { renderRecipeEditor } from "../views/recipe-editor-view.js";
@@ -221,22 +221,10 @@ export class ProductsController {
   }
 
   private async _aiGuessFromSearch(): Promise<void> {
-    const q = this.searchQuery.trim();
-    const foodName = q || prompt("Voer een productnaam in (bijv. paprika):");
+    const foodName = this.searchQuery.trim() || prompt("Voer een productnaam in (bijv. paprika):");
     if (!foodName) return;
-    try {
-      const res = await this.host.hass.callWS<AiGuessNutrientsResponse>({
-        type: "voedingslog/ai_guess_nutrients",
-        food_name: foodName,
-      });
-      if (res.product) {
-        this.host._selectProduct(res.product as Product, "products");
-      } else {
-        alert("AI kon geen voedingswaarden schatten.");
-      }
-    } catch {
-      alert("Fout bij AI schatting.");
-    }
+    const product = await aiGuessNutrients(this.host.hass, foodName);
+    if (product) this.host._selectProduct(product, "products");
   }
 
   openEditor(product: UnifiedProduct | null, newType?: "base" | "recipe"): void {

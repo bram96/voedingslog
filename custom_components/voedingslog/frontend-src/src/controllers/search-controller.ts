@@ -2,10 +2,11 @@
  * Search controller — product search, barcode, photo label dialogs.
  */
 import { html, nothing, type TemplateResult } from "lit";
-import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse, AiGuessNutrientsResponse } from "../types.js";
+import type { Product, VoedingslogConfig, DialogMode, GetFavoritesResponse, LookupBarcodeResponse, AnalyzePhotoResponse } from "../types.js";
 import { ProductSearch } from "../product-search.js";
 import { readFileAsBase64 } from "../photo-capture.js";
 import { readNutrientFields } from "../ui/nutrient-fields.js";
+import { aiGuessNutrients } from "../helpers/api.js";
 import { renderSearchView } from "../views/search-view.js";
 import { renderBarcodeView } from "../views/barcode-view.js";
 import { renderPhotoView } from "../views/photo-view.js";
@@ -247,28 +248,16 @@ export class SearchController {
 
   async aiGuessNutrients(): Promise<void> {
     const h = this.host;
-    const query = this.search.query.trim();
-    const foodName = query || prompt("Voer een productnaam in (bijv. paprika):");
+    const foodName = this.search.query.trim() || prompt("Voer een productnaam in (bijv. paprika):");
     if (!foodName) return;
-
     h._analyzing = true;
     h.requestUpdate();
-    try {
-      const res = await h.hass.callWS<AiGuessNutrientsResponse>({
-        type: "voedingslog/ai_guess_nutrients",
-        food_name: foodName,
-      });
-      h._analyzing = false;
-      if (res.product) {
-        h._openManualWithPrefill(res.product, "ai-guess");
-      } else {
-        alert("AI kon geen voedingswaarden schatten.");
-        h.requestUpdate();
-      }
-    } catch (err) {
-      h._analyzing = false;
+    const product = await aiGuessNutrients(h.hass, foodName);
+    h._analyzing = false;
+    if (product) {
+      h._openManualWithPrefill(product, "ai-guess");
+    } else {
       h.requestUpdate();
-      alert("Fout bij AI schatting: " + ((err as Error).message || err));
     }
   }
 
