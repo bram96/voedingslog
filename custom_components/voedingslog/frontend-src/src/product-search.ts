@@ -91,15 +91,21 @@ export class ProductSearch {
             `
         )}
       </div>
-      ${showOnlineButton && this.source === "local" && this.query.trim()
-        ? html`<button class="btn-secondary search-online-btn" @click=${() => this.search(true)}>
-            <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
-          </button>`
-        : nothing}
-      ${onAiGuess && this.query.trim()
-        ? html`<button class="btn-secondary search-online-btn" @click=${onAiGuess}>
-            <ha-icon icon="mdi:robot"></ha-icon> AI schatting
-          </button>`
+      ${(showOnlineButton && this.source === "local" && this.query.trim()) || (onAiGuess && this.query.trim())
+        ? html`
+          <div style="display:flex;gap:8px">
+            ${showOnlineButton && this.source === "local" && this.query.trim()
+              ? html`<button class="btn-secondary search-online-btn" style="flex:1" @click=${() => this.search(true)}>
+                  <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online
+                </button>`
+              : nothing}
+            ${onAiGuess && this.query.trim()
+              ? html`<button class="btn-secondary search-online-btn" style="flex:1" @click=${onAiGuess}>
+                  <ha-icon icon="mdi:robot"></ha-icon> AI schatting
+                </button>`
+              : nothing}
+          </div>
+        `
         : nothing}
     `;
   }

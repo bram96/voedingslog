@@ -199,14 +199,16 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
         ${onlineSearching
           ? html`<div class="search-loading"><ha-circular-progress indeterminate size="small"></ha-circular-progress> Online zoeken...</div>`
           : html`
-            <button class="btn-secondary search-online-btn" @click=${() => callbacks.onSearchOnline()}>
-              <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
-            </button>
-            ${callbacks.onAiGuess ? html`
-              <button class="btn-secondary search-online-btn" @click=${() => callbacks.onAiGuess!()}>
-                <ha-icon icon="mdi:robot"></ha-icon> AI schatting
+            <div style="display:flex;gap:8px">
+              <button class="btn-secondary search-online-btn" style="flex:1" @click=${() => callbacks.onSearchOnline()}>
+                <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online
               </button>
-            ` : nothing}
+              ${callbacks.onAiGuess ? html`
+                <button class="btn-secondary search-online-btn" style="flex:1" @click=${() => callbacks.onAiGuess!()}>
+                  <ha-icon icon="mdi:robot"></ha-icon> AI schatting
+                </button>
+              ` : nothing}
+            </div>
           `}
       ` : nothing}
 
