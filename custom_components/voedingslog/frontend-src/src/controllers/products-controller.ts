@@ -15,6 +15,7 @@ import type {
   GetProductsResponse,
   SaveProductResponse,
   SearchProductsResponse,
+  AiGuessNutrientsResponse,
   DialogMode,
 } from "../types.js";
 import { readNutrientFields } from "../ui/nutrient-fields.js";
@@ -110,6 +111,7 @@ export class ProductsController {
         onToggleFavorites: () => { this.showFavoritesOnly = !this.showFavoritesOnly; h.requestUpdate(); },
         onSetTypeFilter: (t) => { this.typeFilter = t; h.requestUpdate(); },
         onSearchOnline: () => this._searchOnline(),
+        onAiGuess: h._config?.ai_task_entity ? () => this._aiGuessFromSearch() : undefined,
         onSelectOnlineProduct: (p) => this._selectOnlineProduct(p),
         onSelectRecentProduct: (p) => h._selectProduct(p, "products"),
         onOpenBarcode: () => h._openBarcodeScanner(),
@@ -216,6 +218,25 @@ export class ProductsController {
 
   private _selectOnlineProduct(product: Product): void {
     this.host._selectProduct(product, "products");
+  }
+
+  private async _aiGuessFromSearch(): Promise<void> {
+    const q = this.searchQuery.trim();
+    const foodName = q || prompt("Voer een productnaam in (bijv. paprika):");
+    if (!foodName) return;
+    try {
+      const res = await this.host.hass.callWS<AiGuessNutrientsResponse>({
+        type: "voedingslog/ai_guess_nutrients",
+        food_name: foodName,
+      });
+      if (res.product) {
+        this.host._selectProduct(res.product as Product, "products");
+      } else {
+        alert("AI kon geen voedingswaarden schatten.");
+      }
+    } catch {
+      alert("Fout bij AI schatting.");
+    }
   }
 
   openEditor(product: UnifiedProduct | null, newType?: "base" | "recipe"): void {
