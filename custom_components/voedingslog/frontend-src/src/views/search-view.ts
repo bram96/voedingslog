@@ -30,7 +30,7 @@ export function renderSearchView(params: SearchViewParams): TemplateResult {
         : nothing}
       ${search.renderSearchBar(
         (p) => onSelected(p),
-        { renderResult: (p) => renderResult(p) },
+        { renderResult: (p) => renderResult(p), onAiGuess },
       )}
       <div class="ai-validate-actions" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--divider-color)">
         <button class="btn-secondary btn-confirm" @click=${onBarcode}>
@@ -41,12 +41,6 @@ export function renderSearchView(params: SearchViewParams): TemplateResult {
           <ha-icon icon="mdi:pencil-plus"></ha-icon>
           Handmatig
         </button>
-        ${onAiGuess ? html`
-          <button class="btn-secondary btn-confirm" @click=${onAiGuess}>
-            <ha-icon icon="mdi:robot"></ha-icon>
-            AI schatting
-          </button>
-        ` : nothing}
       </div>
     </div>
   `;

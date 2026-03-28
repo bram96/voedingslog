@@ -58,11 +58,12 @@ export class ProductSearch {
     onSelect: (p: Product) => void,
     options: {
       showOnlineButton?: boolean;
+      onAiGuess?: () => void;
       renderResult?: (p: Product) => TemplateResult;
       placeholder?: string;
     } = {},
   ): TemplateResult {
-    const { showOnlineButton = true, renderResult, placeholder = "Productnaam..." } = options;
+    const { showOnlineButton = true, onAiGuess, renderResult, placeholder = "Productnaam..." } = options;
 
     return html`
       <div class="input-row">
@@ -93,6 +94,11 @@ export class ProductSearch {
       ${showOnlineButton && this.source === "local" && this.query.trim()
         ? html`<button class="btn-secondary search-online-btn" @click=${() => this.search(true)}>
             <ha-icon icon="mdi:cloud-search"></ha-icon> Zoek online (Open Food Facts)
+          </button>`
+        : nothing}
+      ${onAiGuess && this.query.trim()
+        ? html`<button class="btn-secondary search-online-btn" @click=${onAiGuess}>
+            <ha-icon icon="mdi:robot"></ha-icon> AI schatting
           </button>`
         : nothing}
     `;

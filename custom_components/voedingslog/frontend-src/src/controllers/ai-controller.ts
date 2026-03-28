@@ -10,6 +10,7 @@ import type {
   ParsedProduct,
   ParseFoodResponse,
   SearchProductsResponse,
+  AiGuessNutrientsResponse,
   VoedingslogConfig,
 } from "../types.js";
 import { defaultCategory } from "../helpers/categories.js";
@@ -92,6 +93,7 @@ export class AiController {
       onSearchInput: (v) => { this.validateSearch = v; h.requestUpdate(); },
       onSearchLocal: () => this.searchValidate(),
       onSearchOnline: () => this.searchValidate(true),
+      onAiGuess: h._config?.ai_task_entity ? () => this.aiGuessForValidate() : undefined,
       onSelectProduct: (p) => this.selectProduct(p),
       onAcceptSuggestion: () => this._acceptSuggestion(),
     });
@@ -165,6 +167,26 @@ export class AiController {
       h.requestUpdate();
       console.error("AI handwriting parsing failed:", err);
       alert("Fout bij analyseren: " + ((err as Error).message || err));
+    }
+  }
+
+  async aiGuessForValidate(): Promise<void> {
+    const h = this.host;
+    const product = this.parsedProducts[this.validateIndex];
+    const foodName = this.validateSearch.trim() || product?.ai_name || product?.name;
+    if (!foodName) return;
+
+    try {
+      const res = await h.hass.callWS<AiGuessNutrientsResponse>({
+        type: "voedingslog/ai_guess_nutrients",
+        food_name: foodName,
+      });
+      if (res.product) {
+        this.selectProduct(res.product as Product);
+      }
+    } catch (err) {
+      console.error("AI guess in validate failed:", err);
+      alert("Fout bij AI schatting: " + ((err as Error).message || err));
     }
   }
 

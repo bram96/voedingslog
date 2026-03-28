@@ -18,12 +18,13 @@ interface ValidateViewParams {
   onSearchInput: (value: string) => void;
   onSearchLocal: () => void;
   onSearchOnline: () => void;
+  onAiGuess?: () => void;
   onSelectProduct: (p: Product) => void;
   onAcceptSuggestion: () => void;
 }
 
 export function renderValidateView(params: ValidateViewParams): TemplateResult {
-  const { products, index, validateMode, validateSearch, validateSearchResults, config, onClose, onDone, onSkip, onConfirm, onSearchInput, onSearchLocal, onSearchOnline, onSelectProduct, onAcceptSuggestion } = params;
+  const { products, index, validateMode, validateSearch, validateSearchResults, config, onClose, onDone, onSkip, onConfirm, onSearchInput, onSearchLocal, onSearchOnline, onAiGuess, onSelectProduct, onAcceptSuggestion } = params;
 
   if (!products.length) return html``;
   if (index >= products.length) {
@@ -71,6 +72,9 @@ export function renderValidateView(params: ValidateViewParams): TemplateResult {
         <div style="display:flex;gap:4px;margin-top:4px">
           <button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${onSearchLocal}>Zoek lokaal</button>
           <button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${onSearchOnline}>Zoek online</button>
+          ${onAiGuess ? html`<button class="btn-secondary" style="flex:1;padding:6px;font-size:13px" @click=${onAiGuess}>
+            <ha-icon icon="mdi:robot" style="--mdc-icon-size:14px"></ha-icon> AI
+          </button>` : nothing}
         </div>
         ${validateSearchResults.length > 0 ? html`
           <div class="search-results">
