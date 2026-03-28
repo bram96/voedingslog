@@ -5,6 +5,7 @@ import { renderDialogHeader } from "../ui/dialog-header.js";
 
 interface ManualEntryViewParams {
   prefill: Product | null;
+  prefillSource?: "photo" | "ai-guess" | null;
   config: VoedingslogConfig | null;
   onClose: () => void;
   onConfirm: () => void;
@@ -12,11 +13,14 @@ interface ManualEntryViewParams {
 }
 
 export function renderManualEntryView(params: ManualEntryViewParams): TemplateResult {
-  const { prefill, config, onClose, onConfirm, onPhoto } = params;
+  const { prefill, prefillSource, config, onClose, onConfirm, onPhoto } = params;
+  const hint = prefillSource === "ai-guess"
+    ? "Door AI geschat. Controleer en pas aan indien nodig."
+    : "Door AI herkend. Controleer en pas aan indien nodig.";
   return html`
     ${renderDialogHeader(prefill ? "Controleer voedingswaarden" : "Handmatig toevoegen", onClose)}
     <div class="dialog-body">
-      ${prefill ? html`<p class="manual-hint">Door AI herkend. Controleer en pas aan indien nodig.</p>` : nothing}
+      ${prefill ? html`<p class="manual-hint">${hint}</p>` : nothing}
       <div class="form-field">
         <label>Productnaam</label>
         <input type="text" id="manual-name"

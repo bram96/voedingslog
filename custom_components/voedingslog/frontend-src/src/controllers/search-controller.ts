@@ -30,7 +30,8 @@ export interface SearchControllerHost {
   _stopPhotoCamera(): void;
   _openBarcodeScanner(): void;
   _handleBarcodePhoto(e: Event): void;
-  _openManualWithPrefill(product: Product): void;
+  _prefillSource: "photo" | "ai-guess" | null;
+  _openManualWithPrefill(product: Product, source?: "photo" | "ai-guess"): void;
   _capturePhotoFrame(): string | null;
 }
 
@@ -118,6 +119,7 @@ export class SearchController {
     const h = this.host;
     return renderManualEntryView({
       prefill: h._prefillProduct,
+      prefillSource: h._prefillSource,
       config: h._config,
       onClose: () => h._setDialogMode(this.returnToMode as string),
       onConfirm: () => this.confirmManualEntry(),
@@ -258,7 +260,7 @@ export class SearchController {
       });
       h._analyzing = false;
       if (res.product) {
-        h._openManualWithPrefill(res.product);
+        h._openManualWithPrefill(res.product, "ai-guess");
       } else {
         alert("AI kon geen voedingswaarden schatten.");
         h.requestUpdate();
