@@ -1,5 +1,7 @@
 import { LitElement, html, nothing, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
+import { repeat } from "lit/directives/repeat.js";
 import { Html5Camera } from "./barcode-capture.js";
 import type {
   HomeAssistant,
@@ -267,7 +269,7 @@ export class VoedingslogPanel extends LitElement {
       <div class="header">
         <div class="header-bar">
           ${this.narrow
-            ? html`<button class="menu-btn" @click=${() => this._toggleMenu()}>
+            ? html`<button class="menu-btn" aria-label="Menu" @click=${() => this._toggleMenu()}>
                 <ha-icon icon="mdi:menu"></ha-icon>
               </button>`
             : nothing}
@@ -278,7 +280,9 @@ export class VoedingslogPanel extends LitElement {
               ${persons.map(
                 (p) => html`
                   <button
-                    class="person-tab ${p === this._selectedPerson ? "active" : ""}"
+                    class=${classMap({ "person-tab": true, active: p === this._selectedPerson })}
+                    role="tab"
+                    aria-selected=${p === this._selectedPerson}
                     @click=${() => {
                       this._selectedPerson = p;
                       this._loadLog();
@@ -412,7 +416,7 @@ export class VoedingslogPanel extends LitElement {
         </div>
         ${items.length === 0
           ? html`<div class="empty-hint">Nog geen items</div>`
-          : items.map((item) => this._renderItem(item))}
+          : repeat(items, (item) => item._index, (item) => this._renderItem(item))}
       </div>
     `;
   }
@@ -470,7 +474,7 @@ export class VoedingslogPanel extends LitElement {
   private _renderDialog(): TemplateResult | typeof nothing {
     if (!this._dialogMode) return nothing;
     return html`
-      <div class="dialog-overlay" @click=${() => this._navigateBack()}>
+      <div class="dialog-overlay" role="dialog" aria-modal="true" @click=${() => this._navigateBack()}>
         <div class="dialog" @click=${(e: Event) => e.stopPropagation()}>
           ${this._dialogMode === "search" ? this._searchCtrl.renderSearchDialog() : nothing}
           ${this._dialogMode === "barcode" ? this._searchCtrl.renderBarcodeDialog() : nothing}
@@ -618,6 +622,14 @@ export class VoedingslogPanel extends LitElement {
       this._pushDialogHistory();
     }
     this._dialogMode = mode as DialogMode;
+    // Auto-focus first interactive element in the dialog
+    if (mode) {
+      this.updateComplete.then(() => {
+        const dialog = this.shadowRoot?.querySelector(".dialog");
+        const focusable = dialog?.querySelector<HTMLElement>("input, button.close-btn, textarea, select");
+        focusable?.focus();
+      });
+    }
   }
 
   _openFileInput(id: string): void {

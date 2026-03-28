@@ -359,7 +359,16 @@ export class ProductsController {
   // ── Favorites ─────────────────────────────────────────────────
 
   toggleFavorite(product: UnifiedProduct): void {
-    product.favorite = !product.favorite;
+    // Immutable update — replace the product in the array
+    const newFav = !product.favorite;
+    const idx = this.products.findIndex((p) => p.id === product.id);
+    if (idx >= 0) {
+      this.products = [
+        ...this.products.slice(0, idx),
+        { ...this.products[idx], favorite: newFav },
+        ...this.products.slice(idx + 1),
+      ];
+    }
     this.host.hass.callWS({
       type: "voedingslog/toggle_favorite",
       product_id: product.id,
