@@ -18,6 +18,7 @@ from .const import (
     WS_ANALYZE_PHOTO,
     WS_PARSE_TEXT,
     WS_PARSE_HANDWRITING,
+    WS_AI_GUESS_NUTRIENTS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -370,9 +371,121 @@ def _create_parse_handler(get_coordinator):
     return ws_parse_text, ws_parse_handwriting
 
 
+# ── AI nutrient guess ───────────────────────────────────────────
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_AI_GUESS_NUTRIENTS,
+        vol.Required("food_name"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_ai_guess_nutrients(hass, connection, msg):
+    """Ask AI to estimate per-100g nutrients for a plain food item."""
+    ai_entity = get_ai_entity(hass)
+    if not ai_entity:
+        connection.send_error(
+            msg["id"], "no_ai_entity",
+            "Geen AI Task entity geconfigureerd."
+        )
+        return
+
+    food_name = msg["food_name"]
+    structure = {
+        "name": {
+            "description": "The canonical name for this food (in Dutch if possible)",
+            "required": True,
+            "selector": {"text": {}},
+        },
+        "energy_kcal": {
+            "description": "Energy in kcal per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "fat": {
+            "description": "Fat in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "saturated_fat": {
+            "description": "Saturated fat in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "carbohydrates": {
+            "description": "Carbohydrates in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "sugars": {
+            "description": "Sugars in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "fiber": {
+            "description": "Fiber in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "proteins": {
+            "description": "Proteins in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.1}},
+        },
+        "sodium": {
+            "description": "Sodium in grams per 100g",
+            "required": True,
+            "selector": {"number": {"min": 0, "step": 0.001}},
+        },
+    }
+
+    try:
+        result = await hass.services.async_call(
+            "ai_task",
+            "generate_data",
+            {
+                "task_name": "food_nutrient_guess",
+                "entity_id": ai_entity,
+                "instructions": (
+                    f"Estimate the nutritional values PER 100 GRAMS for: {food_name}. "
+                    "This is a plain/generic food item. Use your knowledge of typical "
+                    "nutritional databases (like USDA, NEVO, Open Food Facts) to provide "
+                    "realistic estimates. For sodium: provide the value in grams (not mg). "
+                    "If unsure, provide your best estimate."
+                ),
+                "structure": structure,
+            },
+            blocking=True,
+            return_response=True,
+        )
+
+        data = result.get("data", {}) if result else {}
+        connection.send_result(msg["id"], {
+            "product": {
+                "name": data.get("name", food_name),
+                "serving_grams": 100,
+                "nutrients": {
+                    "energy-kcal_100g": float(data.get("energy_kcal", 0)),
+                    "fat_100g": float(data.get("fat", 0)),
+                    "saturated-fat_100g": float(data.get("saturated_fat", 0)),
+                    "carbohydrates_100g": float(data.get("carbohydrates", 0)),
+                    "sugars_100g": float(data.get("sugars", 0)),
+                    "fiber_100g": float(data.get("fiber", 0)),
+                    "proteins_100g": float(data.get("proteins", 0)),
+                    "sodium_100g": float(data.get("sodium", 0)),
+                },
+            }
+        })
+
+    except Exception as e:
+        _LOGGER.error("AI nutrient guess failed: %s", e)
+        connection.send_error(msg["id"], "ai_error", str(e))
+
+
 def register_ai_commands(hass: HomeAssistant, get_coordinator) -> None:
     """Register all AI-related WebSocket commands."""
     websocket_api.async_register_command(hass, ws_analyze_photo)
+    websocket_api.async_register_command(hass, ws_ai_guess_nutrients)
     ws_text, ws_hw = _create_parse_handler(get_coordinator)
     websocket_api.async_register_command(hass, ws_text)
     websocket_api.async_register_command(hass, ws_hw)

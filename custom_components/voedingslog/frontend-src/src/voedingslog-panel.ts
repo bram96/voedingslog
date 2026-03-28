@@ -49,6 +49,7 @@ export class VoedingslogPanel extends LitElement {
   @state() _scanFailed = false;
   @state() _photoCameraActive = false;
   @state() _prefillProduct: Product | null = null;
+  @state() _prefillSource: "photo" | "ai-guess" | null = null;
   @state() _analyzing = false;
   @state() _editingItem: IndexedLogItem | null = null;
 
@@ -492,8 +493,9 @@ export class VoedingslogPanel extends LitElement {
 
 
 
-  _openManualWithPrefill(product: Product): void {
+  _openManualWithPrefill(product: Product, source: "photo" | "ai-guess" = "photo"): void {
     this._prefillProduct = product;
+    this._prefillSource = source;
     this._setDialogMode("manual");
   }
 
@@ -597,6 +599,7 @@ export class VoedingslogPanel extends LitElement {
     this._scanning = false;
     this._scanFailed = false;
     this._prefillProduct = null;
+    this._prefillSource = null;
     this._searchCtrl.reset();
     this._products.reset();
     this._export.reset();

@@ -22,6 +22,7 @@ export interface AiControllerHost extends PhotoCaptureHost {
   shadowRoot: ShadowRoot | null;
   _config: VoedingslogConfig | null;
   _selectedPerson: string | null;
+  _selectedDate: string;
   requestUpdate(): void;
   _closeDialog(): void;
   _loadLog(): Promise<void>;
@@ -267,6 +268,7 @@ export class AiController {
           grams,
           nutrients: product.nutrients || {},
           category,
+          date: h._selectedDate,
         });
       } catch (err) {
         console.error("Failed to log AI product:", err);

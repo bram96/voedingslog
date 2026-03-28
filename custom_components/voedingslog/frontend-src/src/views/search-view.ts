@@ -11,10 +11,11 @@ interface SearchViewParams {
   renderResult: (p: Product) => TemplateResult;
   onBarcode: () => void;
   onManual: () => void;
+  onAiGuess?: () => void;
 }
 
 export function renderSearchView(params: SearchViewParams): TemplateResult {
-  const { search, favorites, onClose, onSelected, renderResult, onBarcode, onManual } = params;
+  const { search, favorites, onClose, onSelected, renderResult, onBarcode, onManual, onAiGuess } = params;
   const showFavorites = !search.query.trim() && favorites.length > 0;
   return html`
     ${renderDialogHeader("Zoek product", onClose)}
@@ -40,6 +41,12 @@ export function renderSearchView(params: SearchViewParams): TemplateResult {
           <ha-icon icon="mdi:pencil-plus"></ha-icon>
           Handmatig
         </button>
+        ${onAiGuess ? html`
+          <button class="btn-secondary btn-confirm" @click=${onAiGuess}>
+            <ha-icon icon="mdi:robot"></ha-icon>
+            AI schatting
+          </button>
+        ` : nothing}
       </div>
     </div>
   `;
