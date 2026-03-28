@@ -43,6 +43,43 @@ Source in `frontend-src/src/`, built output in `frontend/voedingslog-panel.js`.
 | `controllers/ai-controller.ts` | Batch add — AI text parsing, handwriting OCR, product validation flow |
 | `controllers/export-controller.ts` | Day detail dialog, pie chart, PNG export, download/share |
 
+**Views (template renderers for each dialog/screen):**
+
+| File | Purpose |
+|------|---------|
+| `views/search-view.ts` | Product search interface |
+| `views/weight-view.ts` | Portion/weight selection |
+| `views/edit-view.ts` | Edit item dialog |
+| `views/day-view.ts` | Day detail with pie chart, macros, items by category |
+| `views/period-view.ts` | Week/month charts with navigation |
+| `views/products-list-view.ts` | Product management list |
+| `views/base-product-editor-view.ts` | Base product creation/editing |
+| `views/recipe-editor-view.ts` | Fixed and component recipe creation/editing |
+| `views/manual-entry-view.ts` | Manual nutrient entry form |
+| `views/photo-view.ts` | Camera/file picker |
+| `views/barcode-view.ts` | Manual barcode entry |
+| `views/batch-add-view.ts` | Multi-item AI parsing progress |
+| `views/validate-view.ts` | AI-parsed item validation flow |
+
+**UI components:**
+
+| File | Purpose |
+|------|---------|
+| `ui/chart.ts` | Pie and bar chart rendering |
+| `ui/dialog-header.ts` | Dialog header with back button |
+| `ui/form-helpers.ts` | Form input helpers |
+| `ui/nutrient-fields.ts` | Nutrient editor fields |
+
+**Helper modules:**
+
+| File | Purpose |
+|------|---------|
+| `helpers/api.ts` | WebSocket call wrappers |
+| `helpers/categories.ts` | Meal category constants |
+| `helpers/dates.ts` | Date formatting |
+| `helpers/gestures.ts` | Swipe/pull-to-refresh gesture handler |
+| `helpers/nutrients.ts` | Nutrient metadata and display constants |
+
 **Shared utilities:**
 
 | File | Purpose |
@@ -92,13 +129,13 @@ make typecheck  # TypeScript type check only
 
 The `.githooks/pre-commit` hook runs all tests before every commit. Activated via `git config core.hooksPath .githooks` (done by `make setup`).
 
-### Test files (165 tests total)
+### Test files (174 tests total)
 
 | File | Tests | What it covers |
 |------|-------|----------------|
-| `tests/test_coordinator.py` | 82 | Nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items/searches, input sanitization, log/delete/reset operations |
-| `tests/test_open_food_facts.py` | 17 | OFF product processing, serving parsing, portion building, micronutrient conversion, completeness |
-| `frontend-src/src/helpers.test.ts` | 21 | Nutrient calculation (all keys), grouping, display constants, NUTRIENTS_META |
+| `tests/test_coordinator.py` | 73 | Nutrient computation, product CRUD, fuzzy search, favorites, aliases, barcode, streaks, merge, duplicate detection, component editing, recipe product refs, cleanup, period totals, recent items/searches, input sanitization, log/delete/reset operations |
+| `tests/test_open_food_facts.py` | 26 | OFF product processing, serving parsing, portion building, micronutrient conversion, completeness |
+| `frontend-src/src/helpers.test.ts` | 30 | Nutrient calculation (all keys), grouping, display constants, NUTRIENTS_META |
 | `frontend-src/src/voedingslog-panel.test.ts` | 45 | E2E component tests — renders actual LitElement in jsdom, tests dialogs, navigation, products add/manage, weight dialog, day detail, period toggle, delete/undo, loading/empty states, narrow mode |
 
 ### Test coverage
@@ -223,6 +260,7 @@ Categories: `breakfast`, `lunch`, `dinner`, `snack` (auto-assigned by time of da
 | `voedingslog/analyze_photo` | AI analysis of nutrition label photo (structured output) |
 | `voedingslog/parse_text` | AI text parsing → product lookup from cache/OFF, stores aliases |
 | `voedingslog/parse_handwriting` | AI handwriting OCR → product lookup from cache/OFF, stores aliases |
+| `voedingslog/ai_guess_nutrients` | AI nutrient estimation for unknown products |
 
 ## Code Conventions
 

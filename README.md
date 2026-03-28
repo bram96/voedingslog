@@ -1,5 +1,7 @@
 # Voedingslog — Home Assistant Custom Component
 
+> **Let op:** Deze custom component is volledig gegenereerd door een LLM (Large Language Model). Alle code — Python backend, TypeScript frontend, tests en documentatie — is geschreven door AI.
+
 Een uitgebreide voedingstracker die draait als sidebar panel in Home Assistant. Houd calorieen, macronutrienten, vezels, vitamines en mineralen bij voor meerdere personen. Producten komen uit **Open Food Facts** — een gratis, open database met miljoenen producten inclusief Nederlandse supermarktproducten.
 
 De app combineert slimme zoekfuncties, barcode scanning, AI-gestuurde herkenning en persoonlijke voedingsanalyse in een mobiel-vriendelijke interface die naadloos integreert met je Home Assistant setup.
@@ -150,11 +152,11 @@ Alle data wordt bewaard in de HA `.storage/` map en is onderdeel van HA backups:
 
 ```bash
 make setup    # venv + deps + pre-commit hook
-make test     # 165 tests (Python + TypeScript + E2E)
+make test     # 174 tests (Python + TypeScript + E2E)
 make build    # frontend bundlen
 ```
 
-De codebase heeft 165 geautomatiseerde tests: 99 Python backend tests, 21 TypeScript unit tests voor berekeningen, en 45 E2E component tests die het daadwerkelijke panel renderen in jsdom en gebruikersinteracties simuleren. Een pre-commit hook runt alle tests automatisch voor elke commit.
+De codebase heeft 174 geautomatiseerde tests: 99 Python backend tests (73 coordinator + 26 Open Food Facts), 30 TypeScript unit tests voor berekeningen, en 45 E2E component tests die het daadwerkelijke panel renderen in jsdom en gebruikersinteracties simuleren. Een pre-commit hook runt alle tests automatisch voor elke commit.
 
 ---
 
