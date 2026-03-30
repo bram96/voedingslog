@@ -189,42 +189,42 @@ async def ws_analyze_photo(hass, connection, msg):
         "energy_kcal": {
             "description": "Energy in kcal per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "fat": {
             "description": "Fat in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "saturated_fat": {
             "description": "Saturated fat in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "carbohydrates": {
             "description": "Carbohydrates in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "sugars": {
             "description": "Sugars in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "fiber": {
             "description": "Fiber in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "proteins": {
             "description": "Proteins in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "sodium": {
             "description": "Sodium in grams per 100g (convert from salt: salt / 2.5)",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.001}},
+            "selector": {"number": {"step": 0.001}},
         },
     }
 
@@ -400,42 +400,42 @@ async def ws_ai_guess_nutrients(hass, connection, msg):
         "energy_kcal": {
             "description": "Energy in kcal per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "fat": {
             "description": "Fat in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "saturated_fat": {
             "description": "Saturated fat in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "carbohydrates": {
             "description": "Carbohydrates in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "sugars": {
             "description": "Sugars in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "fiber": {
             "description": "Fiber in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "proteins": {
             "description": "Proteins in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.1}},
+            "selector": {"number": {"step": 0.1}},
         },
         "sodium": {
             "description": "Sodium in grams per 100g",
             "required": True,
-            "selector": {"number": {"min": 0, "step": 0.001}},
+            "selector": {"number": {"step": 0.001}},
         },
     }
 
