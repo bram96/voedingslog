@@ -38,8 +38,8 @@ describe("VoedingslogPanel", () => {
   let el: VoedingslogPanel;
 
   beforeEach(async () => {
-    // Clean up any previous elements
     document.body.innerHTML = "";
+    window.location.hash = "";
   });
 
   describe("Initial render", () => {
@@ -181,7 +181,7 @@ describe("VoedingslogPanel", () => {
         "voedingslog/get_log": () => {
           callCount++;
           // First call returns items, subsequent calls (after delete) return empty
-          if (callCount <= 1) {
+          if (callCount <= 2) {
             return { items: [{ name: "Brood", grams: 70, nutrients: { "energy-kcal_100g": 247 }, time: "08:30", category: "breakfast" }], totals: {} };
           }
           return { items: [], totals: {} };

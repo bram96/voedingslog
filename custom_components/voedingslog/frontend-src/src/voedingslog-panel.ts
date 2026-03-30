@@ -76,6 +76,44 @@ export class VoedingslogPanel extends LitElement {
   private _popStateHandler = () => this._handleBackButton();
   private _dialogHistoryDepth = 0;
 
+  // ── URL hash state persistence ───────────────────────────────
+  private _onHashChange = () => {
+    this._readHash();
+    if (this._activeView === "products") {
+      this._products.open("manage");
+    } else {
+      this._loadLog();
+    }
+  };
+
+  /** Write current state to URL hash: #products or #person/date */
+  private _updateHash(): void {
+    const hash = this._activeView === "products"
+      ? "#products"
+      : `#${encodeURIComponent(this._selectedPerson || "")}/${this._selectedDate}`;
+    if (window.location.hash !== hash) {
+      history.replaceState(null, "", hash);
+    }
+  }
+
+  /** Read state from URL hash on load. */
+  private _readHash(): void {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    if (hash === "products") {
+      this._activeView = "products";
+      return;
+    }
+    const parts = hash.split("/");
+    if (parts.length >= 1 && parts[0]) {
+      this._selectedPerson = decodeURIComponent(parts[0]);
+      this._activeView = "log";
+    }
+    if (parts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(parts[1])) {
+      this._selectedDate = parts[1];
+    }
+  }
+
   private _gestures = new GestureHandler({
     isDialogOpen: () => !!this._dialogMode,
     onSwipe: (delta) => this._changeDate(delta),
@@ -86,13 +124,16 @@ export class VoedingslogPanel extends LitElement {
   async connectedCallback(): Promise<void> {
     super.connectedCallback();
     window.addEventListener("popstate", this._popStateHandler);
+    window.addEventListener("hashchange", this._onHashChange);
     this._gestures.attach(this);
+    this._readHash();
     await this._loadConfig();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("popstate", this._popStateHandler);
+    window.removeEventListener("hashchange", this._onHashChange);
     this._gestures.detach(this);
     this._barcodeCamera.stop();
     this._photoCamera.stop();
@@ -198,6 +239,7 @@ export class VoedingslogPanel extends LitElement {
       type: "voedingslog/get_streak", person: this._selectedPerson,
     }).then((r) => { this._streak = r.streak; }).catch(() => {});
     this._loading = false;
+    this._updateHash();
   }
 
   // ── Rendering ────────────────────────────────────────────────────
@@ -347,6 +389,7 @@ export class VoedingslogPanel extends LitElement {
   private async _showProducts(): Promise<void> {
     this._activeView = "products";
     this._products.fullPage = true;
+    this._updateHash();
     await this._products.open("manage");
   }
 
