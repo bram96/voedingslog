@@ -279,8 +279,9 @@ export const panelStyles = css`
   .ha-search-bar {
     display: flex; align-items: center; gap: 8px;
     background: var(--card-background-color); border: 1px solid var(--divider-color);
-    border-radius: 28px; padding: 8px 16px; margin-bottom: 12px;
+    border-radius: 28px; padding: 8px 16px; margin-bottom: 8px;
   }
+  .dialog-body .ha-search-bar { margin-bottom: 12px; }
   .ha-search-input {
     flex: 1; border: none; background: none; outline: none;
     font-size: 14px; color: var(--primary-text-color);

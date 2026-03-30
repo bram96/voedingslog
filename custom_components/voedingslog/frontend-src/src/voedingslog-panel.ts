@@ -230,6 +230,7 @@ export class VoedingslogPanel extends LitElement {
                   (cat) => this._renderCategorySection(cat, labels[cat], groups[cat])
                 )}
               </div>
+              ${this._renderLogFab()}
             `}
         </div>
         ${this._renderDialog()}
@@ -424,6 +425,38 @@ export class VoedingslogPanel extends LitElement {
       this._prefillSource = "photo";
       this._setDialogMode("photo");
     });
+  }
+
+  @state() private _logFabOpen = false;
+
+  private _renderLogFab(): TemplateResult {
+    const hasAI = !!this._config?.ai_task_entity;
+    return html`
+      <div class="fab-container">
+        ${this._logFabOpen ? html`
+          <div class="fab-menu">
+            <button class="fab-menu-item" @click=${() => { this._logFabOpen = false; this._openBarcodeScanner(); }}>
+              <ha-icon icon="mdi:barcode-scan"></ha-icon>
+              <span>Scan barcode</span>
+            </button>
+            ${hasAI ? html`
+              <button class="fab-menu-item" @click=${() => { this._logFabOpen = false; this._openBatchAdd("log"); }}>
+                <ha-icon icon="mdi:text-box-outline"></ha-icon>
+                <span>Bulk toevoegen</span>
+              </button>
+            ` : nothing}
+            <button class="fab-menu-item" @click=${() => { this._logFabOpen = false; this._products.open("add"); }}>
+              <ha-icon icon="mdi:plus"></ha-icon>
+              <span>Toevoegen</span>
+            </button>
+          </div>
+        ` : nothing}
+        <button class="fab" aria-label="Toevoegen" @click=${() => { this._logFabOpen = !this._logFabOpen; }}>
+          <ha-icon icon=${this._logFabOpen ? "mdi:close" : "mdi:plus"}></ha-icon>
+        </button>
+      </div>
+      ${this._logFabOpen ? html`<div class="fab-scrim" @click=${() => { this._logFabOpen = false; }}></div>` : nothing}
+    `;
   }
 
   private _renderActions(): TemplateResult {
