@@ -26,9 +26,6 @@ export interface ExportControllerHost {
 
 type PeriodMode = "day" | "week" | "month";
 
-/** 1 = Monday (ISO/European default). 0 = Sunday. */
-const WEEK_START_DAY = 1;
-
 export class ExportController {
   host: ExportControllerHost;
   exportImageUrl: string | null = null;
@@ -42,6 +39,11 @@ export class ExportController {
   private _suggestionsLoading = false;
   // Daily review
   private _dailyReview: string | null = null;
+
+  /** Get week start day from HA locale (0=Sunday, 1=Monday). Defaults to 1 (Monday). */
+  private get _weekStartDay(): number {
+    return this.host.hass?.locale?.first_weekday ?? 1;
+  }
   private _reviewLoading = false;
 
   constructor(host: ExportControllerHost) {
@@ -214,7 +216,7 @@ export class ExportController {
       this._periodAnchor = this.host._selectedDate;
     } else if (this.periodMode === "week") {
       const day = ref.getDay();
-      const diff = (day - WEEK_START_DAY + 7) % 7;
+      const diff = (day - this._weekStartDay + 7) % 7;
       ref.setDate(ref.getDate() - diff);
       this._periodAnchor = toDateStr(ref);
     } else {
