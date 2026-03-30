@@ -367,12 +367,14 @@ async def ws_get_suggestions(hass, connection, msg):
                 if p == msg["person"]:
                     nutrient_goals = {
                         "Calorieen": m.get("doel_calorieen", 0),
+                        "Eiwit": m.get("protein_goal", 0),
                         "Koolhydraten": m.get("carbs_goal", 0),
                         "Vet": m.get("fat_goal", 0),
+                        "Vezels": m.get("fiber_goal", 0),
                     }
                     for label, goal_val in nutrient_goals.items():
                         if goal_val > 0 and label not in all_goals:
-                            key_map = {"Calorieen": "energy-kcal_100g", "Koolhydraten": "carbohydrates_100g", "Vet": "fat_100g"}
+                            key_map = {"Calorieen": "energy-kcal_100g", "Eiwit": "proteins_100g", "Koolhydraten": "carbohydrates_100g", "Vet": "fat_100g", "Vezels": "fiber_100g"}
                             key = key_map.get(label, "")
                             today_str = str(date.today())
                             logged_p = [d for d in period if d["item_count"] > 0 and d["date"] != today_str]
