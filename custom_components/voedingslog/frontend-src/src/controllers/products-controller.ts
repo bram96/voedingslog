@@ -165,8 +165,36 @@ export class ProductsController {
         onMerge: (id) => this._mergeInto(id),
         onAddAlias: () => this._addAliasFromInput(),
         onRemoveAlias: (idx) => this._removeAlias(idx),
+        onAddPortion: () => this._addPortion(),
+        onRemovePortion: (idx) => this._removePortion(idx),
+        onUpdatePortion: (idx, label, grams) => this._updatePortion(idx, label, grams),
       },
     });
+  }
+
+  // ── Portion management ──────────────────────────────────────
+
+  private _addPortion(): void {
+    if (!this.editingProduct || this.editingProduct.type !== "base") return;
+    const portions = [...(this.editingProduct.portions || []), { label: "", grams: 100 }];
+    this.editingProduct = { ...this.editingProduct, portions };
+    this.host.requestUpdate();
+  }
+
+  private _removePortion(index: number): void {
+    if (!this.editingProduct || this.editingProduct.type !== "base") return;
+    const portions = [...(this.editingProduct.portions || [])];
+    portions.splice(index, 1);
+    this.editingProduct = { ...this.editingProduct, portions };
+    this.host.requestUpdate();
+  }
+
+  private _updatePortion(index: number, label: string, grams: number): void {
+    if (!this.editingProduct || this.editingProduct.type !== "base") return;
+    const portions = [...(this.editingProduct.portions || [])];
+    portions[index] = { label, grams };
+    this.editingProduct = { ...this.editingProduct, portions };
+    this.host.requestUpdate();
   }
 
   // ── Actions ──────────────────────────────────────────────────
@@ -463,10 +491,9 @@ export class ProductsController {
     const name = nameInput?.value?.trim();
     if (!name) { alert("Vul een naam in."); return; }
 
-    const servingInput = h.shadowRoot?.getElementById("product-serving-input") as HTMLInputElement | null;
-    const servingGrams = parseFloat(servingInput?.value || "100") || 100;
-
     const nutrients = readNutrientFields("product", h.shadowRoot);
+    const portions = (this.editingProduct.portions || []).filter((p) => p.label.trim() && p.grams > 0);
+    const servingGrams = portions.length > 0 ? portions[0].grams : 100;
 
     try {
       await h.hass.callWS<SaveProductResponse>({
@@ -476,6 +503,7 @@ export class ProductsController {
           type: "base",
           name,
           serving_grams: servingGrams,
+          portions,
           nutrients,
           aliases: this.editingProduct.aliases || [],
         },

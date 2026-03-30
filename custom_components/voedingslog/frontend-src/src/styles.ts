@@ -258,6 +258,9 @@ export const panelStyles = css`
     color: var(--primary-text-color); transition: all 0.2s;
   }
   .filter-chip.active { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
+  .portion-edit-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .portion-label-input { flex: 1; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 13px; background: var(--primary-background-color); color: var(--primary-text-color); }
+  .portion-grams-input { width: 60px; padding: 4px 8px; border: 1px solid var(--divider-color); border-radius: 6px; font-size: 13px; text-align: right; background: var(--primary-background-color); color: var(--primary-text-color); }
   .alias-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
   .alias-name { flex: 1; font-size: 13px; color: var(--secondary-text-color); }
   .meal-ingredients-section { margin-bottom: 16px; }

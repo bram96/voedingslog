@@ -3,7 +3,7 @@
  * Pure function: (data) => TemplateResult, no class, no state.
  */
 import { html, nothing, type TemplateResult } from "lit";
-import type { BaseProduct, UnifiedProduct, VoedingslogConfig } from "../types.js";
+import type { BaseProduct, Portion, UnifiedProduct, VoedingslogConfig } from "../types.js";
 import { renderNutrientFields } from "../ui/nutrient-fields.js";
 import { renderDialogHeader } from "../ui/dialog-header.js";
 
@@ -15,6 +15,9 @@ export interface BaseProductEditorCallbacks {
   onMerge: (productId: string) => void;
   onAddAlias: () => void;
   onRemoveAlias: (index: number) => void;
+  onAddPortion: () => void;
+  onRemovePortion: (index: number) => void;
+  onUpdatePortion: (index: number, label: string, grams: number) => void;
 }
 
 export interface BaseProductEditorParams {
@@ -57,6 +60,34 @@ function renderAliasEditor(
   `;
 }
 
+function _renderPortionsEditor(portions: Portion[], callbacks: BaseProductEditorCallbacks): TemplateResult {
+  return html`
+    <div class="form-field">
+      <label>Porties</label>
+      ${portions.map(
+        (p, idx) => html`
+          <div class="portion-edit-row">
+            <input type="text" class="portion-label-input" .value=${p.label}
+              placeholder="Naam (bijv. 1 snee)"
+              @change=${(e: Event) => callbacks.onUpdatePortion(idx, (e.target as HTMLInputElement).value, p.grams)} />
+            <input type="number" class="portion-grams-input" .value=${String(p.grams)}
+              min="1" step="1" inputmode="numeric" placeholder="g"
+              @change=${(e: Event) => callbacks.onUpdatePortion(idx, p.label, parseFloat((e.target as HTMLInputElement).value) || p.grams)} />
+            <span class="ingredient-unit">g</span>
+            <button class="item-delete" @click=${() => callbacks.onRemovePortion(idx)}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+        `
+      )}
+      ${portions.length === 0 ? html`<p class="empty-hint" style="margin:4px 0">Geen porties ingesteld. Standaard 100g.</p>` : nothing}
+      <button class="btn-secondary" style="width:100%;margin-top:4px;padding:6px" @click=${() => callbacks.onAddPortion()}>
+        <ha-icon icon="mdi:plus"></ha-icon> Portie toevoegen
+      </button>
+    </div>
+  `;
+}
+
 export function renderBaseProductEditor(params: BaseProductEditorParams): TemplateResult {
   const { product, config, callbacks } = params;
 
@@ -68,11 +99,7 @@ export function renderBaseProductEditor(params: BaseProductEditorParams): Templa
         <input type="text" id="product-name-input" .value=${product.name || ""} placeholder="Bijv. Volkoren brood" />
       </div>
 
-      <div class="form-field">
-        <label>Standaard portie (gram)</label>
-        <input type="number" id="product-serving-input" .value=${String(product.serving_grams || 100)}
-          placeholder="Bijv. 35" min="1" step="1" inputmode="numeric" />
-      </div>
+      ${_renderPortionsEditor(product.portions || [], callbacks)}
 
       ${renderAliasEditor(product, callbacks.onAddAlias, callbacks.onRemoveAlias)}
 
