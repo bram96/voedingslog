@@ -117,7 +117,8 @@ export class VoedingslogPanel extends LitElement {
       case "photo": this._setDialogMode("manual"); break;
       case "manual": this._setDialogMode(this._searchCtrl.returnToMode as string); break;
       case "search": this._searchCtrl.closeSearch(); break;
-      case "product-edit": this._setDialogMode("products"); break;
+      case "products-add": this._closeDialog(); break;
+      case "product-edit": this._closeDialog(); break;
       case "weight":
         if (this._weightReturnMode) {
           const ret = this._weightReturnMode;
@@ -528,7 +529,7 @@ export class VoedingslogPanel extends LitElement {
           ${this._dialogMode === "photo" ? this._searchCtrl.renderPhotoDialog() : nothing}
           ${this._dialogMode === "weight" ? this._entry.renderWeightDialog() : nothing}
           ${this._dialogMode === "edit" ? this._entry.renderEditDialog() : nothing}
-          ${this._dialogMode === "products" ? this._products.renderProductsDialog() : nothing}
+          ${this._dialogMode === "products-add" ? this._products.renderProductsDialog() : nothing}
           ${this._dialogMode === "product-edit" ? this._products.renderEditDialog() : nothing}
           ${this._dialogMode === "manual" ? this._searchCtrl.renderManualEntryDialog() : nothing}
           ${this._dialogMode === "day-detail" ? this._export.renderDayDetailDialog() : nothing}

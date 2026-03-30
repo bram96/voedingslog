@@ -116,7 +116,7 @@ export class ProductsController {
         onSearchOnline: () => this._searchOnline(),
         onAiGuess: h._config?.ai_task_entity ? () => this._aiGuessFromSearch() : undefined,
         onSelectOnlineProduct: (p) => this._selectOnlineProduct(p),
-        onSelectRecentProduct: (p) => h._selectProduct(p, "products"),
+        onSelectRecentProduct: (p) => h._selectProduct(p, this.mode === "add" ? "products-add" : null),
         onOpenBarcode: () => h._openBarcodeScanner(),
         onOpenManual: () => h._setDialogMode("manual"),
         onOpenBatchAdd: () => h._openBatchAdd("log"),
@@ -139,7 +139,7 @@ export class ProductsController {
         config: h._config,
         editingIngredientIndex: this.editingIngredientIndex,
         callbacks: {
-          onClose: () => { h._setDialogMode("products"); this.editingProduct = null; h.requestUpdate(); },
+          onClose: () => { this._closeEditor(); },
           onSave: () => this._saveRecipe(),
           onAddIngredient: () => this.openIngredientSearch(),
           onRemoveIngredient: (idx) => this.removeIngredient(idx),
@@ -158,7 +158,7 @@ export class ProductsController {
       product,
       config: h._config,
       callbacks: {
-        onClose: () => { h._setDialogMode("products"); this.editingProduct = null; h.requestUpdate(); },
+        onClose: () => { this._closeEditor(); },
         onSave: () => this._saveBase(),
         onPhoto: () => this._openPhotoForBase(),
         onRefresh: (id) => this._refreshFromOff(id),
@@ -192,7 +192,10 @@ export class ProductsController {
         this.recentItems = res.items || [];
       } catch { /* ignore */ }
     }
-    this.host._setDialogMode("products");
+    // Only open dialog for add mode — manage mode renders inline (tab view)
+    if (mode === "add") {
+      this.host._setDialogMode("products-add");
+    }
   }
 
   /** @deprecated Use open() instead */
@@ -220,14 +223,26 @@ export class ProductsController {
   }
 
   private _selectOnlineProduct(product: Product): void {
-    this.host._selectProduct(product, "products");
+    this.host._selectProduct(product, this.mode === "add" ? "products-add" : null);
   }
 
   private async _aiGuessFromSearch(): Promise<void> {
     const foodName = this.searchQuery.trim() || prompt("Voer een productnaam in (bijv. paprika):");
     if (!foodName) return;
     const product = await aiGuessNutrients(this.host.hass, foodName);
-    if (product) this.host._selectProduct(product, "products");
+    if (product) this.host._selectProduct(product, this.mode === "add" ? "products-add" : null);
+  }
+
+  private _closeEditor(): void {
+    this.editingProduct = null;
+    if (this.fullPage) {
+      // Close the editor dialog, stay on the full-page products tab
+      this.host._closeDialog();
+    } else {
+      // Go back to the add dialog
+      this.host._setDialogMode("products-add");
+    }
+    this.host.requestUpdate();
   }
 
   openEditor(product: UnifiedProduct | null, newType?: "base" | "recipe"): void {
@@ -260,7 +275,7 @@ export class ProductsController {
         portions: product.portions,
         nutrients: product.nutrients,
       };
-      this.host._selectProduct(p, "products");
+      this.host._selectProduct(p, this.mode === "add" ? "products-add" : null);
       return;
     }
 
@@ -289,7 +304,7 @@ export class ProductsController {
       p.components = recipe.ingredients.map((i) => ({ ...i }));
     }
 
-    this.host._selectProduct(p, "products");
+    this.host._selectProduct(p, this.mode === "add" ? "products-add" : null);
   }
 
   // ── Ingredient management ─────────────────────────────────────

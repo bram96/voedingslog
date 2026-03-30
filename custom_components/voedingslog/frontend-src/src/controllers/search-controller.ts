@@ -45,7 +45,7 @@ export class SearchController {
 
   /** The dialog to return to when closing sub-dialogs (barcode, manual, photo). */
   get returnToMode(): DialogMode {
-    return this._returnMode || "products";
+    return this._returnMode || "products-add";
   }
 
   constructor(host: SearchControllerHost) {
@@ -152,7 +152,7 @@ export class SearchController {
         this._returnMode = null;
       }
     } else {
-      this.host._selectProduct(product, "products");
+      this.host._selectProduct(product, "products-add");
     }
   }
 
