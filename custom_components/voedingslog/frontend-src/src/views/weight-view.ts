@@ -46,7 +46,7 @@ function _renderSimpleSection(p: Product, shadow: ShadowRoot | null, requestUpda
   return html`
     <div class="form-field">
       <label>Gewicht (gram)</label>
-      ${renderPortionChips(p.portions || [], shadow, "weight-input", requestUpdate)}
+      ${renderPortionChips(p.portions || [], shadow, "weight-input", requestUpdate, grams)}
       <input type="number" id="weight-input"
         .value=${String(p.serving_grams || 100)}
         min="1" step="1" inputmode="numeric"

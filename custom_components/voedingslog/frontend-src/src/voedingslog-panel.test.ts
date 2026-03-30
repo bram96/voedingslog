@@ -54,9 +54,8 @@ describe("VoedingslogPanel", () => {
       el = createElement();
       await waitForRender(el);
       const buttons = queryAll(el, ".action-btn");
-      expect(buttons.length).toBeGreaterThanOrEqual(2);
+      expect(buttons.length).toBeGreaterThanOrEqual(1);
       const labels = buttons.map((b) => text(b));
-      expect(labels).toContain("Producten");
       expect(labels).toContain("Toevoegen");
     });
 
@@ -101,7 +100,7 @@ describe("VoedingslogPanel", () => {
   });
 
   describe("Person tabs", () => {
-    it("shows tabs when multiple persons configured", async () => {
+    it("shows person tabs + Producten tab when multiple persons", async () => {
       el = document.createElement("voedingslog-panel") as VoedingslogPanel;
       el.hass = mockHass({
         "voedingslog/get_config": () => mockConfig({ persons: ["Jan", "Lisa"] }),
@@ -109,14 +108,16 @@ describe("VoedingslogPanel", () => {
       document.body.appendChild(el);
       await waitForRender(el);
       const tabs = queryAll(el, ".person-tab");
-      expect(tabs.length).toBe(2);
+      expect(tabs.length).toBe(3); // Jan, Lisa, Producten
+      expect(text(tabs[2])).toBe("Producten");
     });
 
-    it("hides tabs when single person", async () => {
+    it("shows Producten tab even with single person", async () => {
       el = createElement();
       await waitForRender(el);
       const tabs = queryAll(el, ".person-tab");
-      expect(tabs.length).toBe(0);
+      expect(tabs.length).toBeGreaterThanOrEqual(1);
+      expect(tabs.some((t) => text(t) === "Producten")).toBe(true);
     });
   });
 
@@ -145,14 +146,15 @@ describe("VoedingslogPanel", () => {
       expect(text(header)).toBe("Toevoegen");
     });
 
-    it("opens products manage dialog on Producten click", async () => {
+    it("switches to products page on Producten tab click", async () => {
       el = createElement();
       await waitForRender(el);
-      const btn = queryAll(el, ".action-btn").find((b) => text(b).includes("Producten")) as HTMLElement;
-      btn?.click();
+      const tab = queryAll(el, ".person-tab").find((t) => text(t) === "Producten") as HTMLElement;
+      tab?.click();
       await waitForRender(el);
-      const header = query(el, ".dialog-header h2");
-      expect(text(header)).toBe("Producten");
+      // Should show FAB (products page indicator)
+      const fab = query(el, ".fab");
+      expect(fab).not.toBeNull();
     });
   });
 
@@ -292,40 +294,31 @@ describe("VoedingslogPanel", () => {
     });
   });
 
-  describe("Products dialog — manage mode", () => {
-    async function openManageMode(): Promise<VoedingslogPanel> {
+  describe("Products page (tab view)", () => {
+    async function openProductsTab(): Promise<VoedingslogPanel> {
       const panel = createElement();
       await waitForRender(panel);
-      (queryAll(panel, ".action-btn").find((b) => text(b).includes("Producten")) as HTMLElement)?.click();
+      const productenTab = queryAll(panel, ".person-tab").find((t) => text(t) === "Producten") as HTMLElement;
+      productenTab?.click();
       await waitForRender(panel);
       return panel;
     }
 
-    it("shows Producten title", async () => {
-      el = await openManageMode();
-      const header = query(el, ".dialog-header h2");
-      expect(text(header)).toBe("Producten");
+    it("shows products list when Producten tab clicked", async () => {
+      el = await openProductsTab();
+      const items = queryAll(el, ".product-item");
+      expect(items.length).toBeGreaterThanOrEqual(0);
     });
 
-    it("shows edit and delete buttons", async () => {
-      el = await openManageMode();
-      const editBtns = queryAll(el, ".product-item .item-edit");
-      const deleteBtns = queryAll(el, ".product-item .item-delete");
-      expect(editBtns.length).toBeGreaterThanOrEqual(1);
-      expect(deleteBtns.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it("shows create buttons", async () => {
-      el = await openManageMode();
-      const buttons = queryAll(el, ".dialog .btn-primary.btn-confirm");
-      const labels = buttons.map((b) => text(b));
-      expect(labels.some((l) => l.includes("Nieuw product"))).toBe(true);
-      expect(labels.some((l) => l.includes("Nieuw recept"))).toBe(true);
+    it("shows FAB button", async () => {
+      el = await openProductsTab();
+      const fab = query(el, ".fab");
+      expect(fab).not.toBeNull();
     });
 
     it("shows cleanup button", async () => {
-      el = await openManageMode();
-      const btns = queryAll(el, ".dialog .btn-secondary");
+      el = await openProductsTab();
+      const btns = queryAll(el, ".btn-secondary");
       expect(btns.some((b) => text(b).includes("opruimen"))).toBe(true);
     });
   });

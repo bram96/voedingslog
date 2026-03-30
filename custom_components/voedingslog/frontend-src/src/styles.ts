@@ -275,6 +275,31 @@ export const panelStyles = css`
   .add-ingredient { margin-top: 12px; }
   .ingredient-nutrients { padding: 8px 0 8px 12px; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); border-radius: 0 0 8px 8px; margin-bottom: 4px; }
 
+  /* FAB */
+  .fab-container { position: fixed; bottom: 24px; right: 24px; z-index: 50; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+  .fab {
+    width: 56px; height: 56px; border-radius: 16px; border: none;
+    background: var(--primary-color); color: var(--text-primary-color, #fff);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 5px -1px rgba(0,0,0,0.2), 0 6px 10px 0 rgba(0,0,0,0.14), 0 1px 18px 0 rgba(0,0,0,0.12);
+    transition: transform 0.2s;
+  }
+  .fab:hover { transform: scale(1.05); }
+  .fab ha-icon { --mdc-icon-size: 24px; }
+  .fab-menu { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; animation: fab-menu-in 0.15s ease-out; }
+  @keyframes fab-menu-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .fab-menu-item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px;
+    background: var(--card-background-color); border: none; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15); font-size: 14px; color: var(--primary-text-color);
+    white-space: nowrap;
+  }
+  .fab-menu-item ha-icon { --mdc-icon-size: 20px; color: var(--primary-color); }
+  .fab-scrim { position: fixed; inset: 0; z-index: 49; }
+
+  /* Portion chips */
+  .portion-chip.active { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
+
   /* Pull to refresh */
   .pull-indicator { display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--secondary-text-color); }
   .pull-indicator ha-icon { --mdc-icon-size: 24px; }

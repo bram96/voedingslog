@@ -35,13 +35,14 @@ export function renderPortionChips(
   shadow: ShadowRoot | null,
   weightInputId: string,
   requestUpdate: () => void,
+  selectedGrams?: number,
 ): TemplateResult {
   if (!portions || portions.length === 0) return html``;
   return html`
     <div class="portion-chips">
       ${portions.map(
         (p) => html`
-          <button class="portion-chip" @click=${() => {
+          <button class="portion-chip ${selectedGrams === p.grams ? "active" : ""}" @click=${() => {
             const input = shadow?.getElementById(weightInputId) as HTMLInputElement | null;
             if (input) { input.value = String(p.grams); requestUpdate(); }
           }}>

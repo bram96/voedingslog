@@ -40,6 +40,7 @@ export class VoedingslogPanel extends LitElement {
 
   @state() _config: VoedingslogConfig | null = null;
   @state() _selectedPerson: string | null = null;
+  @state() _activeView: "log" | "products" = "log";
   @state() _selectedDate: string = new Date().toISOString().split("T")[0];
   @state() _items: LogItem[] = [];
   @state() private _loading = true;
@@ -217,13 +218,17 @@ export class VoedingslogPanel extends LitElement {
         ` : nothing}
         <div class="panel">
           ${this._renderHeader()}
-          <div class="container">
-            ${this._renderActions()}
-            ${this._renderDayTotals()}
-            ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
-              (cat) => this._renderCategorySection(cat, labels[cat], groups[cat])
-            )}
-          </div>
+          ${this._activeView === "products"
+            ? this._renderProductsPage()
+            : html`
+              <div class="container">
+                ${this._renderActions()}
+                ${this._renderDayTotals()}
+                ${(["breakfast", "lunch", "dinner", "snack"] as MealCategory[]).map(
+                  (cat) => this._renderCategorySection(cat, labels[cat], groups[cat])
+                )}
+              </div>
+            `}
         </div>
         ${this._renderDialog()}
         ${this._snackbar ? html`
@@ -280,25 +285,32 @@ export class VoedingslogPanel extends LitElement {
             : nothing}
           <span class="header-title">Voedingslog</span>
         </div>
-        ${persons.length > 1
-          ? html`<div class="person-tabs">
-              ${persons.map(
-                (p) => html`
-                  <button
-                    class=${classMap({ "person-tab": true, active: p === this._selectedPerson })}
-                    role="tab"
-                    aria-selected=${p === this._selectedPerson}
-                    @click=${() => {
-                      this._selectedPerson = p;
-                      this._loadLog();
-                    }}
-                  >
-                    ${p}
-                  </button>
-                `
-              )}
-            </div>`
-          : nothing}
+        <div class="person-tabs" role="tablist">
+          ${persons.map(
+            (p) => html`
+              <button
+                class=${classMap({ "person-tab": true, active: p === this._selectedPerson && this._activeView === "log" })}
+                role="tab"
+                aria-selected=${p === this._selectedPerson && this._activeView === "log"}
+                @click=${() => {
+                  this._selectedPerson = p;
+                  this._activeView = "log";
+                  this._loadLog();
+                }}
+              >
+                ${p}
+              </button>
+            `
+          )}
+          <button
+            class=${classMap({ "person-tab": true, active: this._activeView === "products" })}
+            role="tab"
+            aria-selected=${this._activeView === "products"}
+            @click=${() => this._showProducts()}
+          >
+            Producten
+          </button>
+        </div>
       </div>
       <div class="date-nav">
         <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
@@ -324,14 +336,44 @@ export class VoedingslogPanel extends LitElement {
     `;
   }
 
+  private async _showProducts(): Promise<void> {
+    this._activeView = "products";
+    this._products.fullPage = true;
+    await this._products.open("manage");
+  }
+
+  @state() private _fabMenuOpen = false;
+
+  private _renderProductsPage(): TemplateResult {
+    return html`
+      <div class="container">
+        ${this._products.renderProductsDialog()}
+      </div>
+      <div class="fab-container">
+        ${this._fabMenuOpen ? html`
+          <div class="fab-menu">
+            <button class="fab-menu-item" @click=${() => { this._fabMenuOpen = false; this._products.openEditor(null, "base"); }}>
+              <ha-icon icon="mdi:food-variant"></ha-icon>
+              <span>Nieuw product</span>
+            </button>
+            <button class="fab-menu-item" @click=${() => { this._fabMenuOpen = false; this._products.openEditor(null, "recipe"); }}>
+              <ha-icon icon="mdi:pot-steam"></ha-icon>
+              <span>Nieuw recept</span>
+            </button>
+          </div>
+        ` : nothing}
+        <button class="fab" aria-label="Toevoegen" @click=${() => { this._fabMenuOpen = !this._fabMenuOpen; }}>
+          <ha-icon icon=${this._fabMenuOpen ? "mdi:close" : "mdi:plus"}></ha-icon>
+        </button>
+      </div>
+      ${this._fabMenuOpen ? html`<div class="fab-scrim" @click=${() => { this._fabMenuOpen = false; }}></div>` : nothing}
+    `;
+  }
+
   private _renderActions(): TemplateResult {
     const hasAI = !!this._config?.ai_task_entity;
     return html`
       <div class="actions">
-        <button class="action-btn" @click=${() => this._products.open("manage")}>
-          <ha-icon icon="mdi:food-variant"></ha-icon>
-          <span>Producten</span>
-        </button>
         ${hasAI ? html`
           <button class="action-btn" @click=${() => this._openBatchAdd("log")}>
             <ha-icon icon="mdi:text-box-outline"></ha-icon>

@@ -40,6 +40,7 @@ export interface ProductsListParams {
   onlineSearching: boolean;
   hasAI: boolean;
   config: VoedingslogConfig | null;
+  fullPage?: boolean;
   callbacks: ProductsListCallbacks;
 }
 
@@ -112,12 +113,14 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
   const favoriteProducts = showQuickAccess ? products.filter((p) => p.favorite) : [];
 
   return html`
-    <div class="dialog-header">
-      <h2>${isAdd ? "Toevoegen" : "Producten"}</h2>
-      <button class="close-btn" @click=${() => callbacks.onClose()}>
-        <ha-icon icon="mdi:close"></ha-icon>
-      </button>
-    </div>
+    ${!params.fullPage ? html`
+      <div class="dialog-header">
+        <h2>${isAdd ? "Toevoegen" : "Producten"}</h2>
+        <button class="close-btn" aria-label="Sluiten" @click=${() => callbacks.onClose()}>
+          <ha-icon icon="mdi:close"></ha-icon>
+        </button>
+      </div>
+    ` : nothing}
     <div class="dialog-body">
       <div class="input-row" style="margin-bottom:8px">
         <input type="text" placeholder="Zoek product of recept..."
@@ -232,8 +235,8 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
         </div>
       ` : nothing}
 
-      ${/* Manage mode: create/cleanup buttons */""}
-      ${!isAdd ? html`
+      ${/* Manage mode: create/cleanup buttons (hidden in full-page mode — FAB handles creation) */""}
+      ${!isAdd && !params.fullPage ? html`
         <div style="display:flex;gap:8px;margin-top:12px">
           <button class="btn-primary btn-confirm" style="flex:1" @click=${() => callbacks.onNewProduct()}>
             <ha-icon icon="mdi:plus"></ha-icon>
@@ -244,6 +247,8 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
             Nieuw recept
           </button>
         </div>
+      ` : nothing}
+      ${!isAdd ? html`
         <button class="btn-secondary" style="width:100%;margin-top:8px" @click=${() => callbacks.onCleanup()}>
           <ha-icon icon="mdi:broom"></ha-icon>
           Ongebruikte producten opruimen

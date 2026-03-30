@@ -88,6 +88,8 @@ export class ProductsController {
 
   // ── Render delegation ─────────────────────────────────────────
 
+  fullPage = false;
+
   renderProductsDialog(): TemplateResult {
     const h = this.host;
     return renderProductsList({
@@ -101,6 +103,7 @@ export class ProductsController {
       onlineResults: this._onlineResults,
       onlineSearching: this._onlineSearching,
       hasAI: !!h._config?.ai_task_entity,
+      fullPage: this.fullPage,
       config: h._config,
       callbacks: {
         onProductClick: (p) => this.mode === "add" ? this.logProduct(p) : this.openEditor(p),
