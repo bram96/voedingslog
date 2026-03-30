@@ -404,27 +404,29 @@ async def ws_get_suggestions(hass, connection, msg):
                     "task_name": "nutrition_advice",
                     "entity_id": ai_entity,
                     "instructions": (
-                        "Je bent een voedingsadviseur. Analyseer de voedingstekorten van de afgelopen week en geef advies.\n"
-                        "De gemiddelden zijn berekend over AFGERONDE dagen (vandaag is uitgesloten omdat die nog bezig is).\n\n"
+                        "Je bent een persoonlijke voedingscoach. Stel concrete maaltijden en tussendoortjes voor om tekorten aan te vullen.\n"
+                        "De gemiddelden zijn berekend over AFGERONDE dagen (vandaag is uitgesloten).\n\n"
                         f"DOELEN EN GEMIDDELDE INTAKE (per dag, afgelopen afgeronde dagen):\n{goals_text}\n\n"
                         f"BESCHIKBARE PRODUCTEN UIT DE LOKALE DATABASE:\n{products_text}\n\n"
                         "BELANGRIJK:\n"
-                        "- Dit is advies voor TOEKOMSTIGE dagen, gebaseerd op wat er de afgelopen week anders had gekund\n"
-                        "- Suggesties mogen NIET leiden tot overschrijding van andere doelen (let op calorieen en koolhydraten!)\n"
-                        "- Geef eerst suggesties uit de lokale database (als die goed genoeg zijn)\n"
-                        "- Geef daarna een 'Anders' sectie met makkelijk te bereiden producten die niet in de database staan\n"
+                        "- Suggereer COMPLETE maaltijden of tussendoortjes, NIET losse ingredienten\n"
+                        "  Fout: '150g havermout' — Goed: 'Overnight oats: 40g havermout + 150ml yoghurt + banaan + noten'\n"
+                        "  Fout: '100g kipfilet' — Goed: 'Wrap met kipfilet, sla en hummus'\n"
+                        "- Suggesties moeten lekker en makkelijk te bereiden zijn (max 10 min)\n"
+                        "- Suggesties mogen NIET leiden tot overschrijding van andere doelen\n"
+                        "- Gebruik producten uit de database waar mogelijk\n"
                         "- Antwoord in het Nederlands als bullet points\n"
-                        "- Wees specifiek over hoeveelheden (gram)\n"
-                        "- Houd het kort en praktisch (max 6 bullets totaal)"
+                        "- Wees specifiek over hoeveelheden\n"
+                        "- Max 4 suggesties: mix van maaltijden en tussendoortjes"
                     ),
                     "structure": {
                         "from_database": {
-                            "description": "Bullet points met suggesties uit de lokale productdatabase. Elke bullet begint met '- '. Leeg als er geen goede matches zijn.",
+                            "description": "Concrete maaltijd- of tussendoortje-suggesties met producten uit de lokale database. Elke bullet begint met '- '. Beschrijf het als een compleet gerecht, niet als los ingrediënt. Leeg als er geen goede matches zijn.",
                             "required": True,
                             "selector": {"text": {"multiline": True}},
                         },
                         "other_suggestions": {
-                            "description": "Bullet points met andere makkelijk te bereiden suggesties die niet in de database staan. Elke bullet begint met '- '.",
+                            "description": "Concrete maaltijd- of tussendoortje-suggesties met producten die NIET in de database staan. Elke bullet begint met '- '. Beschrijf complete, lekkere en makkelijk te maken gerechten of snacks.",
                             "required": True,
                             "selector": {"text": {"multiline": True}},
                         },
