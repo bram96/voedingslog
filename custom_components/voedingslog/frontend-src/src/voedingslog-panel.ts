@@ -353,6 +353,16 @@ export class VoedingslogPanel extends LitElement {
       <div class="fab-container">
         ${this._fabMenuOpen ? html`
           <div class="fab-menu">
+            <button class="fab-menu-item" @click=${() => { this._fabMenuOpen = false; this._addProductFromBarcode(); }}>
+              <ha-icon icon="mdi:barcode-scan"></ha-icon>
+              <span>Scan barcode</span>
+            </button>
+            ${this._config?.ai_task_entity ? html`
+              <button class="fab-menu-item" @click=${() => { this._fabMenuOpen = false; this._addProductFromPhoto(); }}>
+                <ha-icon icon="mdi:camera"></ha-icon>
+                <span>Foto van etiket</span>
+              </button>
+            ` : nothing}
             <button class="fab-menu-item" @click=${() => { this._fabMenuOpen = false; this._products.openEditor(null, "base"); }}>
               <ha-icon icon="mdi:food-variant"></ha-icon>
               <span>Nieuw product</span>
@@ -369,6 +379,45 @@ export class VoedingslogPanel extends LitElement {
       </div>
       ${this._fabMenuOpen ? html`<div class="fab-scrim" @click=${() => { this._fabMenuOpen = false; }}></div>` : nothing}
     `;
+  }
+
+  /** Save a product to the database (from barcode scan or photo). */
+  private _saveProductToDb(product: Product): void {
+    this.hass.callWS({
+      type: "voedingslog/save_product",
+      product: {
+        type: "base",
+        name: product.name,
+        serving_grams: product.serving_grams,
+        nutrients: product.nutrients,
+        portions: product.portions,
+      },
+    }).then(() => {
+      this._closeDialog();
+      this._products.open("manage");
+    }).catch(() => alert("Fout bij opslaan product."));
+  }
+
+  /** Open barcode scanner — result saves as product instead of logging. */
+  private _addProductFromBarcode(): void {
+    this._searchCtrl.open(
+      (product) => this._saveProductToDb(product),
+    );
+    // Immediately switch to barcode dialog
+    this.updateComplete.then(() => this._openBarcodeScanner());
+  }
+
+  /** Open photo capture — result saves as product instead of logging. */
+  private _addProductFromPhoto(): void {
+    this._searchCtrl.open(
+      (product) => this._saveProductToDb(product),
+    );
+    // Immediately switch to photo dialog
+    this.updateComplete.then(() => {
+      this._prefillProduct = null;
+      this._prefillSource = "photo";
+      this._setDialogMode("photo");
+    });
   }
 
   private _renderActions(): TemplateResult {
