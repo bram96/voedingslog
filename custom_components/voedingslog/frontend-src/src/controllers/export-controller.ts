@@ -40,9 +40,15 @@ export class ExportController {
   // Daily review
   private _dailyReview: string | null = null;
 
-  /** Get week start day from HA locale (0=Sunday, 1=Monday). Defaults to 1 (Monday). */
+  /** Get week start day from HA locale (0=Sunday, 1=Monday, ...). Defaults to 1 (Monday). */
   private get _weekStartDay(): number {
-    return this.host.hass?.locale?.first_weekday ?? 1;
+    const val = this.host.hass?.locale?.first_weekday;
+    if (typeof val === "number") return val;
+    if (typeof val === "string") {
+      const map: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+      return map[val.toLowerCase()] ?? 1;
+    }
+    return 1;
   }
   private _reviewLoading = false;
 

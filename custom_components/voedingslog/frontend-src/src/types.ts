@@ -2,7 +2,7 @@
 export interface HomeAssistant {
   callWS<T = unknown>(msg: Record<string, unknown>): Promise<T>;
   user: { id: string; name: string };
-  locale?: { first_weekday?: number };
+  locale?: { first_weekday?: string | number };
 }
 
 export type MealCategory = "breakfast" | "lunch" | "dinner" | "snack";
