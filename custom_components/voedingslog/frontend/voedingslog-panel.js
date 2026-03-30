@@ -298,6 +298,24 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
   .add-ingredient { margin-top: 12px; }
   .ingredient-nutrients { padding: 8px 0 8px 12px; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); border-radius: 0 0 8px 8px; margin-bottom: 4px; }
 
+  /* HA-style search bar (products full-page) */
+  .ha-search-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card-background-color); border: 1px solid var(--divider-color);
+    border-radius: 28px; padding: 8px 16px; margin-bottom: 12px;
+  }
+  .ha-search-input {
+    flex: 1; border: none; background: none; outline: none;
+    font-size: 14px; color: var(--primary-text-color);
+    font-family: inherit;
+  }
+  .ha-search-input::placeholder { color: var(--secondary-text-color); }
+  .ha-search-action {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--secondary-text-color); display: flex; border-radius: 50%;
+  }
+  .ha-search-action.active { color: #ff9800; }
+
   /* FAB */
   .fab-container { position: fixed; bottom: 24px; right: 24px; z-index: 50; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
   .fab {
@@ -587,19 +605,17 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
         </button>
       </div>
     `}
-    <div class="dialog-body">
-      <div class="input-row" style="margin-bottom:8px">
-        <input type="text" placeholder="Zoek product of recept..."
+    <div class=${c.fullPage?"":"dialog-body"}>
+      <div class="ha-search-bar">
+        <ha-icon icon="mdi:magnify" style="--mdc-icon-size:20px;color:var(--secondary-text-color)"></ha-icon>
+        <input type="text" class="ha-search-input" placeholder="Zoeken..."
           .value=${f}
-          @input=${G=>k.onSearchInput(G.target.value)}
-          @keydown=${G=>{G.key==="Enter"&&f.trim()}}
-        />
-        <button class="btn-secondary ${g?"active":""}" style="padding:8px 12px"
+          @input=${G=>k.onSearchInput(G.target.value)} />
+        <button class="ha-search-action ${g?"active":""}"
           @click=${()=>k.onToggleFavorites()}>
-          <ha-icon icon=${g?"mdi:star":"mdi:star-outline"}></ha-icon>
+          <ha-icon icon=${g?"mdi:star":"mdi:star-outline"} style="--mdc-icon-size:20px"></ha-icon>
         </button>
       </div>
-
       <div class="type-filter-chips">
         ${["all","base","recipe"].map(G=>M`
             <button class="filter-chip ${y===G?"active":""}"
@@ -1364,6 +1380,7 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
         <div class="panel">
           ${this._renderHeader()}
           ${this._activeView==="products"?this._renderProductsPage():M`
+              ${this._renderDateNav()}
               <div class="container">
                 ${this._renderActions()}
                 ${this._renderDayTotals()}
@@ -1412,6 +1429,7 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
           </button>
         </div>
       </div>
+    `}_renderDateNav(){return M`
       <div class="date-nav">
         <button class="date-nav-btn" @click=${()=>this._changeDate(-1)}>
           <ha-icon icon="mdi:chevron-left"></ha-icon>
@@ -1423,7 +1441,7 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
           type="date"
           id="header-date-picker"
           .value=${this._selectedDate}
-          @change=${u=>{this._selectedDate=u.target.value,this._loadLog()}}
+          @change=${a=>{this._selectedDate=a.target.value,this._loadLog()}}
           style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;"
         />
         <button class="date-nav-btn" @click=${()=>this._changeDate(1)}>

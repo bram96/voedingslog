@@ -121,19 +121,17 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
         </button>
       </div>
     ` : nothing}
-    <div class="dialog-body">
-      <div class="input-row" style="margin-bottom:8px">
-        <input type="text" placeholder="Zoek product of recept..."
+    <div class=${params.fullPage ? "" : "dialog-body"}>
+      <div class="ha-search-bar">
+        <ha-icon icon="mdi:magnify" style="--mdc-icon-size:20px;color:var(--secondary-text-color)"></ha-icon>
+        <input type="text" class="ha-search-input" placeholder="Zoeken..."
           .value=${searchQuery}
-          @input=${(e: Event) => callbacks.onSearchInput((e.target as HTMLInputElement).value)}
-          @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" && searchQuery.trim()) { /* trigger update */ } }}
-        />
-        <button class="btn-secondary ${showFavoritesOnly ? "active" : ""}" style="padding:8px 12px"
+          @input=${(e: Event) => callbacks.onSearchInput((e.target as HTMLInputElement).value)} />
+        <button class="ha-search-action ${showFavoritesOnly ? "active" : ""}"
           @click=${() => callbacks.onToggleFavorites()}>
-          <ha-icon icon=${showFavoritesOnly ? "mdi:star" : "mdi:star-outline"}></ha-icon>
+          <ha-icon icon=${showFavoritesOnly ? "mdi:star" : "mdi:star-outline"} style="--mdc-icon-size:20px"></ha-icon>
         </button>
       </div>
-
       <div class="type-filter-chips">
         ${(["all", "base", "recipe"] as TypeFilter[]).map(
           (t) => html`

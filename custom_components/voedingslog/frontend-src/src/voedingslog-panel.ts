@@ -222,6 +222,7 @@ export class VoedingslogPanel extends LitElement {
           ${this._activeView === "products"
             ? this._renderProductsPage()
             : html`
+              ${this._renderDateNav()}
               <div class="container">
                 ${this._renderActions()}
                 ${this._renderDayTotals()}
@@ -313,6 +314,11 @@ export class VoedingslogPanel extends LitElement {
           </button>
         </div>
       </div>
+    `;
+  }
+
+  private _renderDateNav(): TemplateResult {
+    return html`
       <div class="date-nav">
         <button class="date-nav-btn" @click=${() => this._changeDate(-1)}>
           <ha-icon icon="mdi:chevron-left"></ha-icon>

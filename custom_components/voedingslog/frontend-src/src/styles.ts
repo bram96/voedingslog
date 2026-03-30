@@ -275,6 +275,24 @@ export const panelStyles = css`
   .add-ingredient { margin-top: 12px; }
   .ingredient-nutrients { padding: 8px 0 8px 12px; border-bottom: 1px solid var(--divider-color); background: var(--secondary-background-color); border-radius: 0 0 8px 8px; margin-bottom: 4px; }
 
+  /* HA-style search bar (products full-page) */
+  .ha-search-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card-background-color); border: 1px solid var(--divider-color);
+    border-radius: 28px; padding: 8px 16px; margin-bottom: 12px;
+  }
+  .ha-search-input {
+    flex: 1; border: none; background: none; outline: none;
+    font-size: 14px; color: var(--primary-text-color);
+    font-family: inherit;
+  }
+  .ha-search-input::placeholder { color: var(--secondary-text-color); }
+  .ha-search-action {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--secondary-text-color); display: flex; border-radius: 50%;
+  }
+  .ha-search-action.active { color: #ff9800; }
+
   /* FAB */
   .fab-container { position: fixed; bottom: 24px; right: 24px; z-index: 50; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
   .fab {
