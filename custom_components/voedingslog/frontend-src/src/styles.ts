@@ -93,6 +93,9 @@ export const panelStyles = css`
   .macro-ratio-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; }
   .macro-ratio-bar div { height: 100%; }
   .macro-ratio-labels { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; margin-top: 2px; }
+  .macro-toggle-btn { background: none; border: none; color: var(--secondary-text-color); cursor: pointer; padding: 4px; border-radius: 50%; display: flex; align-items: center; margin-left: 4px; }
+  .macro-toggle-btn:hover { background: var(--divider-color); }
+  .macro-toggle-btn ha-icon { --mdc-icon-size: 18px; }
   .totals-hint { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; opacity: 0.7; }
   .totals-hint ha-icon { --mdc-icon-size: 14px; }
 
@@ -116,8 +119,9 @@ export const panelStyles = css`
   .item-meta { display: block; font-size: 12px; color: var(--secondary-text-color); }
   .item-grams { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
   .quick-gram-input { width: 60px; padding: 2px 6px; border: 1px solid var(--primary-color); border-radius: 4px; font-size: 13px; text-align: right; background: var(--card-background-color); color: var(--primary-text-color); }
-  .item-nutrients { white-space: nowrap; }
+  .item-nutrients { white-space: nowrap; text-align: right; }
   .item-kcal { font-size: 13px; white-space: nowrap; font-weight: 500; }
+  .item-macros { display: block; font-size: 10px; color: var(--secondary-text-color); letter-spacing: -0.2px; }
   .item-delete, .item-edit {
     background: none; border: none; color: var(--secondary-text-color);
     cursor: pointer; padding: 4px; border-radius: 50%; display: flex;
