@@ -596,7 +596,9 @@ export class VoedingslogPanel extends LitElement {
         <div class="category-header">
           <ha-icon icon=${CATEGORY_ICONS[category] || "mdi:food"}></ha-icon>
           <span class="category-title">${label}</span>
-          <span class="category-cal">${Math.round(catTotals["energy-kcal_100g"] || 0)} kcal</span>
+          <span class="category-cal">${this._showItemMacros
+            ? html`E${(catTotals["proteins_100g"] || 0).toFixed(1)} K${(catTotals["carbohydrates_100g"] || 0).toFixed(1)} V${(catTotals["fat_100g"] || 0).toFixed(1)} Ve${(catTotals["fiber_100g"] || 0).toFixed(1)}`
+            : html`${Math.round(catTotals["energy-kcal_100g"] || 0)} kcal`}</span>
         </div>
         ${items.length === 0
           ? html`<div class="empty-hint">Nog geen items</div>`
@@ -626,10 +628,9 @@ export class VoedingslogPanel extends LitElement {
               </span>`}
         </div>
         <div class="item-nutrients">
-          <span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>
-          ${this._showItemMacros ? html`
-            <span class="item-macros">E${(vals["proteins_100g"] || 0).toFixed(1)} K${(vals["carbohydrates_100g"] || 0).toFixed(1)} V${(vals["fat_100g"] || 0).toFixed(1)} Ve${(vals["fiber_100g"] || 0).toFixed(1)}</span>
-          ` : nothing}
+          ${this._showItemMacros
+            ? html`<span class="item-kcal">E${(vals["proteins_100g"] || 0).toFixed(1)} K${(vals["carbohydrates_100g"] || 0).toFixed(1)} V${(vals["fat_100g"] || 0).toFixed(1)} Ve${(vals["fiber_100g"] || 0).toFixed(1)}</span>`
+            : html`<span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>`}
         </div>
         <button class="item-delete" @click=${(e: Event) => { e.stopPropagation(); this._deleteItem(item._index); }}>
           <ha-icon icon="mdi:close"></ha-icon>

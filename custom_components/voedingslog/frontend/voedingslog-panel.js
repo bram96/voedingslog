@@ -144,7 +144,6 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
   .quick-gram-input { width: 60px; padding: 2px 6px; border: 1px solid var(--primary-color); border-radius: 4px; font-size: 13px; text-align: right; background: var(--card-background-color); color: var(--primary-text-color); }
   .item-nutrients { white-space: nowrap; text-align: right; }
   .item-kcal { font-size: 13px; white-space: nowrap; font-weight: 500; }
-  .item-macros { display: block; font-size: 10px; color: var(--secondary-text-color); letter-spacing: -0.2px; }
   .item-delete, .item-edit {
     background: none; border: none; color: var(--secondary-text-color);
     cursor: pointer; padding: 4px; border-radius: 50%; display: flex;
@@ -1593,7 +1592,7 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
         <div class="category-header">
           <ha-icon icon=${ri[a]||"mdi:food"}></ha-icon>
           <span class="category-title">${u}</span>
-          <span class="category-cal">${Math.round(g["energy-kcal_100g"]||0)} kcal</span>
+          <span class="category-cal">${this._showItemMacros?M`E${(g.proteins_100g||0).toFixed(1)} K${(g.carbohydrates_100g||0).toFixed(1)} V${(g.fat_100g||0).toFixed(1)} Ve${(g.fiber_100g||0).toFixed(1)}`:M`${Math.round(g["energy-kcal_100g"]||0)} kcal`}</span>
         </div>
         ${f.length===0?M`<div class="empty-hint">Nog geen items</div>`:ko(f,y=>y._index,y=>this._renderItem(y))}
       </div>
@@ -1611,10 +1610,7 @@ var la=Object.create;var br=Object.defineProperty;var uo=Object.getOwnPropertyDe
               </span>`}
         </div>
         <div class="item-nutrients">
-          <span class="item-kcal">${Math.round(u["energy-kcal_100g"]||0)} kcal</span>
-          ${this._showItemMacros?M`
-            <span class="item-macros">E${(u.proteins_100g||0).toFixed(1)} K${(u.carbohydrates_100g||0).toFixed(1)} V${(u.fat_100g||0).toFixed(1)} Ve${(u.fiber_100g||0).toFixed(1)}</span>
-          `:z}
+          ${this._showItemMacros?M`<span class="item-kcal">E${(u.proteins_100g||0).toFixed(1)} K${(u.carbohydrates_100g||0).toFixed(1)} V${(u.fat_100g||0).toFixed(1)} Ve${(u.fiber_100g||0).toFixed(1)}</span>`:M`<span class="item-kcal">${Math.round(u["energy-kcal_100g"]||0)} kcal</span>`}
         </div>
         <button class="item-delete" @click=${g=>{g.stopPropagation(),this._deleteItem(a._index)}}>
           <ha-icon icon="mdi:close"></ha-icon>
