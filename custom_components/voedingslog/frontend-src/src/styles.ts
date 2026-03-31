@@ -93,6 +93,15 @@ export const panelStyles = css`
   .macro-ratio-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; }
   .macro-ratio-bar div { height: 100%; }
   .macro-ratio-labels { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; margin-top: 2px; }
+  .nutrient-toggle-row { display: flex; justify-content: center; margin-top: 8px; }
+  .nutrient-toggle-btn { display: flex; align-items: center; gap: 4px; background: none; border: none; color: var(--primary-color); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-family: inherit; }
+  .nutrient-toggle-btn:hover { background: var(--divider-color); }
+  .nutrient-toggle-btn ha-icon { --mdc-icon-size: 16px; }
+  .all-nutrients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider-color); }
+  .all-nutrient-item { text-align: center; }
+  .all-nutrient-value { display: block; font-size: 14px; font-weight: 500; }
+  .all-nutrient-goal { color: var(--secondary-text-color); font-weight: 400; }
+  .all-nutrient-label { display: block; font-size: 11px; color: var(--secondary-text-color); }
   .totals-hint { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 11px; color: var(--secondary-text-color); margin-top: 8px; opacity: 0.7; }
   .totals-hint ha-icon { --mdc-icon-size: 14px; }
 

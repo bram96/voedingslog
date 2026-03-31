@@ -18,6 +18,7 @@ import {
   DEFAULT_CATEGORY_LABELS,
   groupByCategory,
   KEY_NUTRIENTS_DISPLAY,
+  NUTRIENTS_META,
   calcItemNutrients,
   sumNutrients,
   formatDateLabel,
@@ -48,6 +49,7 @@ export class VoedingslogPanel extends LitElement {
   private _cachedTotals: import("./types.js").NutrientMap = {};
   private _cachedGroups: Record<MealCategory, IndexedLogItem[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
   @state() private _streak = 0;
+  @state() private _showAllNutrients = false;
 
   @state() _dialogMode: DialogMode = null;
   @state() _pendingProduct: Product | null = null;
@@ -569,6 +571,35 @@ export class VoedingslogPanel extends LitElement {
             </div>
           `;
         })()}
+        <div class="nutrient-toggle-row">
+          <button class="nutrient-toggle-btn" @click=${(e: Event) => { e.stopPropagation(); this._showAllNutrients = !this._showAllNutrients; }}>
+            <ha-icon icon=${this._showAllNutrients ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+            ${this._showAllNutrients ? "Minder" : "Alle voedingswaarden"}
+          </button>
+        </div>
+        ${this._showAllNutrients ? html`
+          <div class="all-nutrients-grid">
+            ${Object.entries(this._config?.nutrients || {}).filter(([key]) => key !== "energy-kcal_100g").map(([key, meta]) => {
+              const raw = this._cachedTotals[key] || 0;
+              const factor = NUTRIENTS_META[key] || 1;
+              const value = raw * factor;
+              const goals = this._getMacroGoals();
+              const goalMap: Record<string, number> = {
+                "proteins_100g": goals.protein,
+                "carbohydrates_100g": goals.carbs,
+                "fat_100g": goals.fat,
+                "fiber_100g": goals.fiber,
+              };
+              const goalValue = goalMap[key] || 0;
+              return html`
+                <div class="all-nutrient-item">
+                  <span class="all-nutrient-value">${value.toFixed(1)}${goalValue > 0 ? html`<span class="all-nutrient-goal"> / ${goalValue}</span>` : nothing} ${meta.unit}</span>
+                  <span class="all-nutrient-label">${meta.label}</span>
+                </div>
+              `;
+            })}
+          </div>
+        ` : nothing}
         <div class="totals-hint">
           ${this._streak > 1
             ? html`<ha-icon icon="mdi:fire"></ha-icon><span>${this._streak} dagen streak</span><span style="margin:0 4px">·</span>`
