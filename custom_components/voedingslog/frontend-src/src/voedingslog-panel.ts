@@ -48,7 +48,7 @@ export class VoedingslogPanel extends LitElement {
   private _cachedTotals: import("./types.js").NutrientMap = {};
   private _cachedGroups: Record<MealCategory, IndexedLogItem[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
   @state() private _streak = 0;
-  @state() private _showItemMacros = false;
+  @state() private _nutrientIndex = 0;
 
   @state() _dialogMode: DialogMode = null;
   @state() _pendingProduct: Product | null = null;
@@ -532,10 +532,6 @@ export class VoedingslogPanel extends LitElement {
         <div class="totals-header">
           <span class="totals-title">Dagtotaal</span>
           <span class="totals-cal">${Math.round(kcal)} / ${goal} kcal</span>
-          <button class="macro-toggle-btn" title="${this._showItemMacros ? "Verberg macro's per item" : "Toon macro's per item"}"
-            @click=${(e: Event) => { e.stopPropagation(); this._showItemMacros = !this._showItemMacros; }}>
-            <ha-icon icon="mdi:nutrition"></ha-icon>
-          </button>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" style="width: ${pct}%; background: ${pct > 100 ? "var(--error-color, #db4437)" : "var(--primary-color)"}"></div>
@@ -596,9 +592,13 @@ export class VoedingslogPanel extends LitElement {
         <div class="category-header">
           <ha-icon icon=${CATEGORY_ICONS[category] || "mdi:food"}></ha-icon>
           <span class="category-title">${label}</span>
-          <span class="category-cal">${this._showItemMacros
-            ? html`E${(catTotals["proteins_100g"] || 0).toFixed(1)} K${(catTotals["carbohydrates_100g"] || 0).toFixed(1)} V${(catTotals["fat_100g"] || 0).toFixed(1)} Ve${(catTotals["fiber_100g"] || 0).toFixed(1)}`
-            : html`${Math.round(catTotals["energy-kcal_100g"] || 0)} kcal`}</span>
+          ${(() => {
+            const n = KEY_NUTRIENTS_DISPLAY[this._nutrientIndex];
+            const val = catTotals[n.key] || 0;
+            return this._nutrientIndex === 0
+              ? html`<span class="category-cal">${Math.round(val)} kcal</span>`
+              : html`<span class="category-cal">${val.toFixed(n.decimals)}${n.unit} ${n.label}</span>`;
+          })()}
         </div>
         ${items.length === 0
           ? html`<div class="empty-hint">Nog geen items</div>`
@@ -627,10 +627,14 @@ export class VoedingslogPanel extends LitElement {
                 ${item.grams}g · ${item.time}
               </span>`}
         </div>
-        <div class="item-nutrients">
-          ${this._showItemMacros
-            ? html`<span class="item-kcal">E${(vals["proteins_100g"] || 0).toFixed(1)} K${(vals["carbohydrates_100g"] || 0).toFixed(1)} V${(vals["fat_100g"] || 0).toFixed(1)} Ve${(vals["fiber_100g"] || 0).toFixed(1)}</span>`
-            : html`<span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>`}
+        <div class="item-nutrients" @click=${(e: Event) => { e.stopPropagation(); this._nutrientIndex = (this._nutrientIndex + 1) % KEY_NUTRIENTS_DISPLAY.length; }}>
+          ${(() => {
+            const n = KEY_NUTRIENTS_DISPLAY[this._nutrientIndex];
+            const val = vals[n.key] || 0;
+            return this._nutrientIndex === 0
+              ? html`<span class="item-kcal">${Math.round(val)} kcal</span>`
+              : html`<span class="item-kcal">${val.toFixed(n.decimals)}${n.unit} ${n.label}</span>`;
+          })()}
         </div>
         <button class="item-delete" @click=${(e: Event) => { e.stopPropagation(); this._deleteItem(item._index); }}>
           <ha-icon icon="mdi:close"></ha-icon>
