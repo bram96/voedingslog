@@ -4,7 +4,6 @@
  */
 export {
   KEY_NUTRIENTS_DISPLAY,
-  NUTRIENT_PAGES,
   NUTRIENTS_META,
   EDITABLE_NUTRIENTS,
   calcItemNutrients,

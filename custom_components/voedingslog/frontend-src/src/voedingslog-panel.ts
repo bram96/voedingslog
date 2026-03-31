@@ -17,8 +17,7 @@ import {
   CATEGORY_ICONS,
   DEFAULT_CATEGORY_LABELS,
   groupByCategory,
-  NUTRIENT_PAGES,
-  NUTRIENTS_META,
+  KEY_NUTRIENTS_DISPLAY,
   calcItemNutrients,
   sumNutrients,
   formatDateLabel,
@@ -49,7 +48,7 @@ export class VoedingslogPanel extends LitElement {
   private _cachedTotals: import("./types.js").NutrientMap = {};
   private _cachedGroups: Record<MealCategory, IndexedLogItem[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
   @state() private _streak = 0;
-  @state() private _nutrientPage = 0;
+  @state() private _showItemMacros = false;
 
   @state() _dialogMode: DialogMode = null;
   @state() _pendingProduct: Product | null = null;
@@ -533,18 +532,31 @@ export class VoedingslogPanel extends LitElement {
         <div class="totals-header">
           <span class="totals-title">Dagtotaal</span>
           <span class="totals-cal">${Math.round(kcal)} / ${goal} kcal</span>
+          <button class="macro-toggle-btn" title="${this._showItemMacros ? "Verberg macro's per item" : "Toon macro's per item"}"
+            @click=${(e: Event) => { e.stopPropagation(); this._showItemMacros = !this._showItemMacros; }}>
+            <ha-icon icon="mdi:nutrition"></ha-icon>
+          </button>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" style="width: ${pct}%; background: ${pct > 100 ? "var(--error-color, #db4437)" : "var(--primary-color)"}"></div>
         </div>
-        ${this._renderNutrientPage(totals)}
+        <div class="macro-row">
+          ${KEY_NUTRIENTS_DISPLAY.filter((n) => n.key !== "energy-kcal_100g").map(
+            (n) => html`
+              <div class="macro-item">
+                <span class="macro-value">${(totals[n.key] || 0).toFixed(n.decimals)}${n.unit}</span>
+                <span class="macro-label">${n.label}</span>
+              </div>
+            `
+          )}
+        </div>
         ${(() => {
           const p = totals["proteins_100g"] || 0;
           const c = totals["carbohydrates_100g"] || 0;
           const f = totals["fat_100g"] || 0;
           const v = totals["fiber_100g"] || 0;
           const total = p + c + f + v;
-          if (total < 1 || this._nutrientPage !== 0) return nothing;
+          if (total < 1) return nothing;
           return html`
             <div class="macro-ratio">
               <div class="macro-ratio-bar">
@@ -569,46 +581,6 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon="mdi:information-outline"></ha-icon>
           <span>Tik voor details</span>
         </div>
-      </div>
-    `;
-  }
-
-  private _renderNutrientPage(totals: import("./types.js").NutrientMap): TemplateResult {
-    const page = NUTRIENT_PAGES[this._nutrientPage];
-    const goals = this._getMacroGoals();
-    const goalMap: Record<string, number> = {
-      "proteins_100g": goals.protein,
-      "carbohydrates_100g": goals.carbs,
-      "fat_100g": goals.fat,
-      "fiber_100g": goals.fiber,
-    };
-    return html`
-      <div class="nutrient-pager" @click=${(e: Event) => e.stopPropagation()}>
-        <button class="pager-arrow" @click=${() => { this._nutrientPage = (this._nutrientPage - 1 + NUTRIENT_PAGES.length) % NUTRIENT_PAGES.length; }}>
-          <ha-icon icon="mdi:chevron-left"></ha-icon>
-        </button>
-        <div class="macro-row">
-          ${page.nutrients.map((n) => {
-            const factor = NUTRIENTS_META[n.key] || 1;
-            const value = (totals[n.key] || 0) * factor;
-            const goalValue = goalMap[n.key] || 0;
-            return html`
-              <div class="macro-item">
-                <span class="macro-value">${value.toFixed(n.decimals)}${goalValue > 0 ? html`<span class="macro-goal">/${goalValue}</span>` : nothing}${n.unit}</span>
-                <span class="macro-label">${n.label}</span>
-              </div>
-            `;
-          })}
-        </div>
-        <button class="pager-arrow" @click=${() => { this._nutrientPage = (this._nutrientPage + 1) % NUTRIENT_PAGES.length; }}>
-          <ha-icon icon="mdi:chevron-right"></ha-icon>
-        </button>
-      </div>
-      <div class="pager-dots">
-        ${NUTRIENT_PAGES.map((_, i) => html`
-          <span class="pager-dot ${i === this._nutrientPage ? "active" : ""}"
-            @click=${(e: Event) => { e.stopPropagation(); this._nutrientPage = i; }}></span>
-        `)}
       </div>
     `;
   }
@@ -655,6 +627,9 @@ export class VoedingslogPanel extends LitElement {
         </div>
         <div class="item-nutrients">
           <span class="item-kcal">${Math.round(vals["energy-kcal_100g"] || 0)} kcal</span>
+          ${this._showItemMacros ? html`
+            <span class="item-macros">E${(vals["proteins_100g"] || 0).toFixed(1)} K${(vals["carbohydrates_100g"] || 0).toFixed(1)} V${(vals["fat_100g"] || 0).toFixed(1)} Ve${(vals["fiber_100g"] || 0).toFixed(1)}</span>
+          ` : nothing}
         </div>
         <button class="item-delete" @click=${(e: Event) => { e.stopPropagation(); this._deleteItem(item._index); }}>
           <ha-icon icon="mdi:close"></ha-icon>
