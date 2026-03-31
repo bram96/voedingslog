@@ -8,6 +8,36 @@ export const KEY_NUTRIENTS_DISPLAY: NutrientDisplayConfig[] = [
   { key: "fiber_100g", label: "Vezels", unit: "g", decimals: 1 },
 ];
 
+/** Nutrient pages for the day totals card — swipe/tap to cycle through them. */
+export const NUTRIENT_PAGES: { label: string; nutrients: NutrientDisplayConfig[] }[] = [
+  {
+    label: "Macro's",
+    nutrients: [
+      { key: "proteins_100g", label: "Eiwit", unit: "g", decimals: 1 },
+      { key: "carbohydrates_100g", label: "Koolh.", unit: "g", decimals: 1 },
+      { key: "fat_100g", label: "Vet", unit: "g", decimals: 1 },
+      { key: "fiber_100g", label: "Vezels", unit: "g", decimals: 1 },
+    ],
+  },
+  {
+    label: "Detail",
+    nutrients: [
+      { key: "saturated-fat_100g", label: "Verz. vet", unit: "g", decimals: 1 },
+      { key: "sugars_100g", label: "Suikers", unit: "g", decimals: 1 },
+      { key: "sodium_100g", label: "Natrium", unit: "mg", decimals: 0 },
+    ],
+  },
+  {
+    label: "Vitaminen",
+    nutrients: [
+      { key: "vitamin-c_100g", label: "Vit. C", unit: "mg", decimals: 1 },
+      { key: "calcium_100g", label: "Calcium", unit: "mg", decimals: 0 },
+      { key: "iron_100g", label: "IJzer", unit: "mg", decimals: 1 },
+      { key: "vitamin-d_100g", label: "Vit. D", unit: "µg", decimals: 1 },
+    ],
+  },
+];
+
 /** Factor to convert raw nutrient values to display units (e.g. sodium g → mg) */
 export const NUTRIENTS_META: Record<string, number> = {
   "energy-kcal_100g": 1,
