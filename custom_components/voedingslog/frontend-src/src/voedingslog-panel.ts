@@ -593,8 +593,12 @@ export class VoedingslogPanel extends LitElement {
           <ha-icon icon=${CATEGORY_ICONS[category] || "mdi:food"}></ha-icon>
           <span class="category-title">${label}</span>
           <span class="category-cal nutrient-toggle"
-                @click=${(e: Event) => this._cycleNutrientDisplay(e)}>
-            ${this._formatNutrient(catTotals)}
+                @click=${(e: Event) => this._cycleNutrientDisplay(e)}
+                style=${this._nutrientConfig().color ? `border: 1.5px solid ${this._nutrientConfig().color}` : ""}>
+            ${this._nutrientConfig().color
+              ? html`<span class="nutrient-label" style="color:${this._nutrientConfig().color}">${this._nutrientConfig().label}</span>`
+              : nothing}
+            ${this._formatNutrientValue(catTotals)}
           </span>
         </div>
         ${items.length === 0
@@ -612,8 +616,12 @@ export class VoedingslogPanel extends LitElement {
       (this._nutrientDisplayIndex + 1) % KEY_NUTRIENTS_DISPLAY.length;
   }
 
-  private _formatNutrient(vals: import("./types.js").NutrientMap): string {
-    const cfg = KEY_NUTRIENTS_DISPLAY[this._nutrientDisplayIndex];
+  private _nutrientConfig() {
+    return KEY_NUTRIENTS_DISPLAY[this._nutrientDisplayIndex];
+  }
+
+  private _formatNutrientValue(vals: import("./types.js").NutrientMap): string {
+    const cfg = this._nutrientConfig();
     const value = vals[cfg.key] || 0;
     return `${value.toFixed(cfg.decimals)} ${cfg.unit}`;
   }
@@ -637,8 +645,12 @@ export class VoedingslogPanel extends LitElement {
               </span>`}
         </div>
         <div class="item-nutrients nutrient-toggle"
-             @click=${(e: Event) => this._cycleNutrientDisplay(e)}>
-          <span class="item-kcal">${this._formatNutrient(vals)}</span>
+             @click=${(e: Event) => this._cycleNutrientDisplay(e)}
+             style=${this._nutrientConfig().color ? `border: 1.5px solid ${this._nutrientConfig().color}` : ""}>
+          ${this._nutrientConfig().color
+            ? html`<span class="nutrient-label" style="color:${this._nutrientConfig().color}">${this._nutrientConfig().label}</span>`
+            : nothing}
+          <span class="item-kcal">${this._formatNutrientValue(vals)}</span>
         </div>
         <button class="item-delete" @click=${(e: Event) => { e.stopPropagation(); this._deleteItem(item._index); }}>
           <ha-icon icon="mdi:close"></ha-icon>

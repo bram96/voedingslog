@@ -150,6 +150,7 @@ export interface NutrientDisplayConfig {
   label: string;
   unit: string;
   decimals: number;
+  color?: string;
 }
 
 export interface ParsedProduct extends Product {

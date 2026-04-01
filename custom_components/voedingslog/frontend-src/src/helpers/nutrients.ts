@@ -2,10 +2,10 @@ import type { LogItem, NutrientMap, NutrientDisplayConfig } from "../types.js";
 
 export const KEY_NUTRIENTS_DISPLAY: NutrientDisplayConfig[] = [
   { key: "energy-kcal_100g", label: "Kcal", unit: "kcal", decimals: 0 },
-  { key: "proteins_100g", label: "Eiwit", unit: "g", decimals: 1 },
-  { key: "carbohydrates_100g", label: "Koolh.", unit: "g", decimals: 1 },
-  { key: "fat_100g", label: "Vet", unit: "g", decimals: 1 },
-  { key: "fiber_100g", label: "Vezels", unit: "g", decimals: 1 },
+  { key: "proteins_100g", label: "Eiwit", unit: "g", decimals: 1, color: "#4caf50" },
+  { key: "carbohydrates_100g", label: "Koolh.", unit: "g", decimals: 1, color: "#03a9f4" },
+  { key: "fat_100g", label: "Vet", unit: "g", decimals: 1, color: "#ff9800" },
+  { key: "fiber_100g", label: "Vezels", unit: "g", decimals: 1, color: "#8bc34a" },
 ];
 
 /** Nutrient pages for the day totals card — swipe/tap to cycle through them. */
