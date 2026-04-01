@@ -23,6 +23,13 @@ export function renderWeightView(params: WeightViewParams): TemplateResult {
   return html`
     ${renderDialogHeader(product.name, onClose)}
     <div class="dialog-body">
+      <div class="form-field">
+        <label>Naam</label>
+        <input type="text" id="product-name-override"
+          .value=${product.name}
+          placeholder="Productnaam" />
+      </div>
+
       ${isComponent
         ? _renderComponentSection(components!, onComponentChange, requestUpdate)
         : _renderSimpleSection(product, shadow, requestUpdate)}

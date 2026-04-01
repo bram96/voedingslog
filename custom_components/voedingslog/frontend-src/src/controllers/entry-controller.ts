@@ -74,8 +74,10 @@ export class EntryController {
 
     const catSelect = h.shadowRoot?.getElementById("category-select") as HTMLSelectElement | null;
     const dateInput = h.shadowRoot?.getElementById("log-date-input") as HTMLInputElement | null;
+    const nameInput = h.shadowRoot?.getElementById("product-name-override") as HTMLInputElement | null;
     const category = (catSelect?.value as MealCategory) || defaultCategory();
     const logDate = dateInput?.value || h._selectedDate;
+    const logName = nameInput?.value?.trim() || p.name;
 
     // Component recipe: use component grams, compute totals
     if (this._pendingComponents?.length) {
@@ -105,7 +107,7 @@ export class EntryController {
         await h.hass.callWS({
           type: "voedingslog/log_product",
           person: h._selectedPerson,
-          name: p.name,
+          name: logName,
           grams: totalGrams,
           nutrients,
           category,
@@ -131,7 +133,7 @@ export class EntryController {
       await h.hass.callWS({
         type: "voedingslog/log_product",
         person: h._selectedPerson,
-        name: p.name,
+        name: logName,
         grams,
         nutrients: p.nutrients || {},
         category,
