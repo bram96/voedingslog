@@ -124,6 +124,20 @@ export const panelStyles = css`
   .category-cal.nutrient-toggle { font-size: 13px; }
   .cross-category-hint { font-size: 13px; color: var(--secondary-text-color); margin-top: 0; padding: 0 4px; }
   .cross-category-hint a { color: var(--primary-color); text-decoration: underline; cursor: pointer; }
+
+  /* Copy mode */
+  .copy-item-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--divider-color); }
+  .copy-item-row:last-child { border-bottom: none; }
+  .copy-item-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary-color); flex-shrink: 0; }
+  .copy-item-name { flex: 1; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copy-select-btns { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .btn-text { background: none; border: none; color: var(--primary-color); cursor: pointer; font-size: 13px; padding: 4px 8px; font-weight: 500; }
+  .copy-toolbar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .copy-toolbar label { font-size: 13px; color: var(--secondary-text-color); white-space: nowrap; }
+  .copy-toolbar input[type="date"] { flex: 1; padding: 6px 8px; border: 1px solid var(--divider-color); border-radius: 8px; font-size: 14px; background: var(--card-background-color); color: var(--primary-text-color); }
+  .copy-action-buttons { display: flex; gap: 8px; margin-top: 12px; }
+  .copy-action-buttons .btn-confirm { flex: 1; }
+
   .item-delete, .item-edit {
     background: none; border: none; color: var(--secondary-text-color);
     cursor: pointer; padding: 4px; border-radius: 50%; display: flex;

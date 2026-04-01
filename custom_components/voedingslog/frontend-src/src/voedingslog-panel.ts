@@ -787,6 +787,15 @@ export class VoedingslogPanel extends LitElement {
     this._products.addIngredientFromAi(ingredient);
   }
 
+  _openRecipeFromItems(ingredients: import("./types.js").MealIngredient[]): void {
+    const totalGrams = ingredients.reduce((sum, i) => sum + i.grams, 0);
+    this._products.editingProduct = {
+      id: "", type: "recipe", recipe_type: "fixed",
+      name: "", ingredients: [...ingredients], total_grams: totalGrams, nutrients: {},
+    };
+    this._setDialogMode("product-edit");
+  }
+
   _selectProduct(product: Product, returnMode?: DialogMode): void {
     this._pendingProduct = product;
     this._weightReturnMode = returnMode || null;

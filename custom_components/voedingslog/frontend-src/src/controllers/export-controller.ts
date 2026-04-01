@@ -2,9 +2,9 @@
  * Export controller — day detail dialog, period charts, PNG export, download/share.
  */
 import { html, type TemplateResult } from "lit";
-import type { HomeAssistant, LogItem, MealCategory, VoedingslogConfig, PeriodDay, GetPeriodResponse } from "../types.js";
+import type { HomeAssistant, LogItem, MealCategory, MealIngredient, VoedingslogConfig, PeriodDay, GetPeriodResponse } from "../types.js";
 import { sumNutrients, itemKcal, NUTRIENTS_META, groupByCategory, DEFAULT_CATEGORY_LABELS, toDateStr, shortDay } from "../helpers.js";
-import { renderDayView, type Slice } from "../views/day-view.js";
+import { renderDayView, type Slice, type CopyItem } from "../views/day-view.js";
 import { renderPeriodView, type GoalNutrient } from "../views/period-view.js";
 
 export type { Slice };
@@ -22,6 +22,7 @@ export interface ExportControllerHost {
   _getCaloriesGoal(): number;
   _getMacroGoals(): { carbs: number; protein: number; fat: number; fiber: number };
   _formatDateLabel(dateStr: string): string;
+  _openRecipeFromItems(ingredients: MealIngredient[]): void;
 }
 
 type PeriodMode = "day" | "week" | "month";
@@ -39,6 +40,9 @@ export class ExportController {
   private _suggestionsLoading = false;
   // Daily review
   private _dailyReview: string | null = null;
+  // Copy mode
+  private _copyMode = false;
+  private _copyItems: CopyItem[] = [];
 
   /** Get week start day from HA locale (0=Sunday, 1=Monday, ...). Defaults to 1 (Monday). */
   private get _weekStartDay(): number {
@@ -66,6 +70,8 @@ export class ExportController {
     this._suggestionsLoading = false;
     this._dailyReview = null;
     this._reviewLoading = false;
+    this._copyMode = false;
+    this._copyItems = [];
   }
 
   private _getGoalNutrients(): GoalNutrient[] {
@@ -159,10 +165,18 @@ export class ExportController {
       hasAiEntity: !!h._config?.ai_task_entity,
       reviewLoading: this._reviewLoading,
       dailyReview: this._dailyReview,
+      copyMode: this._copyMode,
+      copyItems: this._copyItems,
       onExport: (s) => this.exportImage(s),
       onDownload: () => this.download(),
       onShare: () => this.share(),
       onLoadReview: () => this._loadDailyReview(),
+      onToggleCopyMode: () => this._toggleCopyMode(),
+      onToggleCopyItem: (i) => this._toggleCopyItem(i),
+      onCopyGramsChange: (i, g) => this._setCopyGrams(i, g),
+      onCopySelectAll: (sel) => this._setCopySelectAll(sel),
+      onCopyToDate: (date) => this._copyToDate(date),
+      onCreateRecipeFromSelection: () => this._createRecipeFromSelection(),
     });
   }
 
@@ -178,6 +192,76 @@ export class ExportController {
       onDownload: () => this.download(),
       onLoadSuggestions: () => this._loadSuggestions(),
     });
+  }
+
+  // ── Copy mode ───────────────────────────────────────────────
+
+  private _toggleCopyMode(): void {
+    this._copyMode = !this._copyMode;
+    if (this._copyMode) {
+      this._copyItems = this.host._items.map((item) => ({
+        item, selected: true, grams: item.grams,
+      }));
+    } else {
+      this._copyItems = [];
+    }
+    this.host.requestUpdate();
+  }
+
+  private _toggleCopyItem(index: number): void {
+    this._copyItems[index] = { ...this._copyItems[index], selected: !this._copyItems[index].selected };
+    this._copyItems = [...this._copyItems];
+    this.host.requestUpdate();
+  }
+
+  private _setCopyGrams(index: number, grams: number): void {
+    this._copyItems[index] = { ...this._copyItems[index], grams };
+    this._copyItems = [...this._copyItems];
+    this.host.requestUpdate();
+  }
+
+  private _setCopySelectAll(selected: boolean): void {
+    this._copyItems = this._copyItems.map((c) => ({ ...c, selected }));
+    this.host.requestUpdate();
+  }
+
+  private async _copyToDate(targetDate: string): Promise<void> {
+    const h = this.host;
+    const selected = this._copyItems.filter((c) => c.selected);
+    if (selected.length === 0) return;
+    try {
+      for (const c of selected) {
+        await h.hass.callWS({
+          type: "voedingslog/log_product",
+          person: h._selectedPerson,
+          name: c.item.name,
+          grams: c.grams,
+          nutrients: c.item.nutrients,
+          category: c.item.category,
+          date: targetDate,
+          components: c.item.components,
+        });
+      }
+      this._copyMode = false;
+      this._copyItems = [];
+      h.requestUpdate();
+    } catch (e) {
+      console.error("Failed to copy items:", e);
+      alert("Fout bij kopiëren.");
+    }
+  }
+
+  private _createRecipeFromSelection(): void {
+    const selected = this._copyItems.filter((c) => c.selected);
+    if (selected.length === 0) return;
+    const ingredients: MealIngredient[] = selected.map((c) => ({
+      name: c.item.name,
+      grams: c.grams,
+      nutrients: c.item.nutrients,
+    }));
+    this._copyMode = false;
+    this._copyItems = [];
+    this.host._openRecipeFromItems(ingredients);
   }
 
   // ── Navigation ──────────────────────────────────────────────
