@@ -41,6 +41,7 @@ export interface ProductsListParams {
   hasAI: boolean;
   config: VoedingslogConfig | null;
   fullPage?: boolean;
+  crossCategoryHint?: { count: number; otherType: "base" | "recipe" } | null;
   callbacks: ProductsListCallbacks;
 }
 
@@ -172,7 +173,18 @@ export function renderProductsList(params: ProductsListParams): TemplateResult {
       ${filteredProducts.length === 0 && !showQuickAccess
         ? html`<p class="empty-hint">${products.length === 0
             ? isAdd ? "Nog geen producten opgeslagen." : "Nog geen producten. Voeg een product of recept toe."
-            : "Geen producten gevonden."}</p>`
+            : "Geen producten gevonden."}</p>
+          ${params.crossCategoryHint ? html`
+            <p class="cross-category-hint">
+              Er ${params.crossCategoryHint.count === 1 ? "is" : "zijn"} wel
+              <a href="#" @click=${(e: Event) => {
+                e.preventDefault();
+                callbacks.onSetTypeFilter(params.crossCategoryHint!.otherType);
+              }}>${params.crossCategoryHint.count}
+              ${params.crossCategoryHint.otherType === "recipe"
+                ? (params.crossCategoryHint.count === 1 ? "recept" : "recepten")
+                : (params.crossCategoryHint.count === 1 ? "product" : "producten")}</a> gevonden.
+            </p>` : nothing}`
         : (!showQuickAccess ? filteredProducts : filteredProducts.filter((p) => !p.favorite)).map(
             (product) => renderProductItem(product, isAdd, personCount, mode, callbacks)
           )}

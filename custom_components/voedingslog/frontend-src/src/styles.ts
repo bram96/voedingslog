@@ -118,6 +118,11 @@ export const panelStyles = css`
   .quick-gram-input { width: 60px; padding: 2px 6px; border: 1px solid var(--primary-color); border-radius: 4px; font-size: 13px; text-align: right; background: var(--card-background-color); color: var(--primary-text-color); }
   .item-nutrients { white-space: nowrap; text-align: right; cursor: pointer; }
   .item-kcal { font-size: 13px; white-space: nowrap; font-weight: 500; }
+  .nutrient-toggle { cursor: pointer; padding: 2px 8px; border-radius: 10px; background: var(--secondary-background-color); transition: background 0.15s; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .nutrient-toggle:active { background: var(--divider-color); }
+  .category-cal.nutrient-toggle { font-size: 13px; }
+  .cross-category-hint { font-size: 13px; color: var(--secondary-text-color); margin-top: 0; padding: 0 4px; }
+  .cross-category-hint a { color: var(--primary-color); text-decoration: underline; cursor: pointer; }
   .item-delete, .item-edit {
     background: none; border: none; color: var(--secondary-text-color);
     cursor: pointer; padding: 4px; border-radius: 50%; display: flex;

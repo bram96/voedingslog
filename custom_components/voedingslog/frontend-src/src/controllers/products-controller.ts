@@ -86,6 +86,19 @@ export class ProductsController {
     return result;
   }
 
+  private _crossCategoryCount(): { count: number; otherType: "base" | "recipe" } | null {
+    if (this.typeFilter === "all") return null;
+    const q = this.searchQuery.toLowerCase().trim();
+    if (!q) return null;
+    const otherType = this.typeFilter === "base" ? "recipe" as const : "base" as const;
+    let source = this.products;
+    if (this.showFavoritesOnly) source = source.filter((p) => p.favorite);
+    const count = source.filter(
+      (p) => p.type === otherType && p.name.toLowerCase().includes(q),
+    ).length;
+    return count > 0 ? { count, otherType } : null;
+  }
+
   // ── Render delegation ─────────────────────────────────────────
 
   fullPage = false;
@@ -105,6 +118,7 @@ export class ProductsController {
       hasAI: !!h._config?.ai_task_entity,
       fullPage: this.fullPage,
       config: h._config,
+      crossCategoryHint: this._crossCategoryCount(),
       callbacks: {
         onProductClick: (p) => this.mode === "add" ? this.logProduct(p) : this.openEditor(p),
         onFavorite: (p) => this.toggleFavorite(p),
@@ -509,6 +523,7 @@ export class ProductsController {
         },
       });
       await this.open(this.mode);
+      this._closeEditor();
     } catch (e) {
       console.error("Failed to save product:", e);
       alert("Fout bij opslaan.");
@@ -544,6 +559,7 @@ export class ProductsController {
         },
       });
       await this.open(this.mode);
+      this._closeEditor();
     } catch (e) {
       console.error("Failed to save recipe:", e);
       alert("Fout bij opslaan.");
